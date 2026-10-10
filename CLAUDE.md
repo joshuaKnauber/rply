@@ -49,7 +49,7 @@ No existing tool combines all of: (1) one self-hosted server deployable anywhere
 
 ### Must have (v1)
 1. **Server**: Docker image with SQLite, trivial to self-host (Railway, exe.dev, Hetzner, anywhere). Serves the API and the web app.
-2. **CLI**: `npx rply init <server-url>`, scan the QR code, done. Works from any agent with a shell, and also from cron, git hooks and CI.
+2. **CLI**: `npx @rply/cli init <server-url>`, scan the QR code, done. Works from any agent with a shell, and also from cron, git hooks and CI.
 3. **Web app** (React, served by the server): channel list, a chat thread per channel, a pinned status page per channel, replies. Usable on a laptop as a first-class client, not only for testing.
 4. **Mobile app** (React Native / Expo): the same features plus push notifications. Built after the web app.
 5. **Messages**: agent sends text or markdown plus components; human replies with free text or by interacting with components.
@@ -104,7 +104,7 @@ Clients wait for new things by holding a plain HTTP request open (`?wait=60`). T
 - **Server**: Node, Hono, Kysely. SQLite for self-hosting (`node:sqlite` if Kysely works with it cleanly, otherwise `better-sqlite3`). Postgres support comes later for the hosted version through a second Kysely dialect. Shipped as a Docker image (Railway: mount a volume at `/data`).
 - **Portable SQL**: text IDs (not rowid), JSON stored as text, timestamps as integer milliseconds, no SQLite-only features. The global `seq` cursor is autoincrement in SQLite and an identity column in Postgres.
 - **Migrations**: Kysely `Migrator`, numbered TS files (`0001_init.ts`) using the schema builder so they run on both dialects. Imported explicitly, not globbed from disk. Run automatically on server start. Before applying pending migrations on SQLite, copy the db file to `rply.db.bak-<version>`. Forward-only, never edit a shipped migration, destructive changes in two releases (stop using, then drop).
-- **CLI**: separate package, Node, distributed via npm (`npx rply`). Minimal dependencies.
+- **CLI**: separate package, Node, distributed via npm as `@rply/cli` (`npx @rply/cli`, installs the `rply` command). Minimal dependencies.
 - **Shared package**: zod schemas for blocks and API types, used by server, CLI and both apps.
 - **Web app**: React + Vite, built to static files that the server serves at `/`.
 - **Mobile app**: Expo (React Native) with expo-notifications and expo-secure-store. Separate from the web app.
@@ -267,12 +267,13 @@ An ask is an agent message with interactive blocks. A tap or form submit is a hu
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) and holds server, agent token, channel and the inbox cursor. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
 - `inbox` and `listen` skip answers to asks (messages with `reply_to`). Those come through `ask --wait` or `rply wait <id>`. `ask` without `--buttons`/`--form` sends a one-field form (element id `answer`) and prints the plain string.
-- The CLI will need a build step before publishing to npm, because Node won't strip types inside `node_modules`.
+- Publishing the CLI: `npm run build -w @rply/cli` bundles everything with esbuild into `packages/cli/dist/rply.js` (Node won't strip types inside `node_modules`). All runtime libraries are devDependencies because they're inlined, so the published package has no dependencies. `prepublishOnly` runs the build. To release, bump `version` in `packages/cli/package.json`, then `npm publish -w @rply/cli`. The npm package is `@rply/cli` (npm blocked the unscoped name `rply` as too similar to existing packages), but the command it installs is still `rply`.
+- Update check (`packages/cli/src/update.ts`): at most once a day the CLI fetches the latest `@rply/cli` version from the npm registry (1.5s timeout, cached in `update-check.json` next to the config). If a newer version exists, it prints a notice to stderr after the command, telling the agent to run `rply update` (which runs `npm install --global @rply/cli@latest`). `RPLY_NO_UPDATE_CHECK=1` turns it off.
 
 ## 13. Name
 
 - **rply**, domain **rply.sh**, CLI `rply`. The name follows ntfy's style: a plain verb with the vowels dropped, nothing abstract or cute. It's about replying to and talking with agents, not just notifications.
-- npm `rply` was free on 2026-10-10. The GitHub username `rply` is taken (the repo is `joshuaKnauber/rply`).
+- npm refused the unscoped name `rply` as too similar to `rlp`, `mlly`, `cpy` and `spdy`, so the CLI is published as `@rply/cli` (npm org `rply`). The GitHub username `rply` is taken (the repo is `joshuaKnauber/rply`).
 
 ## 14. Milestones
 

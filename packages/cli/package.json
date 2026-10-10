@@ -1,20 +1,43 @@
 {
-  "name": "rply",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@rply/cli",
+  "version": "0.1.0",
+  "description": "Talk to the human behind your agent: send updates, ask questions and wait for answers, publish a status page.",
+  "keywords": [
+    "agent",
+    "ai",
+    "human-in-the-loop",
+    "notifications",
+    "cli"
+  ],
+  "homepage": "https://github.com/joshuaKnauber/rply",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/rply.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
-    "rply": "src/index.ts"
+    "rply": "dist/rply.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
+    "build": "node build.ts",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc -p ."
   },
-  "dependencies": {
+  "devDependencies": {
     "@rply/schema": "*",
+    "@types/qrcode": "^1.5.5",
     "commander": "^14.0.3",
+    "esbuild": "^0.28.2",
     "qrcode": "^1.5.4"
   },
-  "devDependencies": {
-    "@types/qrcode": "^1.5.5"
+  "publishConfig": {
+    "access": "public"
   }
 }

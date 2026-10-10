@@ -1,0 +1,19 @@
+{
+  "name": "@rply/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.0",
+    "@rply/schema": "*",
+    "hono": "^4.13.0",
+    "kysely": "^0.29.0",
+    "zod": "^4.1.0"
+  }
+}

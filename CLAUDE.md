@@ -261,7 +261,7 @@ An ask is an agent message with interactive blocks. A tap or form submit is a hu
 - Server env: `PORT` (8080), `RPLY_DB` (path to the SQLite file), `RPLY_ADMIN_TOKEN` (optional), `RPLY_WEB_DIR` (defaults to `apps/web/dist`).
 - Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`) + TanStack Query + wouter. Paired channels live in localStorage (`src/lib/channels.ts`). One `/v1/sync` long-poll loop (`src/lib/sync.ts`) merges new messages and statuses into the query cache.
 - Server tests use `app.request()` against an in-memory database (`packages/server/test`).
-- Deploy: the root `Dockerfile`. On Railway, attach a volume at `/data`.
+- Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - The CLI will need a build step before publishing to npm, because Node won't strip types inside `node_modules`.
 
 ## 13. Name

@@ -6,6 +6,7 @@
 - YAGNI, keep things simple, no overengineering
 - Comments to a minimum, code should be descriptive enough
 - Keep things organized, refactor when needed on your own as you notice complexity
+- Never commit or push; the author does that
 
 ## 1. The idea in one paragraph
 

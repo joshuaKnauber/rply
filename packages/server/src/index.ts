@@ -18,6 +18,9 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   if (!process.env.RPLY_ADMIN_TOKEN) console.log("RPLY_ADMIN_TOKEN is not set, anyone can create channels");
 });
 
-const shutdown = () => server.close(() => db.destroy().then(() => process.exit(0)));
+const shutdown = () => {
+  server.close(() => db.destroy().then(() => process.exit(0)));
+  if ("closeAllConnections" in server) server.closeAllConnections();
+};
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

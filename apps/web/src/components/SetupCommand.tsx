@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, CopyIcon } from "lucide-react";
-import type { ServerInfo } from "@rply/schema";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { useServerInfo } from "@/lib/queries";
 
 export function SetupCommand() {
-  const { data: info } = useQuery({ queryKey: ["info"], queryFn: () => api<ServerInfo>("/info"), staleTime: Infinity });
+  const info = useServerInfo();
   const [copied, setCopied] = useState(false);
 
   const init = `rply init ${window.location.origin} --name "My agent"${info?.server_token_required ? " --server-token <admin token>" : ""}`;

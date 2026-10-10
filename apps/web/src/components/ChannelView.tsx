@@ -30,9 +30,11 @@ export function ChannelView({ entry }: { entry: StoredChannel }) {
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="status">Status</TabsTrigger>
         </TabsList>
-        <Button size="icon" variant="ghost" onClick={remove} aria-label="Remove channel">
-          <Trash2Icon />
-        </Button>
+        {!entry.admin && (
+          <Button size="icon" variant="ghost" onClick={remove} aria-label="Remove channel">
+            <Trash2Icon />
+          </Button>
+        )}
       </header>
       <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col">
         <Thread entry={entry} />

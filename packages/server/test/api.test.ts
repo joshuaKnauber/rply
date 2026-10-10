@@ -118,3 +118,32 @@ test("channel creation requires the admin token once set", async () => {
   assert.equal((await request("GET", "/info")).json.server_token_required, false);
   assert.equal((await request("POST", "/channels", { body: { name: "x" } })).status, 201);
 });
+
+test("the admin token sees and talks to every channel", async () => {
+  const { db, request, pairedChannel } = await setup();
+  const a = await pairedChannel("a");
+  const b = await pairedChannel("b");
+  assert.equal((await request("GET", "/admin/channels", { token: "secret" })).status, 401);
+
+  await syncAdminToken(db, "secret");
+  assert.equal((await request("GET", "/admin/channels", { token: "wrong" })).status, 401);
+  const list = await request("GET", "/admin/channels", { token: "secret" });
+  assert.deepEqual(list.json.channels.map((c: any) => c.name), ["a", "b"]);
+
+  const asAdmin = (method: string, path: string, channel: string, body?: unknown) =>
+    request(method, path, { token: "secret", body, headers: { "x-rply-channel": channel } });
+  await request("POST", "/messages", { token: b.agent, body: { body: { text: "from b" } } });
+  const read = await asAdmin("GET", "/messages", b.channel.id);
+  assert.deepEqual(read.json.messages.map((m: any) => m.body.text), ["from b"]);
+  const sent = await asAdmin("POST", "/messages", a.channel.id, { body: { text: "hi a" } });
+  assert.equal(sent.json.message.sender, "human");
+  const inbox = await request("GET", "/messages?since=0&sender=human", { token: a.agent });
+  assert.equal(inbox.json.messages[0].body.text, "hi a");
+  assert.equal((await asAdmin("PUT", "/status", a.channel.id, { body: { blocks: [] } })).status, 403);
+
+  const initial = await request("POST", "/sync", { token: "secret", body: { tokens: [] } });
+  const waiting = request("POST", "/sync", { token: "secret", body: { tokens: [], cursor: initial.json.cursor, wait: 5 } });
+  await delay(50);
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "for admin" } } });
+  assert.deepEqual((await waiting).json.messages.map((m: any) => m.body.text), ["for admin"]);
+});

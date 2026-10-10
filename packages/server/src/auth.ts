@@ -10,7 +10,7 @@ export function requireAuth({ db }: Deps, role?: Sender) {
     const token = bearer(c.req.header("authorization"));
     if (!token) throw new HTTPException(401, { message: "Missing bearer token" });
 
-    const auth = await authenticate(db, token);
+    const auth = await authenticate(db, token, c.req.header("x-rply-channel"));
     if (!auth) throw new HTTPException(401, { message: "Invalid token" });
     if (role && auth.sender !== role) throw new HTTPException(403, { message: `Only the ${role} can do this` });
 
@@ -19,7 +19,7 @@ export function requireAuth({ db }: Deps, role?: Sender) {
   });
 }
 
-async function authenticate(db: DB, token: string) {
+async function authenticate(db: DB, token: string, channelId: string | undefined) {
   const hash = hashToken(token);
   if (token.startsWith("rply_a_")) {
     const channel = await db.selectFrom("channels").selectAll().where("agent_token_hash", "=", hash).executeTakeFirst();
@@ -37,7 +37,24 @@ async function authenticate(db: DB, token: string) {
     const channel = await db.selectFrom("channels").selectAll().where("id", "=", human.channel_id).executeTakeFirstOrThrow();
     return { channel, sender: "human" as const };
   }
+  if (channelId && (await isServerToken(db, token))) {
+    const channel = await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirst();
+    return channel && { channel, sender: "human" as const };
+  }
   return undefined;
+}
+
+export async function isServerToken(db: DB, token: string | undefined) {
+  if (!token) return false;
+  const key = await db.selectFrom("api_keys").select("id").where("token_hash", "=", hashToken(token)).executeTakeFirst();
+  return key !== undefined;
+}
+
+export function requireServerTokenAuth({ db }: Deps) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    if (!(await isServerToken(db, bearer(c.req.header("authorization"))))) throw new HTTPException(401, { message: "Invalid admin token" });
+    await next();
+  });
 }
 
 export async function serverTokenRequired(db: DB) {
@@ -48,9 +65,9 @@ export async function serverTokenRequired(db: DB) {
 export async function requireServerToken(db: DB, header: string | undefined) {
   if (!(await serverTokenRequired(db))) return;
 
-  const token = bearer(header);
-  const key = token && (await db.selectFrom("api_keys").select("id").where("token_hash", "=", hashToken(token)).executeTakeFirst());
-  if (!key) throw new HTTPException(401, { message: "This server requires a server token to create channels" });
+  if (!(await isServerToken(db, bearer(header)))) {
+    throw new HTTPException(401, { message: "This server requires a server token to create channels" });
+  }
 }
 
 export async function syncAdminToken(db: DB, token: string | undefined) {

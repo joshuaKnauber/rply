@@ -1,13 +1,13 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { HumanMessageBody, Message, MessagesResponse, Status } from "@rply/schema";
+import type { HumanMessageBody, Message, MessagesResponse, ServerInfo, Status } from "@rply/schema";
 import { api } from "./api";
-import type { StoredChannel } from "./channels";
+import { auth, type StoredChannel } from "./channels";
 
 export const messagesKey = (channelId: string) => ["messages", channelId];
 export const statusKey = (channelId: string) => ["status", channelId];
 
 const fetchMessages = (entry: StoredChannel) =>
-  api<MessagesResponse>("/messages?limit=200", { token: entry.token }).then((r) => r.messages);
+  api<MessagesResponse>("/messages?limit=200", auth(entry)).then((r) => r.messages);
 
 export const useMessages = (entry: StoredChannel) =>
   useQuery({ queryKey: messagesKey(entry.channel.id), queryFn: () => fetchMessages(entry), staleTime: Infinity });
@@ -25,7 +25,7 @@ export const useAllMessages = (entries: StoredChannel[]) =>
 export const useStatus = (entry: StoredChannel) =>
   useQuery({
     queryKey: statusKey(entry.channel.id),
-    queryFn: () => api<{ status: Status | null }>("/status", { token: entry.token }).then((r) => r.status),
+    queryFn: () => api<{ status: Status | null }>("/status", auth(entry)).then((r) => r.status),
     staleTime: Infinity,
   });
 
@@ -45,7 +45,10 @@ export function useSendMessage(entry: StoredChannel) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (req: { body: HumanMessageBody; reply_to?: string }) =>
-      api<{ message: Message }>("/messages", { token: entry.token, body: req }).then((r) => r.message),
+      api<{ message: Message }>("/messages", { ...auth(entry), body: req }).then((r) => r.message),
     onSuccess: (message) => mergeMessages(queryClient, entry.channel.id, [message]),
   });
 }
+
+export const useServerInfo = () =>
+  useQuery({ queryKey: ["info"], queryFn: () => api<ServerInfo>("/info"), staleTime: Infinity }).data;

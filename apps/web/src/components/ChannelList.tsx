@@ -2,19 +2,21 @@ import { PlusIcon } from "lucide-react";
 import { Link } from "wouter";
 import type { Message } from "@rply/schema";
 import { Button } from "@/components/ui/button";
-import type { StoredChannel } from "@/lib/channels";
+import { useReadSeqs, type StoredChannel } from "@/lib/channels";
 import { formatTime, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { AddChannelDialog } from "./AddChannelDialog";
+import { OwnerButton } from "./OwnerButton";
 
 export function ChannelList({ channels, activeId }: { channels: StoredChannel[]; activeId?: string }) {
   const results = useAllMessages(channels);
+  const readSeqs = useReadSeqs();
   const rows = channels
     .map((entry, i) => {
       const messages: Message[] = results[i]?.data ?? [];
       const last = messages.at(-1);
-      const unread = messages.filter((m) => m.sender === "agent" && m.seq > (entry.lastReadSeq ?? 0)).length;
+      const unread = messages.filter((m) => m.sender === "agent" && m.seq > (readSeqs[entry.channel.id] ?? 0)).length;
       return { entry, last, unread };
     })
     .sort((a, b) => (b.last?.created_at ?? b.entry.channel.created_at) - (a.last?.created_at ?? a.entry.channel.created_at));
@@ -23,13 +25,16 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <span className="font-semibold">rply</span>
-        <AddChannelDialog
-          trigger={
-            <Button size="icon" variant="ghost" aria-label="Add channel">
-              <PlusIcon />
-            </Button>
-          }
-        />
+        <div className="flex items-center gap-1">
+          <OwnerButton />
+          <AddChannelDialog
+            trigger={
+              <Button size="icon" variant="ghost" aria-label="Add channel">
+                <PlusIcon />
+              </Button>
+            }
+          />
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto">
         {rows.map(({ entry, last, unread }) => (

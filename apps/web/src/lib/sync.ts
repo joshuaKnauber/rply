@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Message, SyncResponse } from "@rply/schema";
 import { api } from "./api";
-import { markRevoked, type StoredChannel } from "./channels";
+import { markRevoked, useAdminToken, type StoredChannel } from "./channels";
 import { mergeMessages, statusKey } from "./queries";
 
 export function useSync(channels: StoredChannel[]) {
   const queryClient = useQueryClient();
-  const tokens = channels.filter((c) => !c.revoked).map((c) => c.token);
+  const admin = useAdminToken();
+  const tokens = channels.filter((c) => !c.revoked && !c.admin).map((c) => c.token);
   const tokensKey = tokens.join(",");
 
   useEffect(() => {
-    if (tokens.length === 0) return;
+    if (tokens.length === 0 && !admin) return;
     const controller = new AbortController();
     let cursor: string | undefined;
 
@@ -19,6 +20,7 @@ export function useSync(channels: StoredChannel[]) {
       while (!controller.signal.aborted) {
         try {
           const res = await api<SyncResponse>("/sync", {
+            token: admin ?? undefined,
             body: { tokens, cursor, wait: cursor ? 30 : 0 },
             signal: controller.signal,
           });
@@ -37,5 +39,5 @@ export function useSync(channels: StoredChannel[]) {
 
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokensKey, queryClient]);
+  }, [tokensKey, admin, queryClient]);
 }

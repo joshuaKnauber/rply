@@ -7,12 +7,13 @@ export async function setup() {
   const db = await openDatabase(":memory:");
   const app = createApp({ db, notifier: createNotifier() });
 
-  const request = async (method: string, path: string, opts: { token?: string; body?: unknown } = {}) => {
+  const request = async (method: string, path: string, opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {}) => {
     const res = await app.request(`/v1${path}`, {
       method,
       headers: {
         "content-type": "application/json",
         ...(opts.token && { authorization: `Bearer ${opts.token}` }),
+        ...opts.headers,
       },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });

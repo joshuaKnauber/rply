@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { SyncRequest, type SyncResponse } from "@rply/schema";
-import { parse, type AppEnv, type Deps } from "../context.ts";
+import { isServerToken } from "../auth.ts";
+import { bearer, parse, type AppEnv, type Deps } from "../context.ts";
 import { longPoll } from "../notifier.ts";
 import { toMessage, toStatus } from "../serialize.ts";
 import { hashToken, now } from "../tokens.ts";
@@ -21,7 +22,10 @@ export function syncRoutes({ db, notifier }: Deps) {
           .returning(["token_hash", "channel_id"])
           .execute()
       : [];
-    const channelIds = humans.map((h) => h.channel_id);
+    const isAdmin = await isServerToken(db, bearer(c.req.header("authorization")));
+    const channelIds = isAdmin
+      ? (await db.selectFrom("channels").select("id").execute()).map((ch) => ch.id)
+      : humans.map((h) => h.channel_id);
     const valid = new Set(humans.map((h) => h.token_hash));
     const revoked = [...hashes].filter(([hash]) => !valid.has(hash)).map(([, token]) => token);
 

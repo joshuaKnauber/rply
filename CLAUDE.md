@@ -185,6 +185,13 @@ ntfy has no accounts: the topic name is the identity and the app keeps a local l
 - Self-host: if `RPLY_ADMIN_TOKEN` is unset, channel creation is open (fine for a private instance). If it is set, `init` needs `--server-token`.
 - Server tokens `rply_k_…` live in an `api_keys` table; the env var seeds one row. The hosted version uses the same slot for per-account API keys, so the CLI does not change.
 
+### Owner sign-in (self-hosted multi-device)
+Pairing is per device (like ntfy without auth, where each device subscribes on its own). So that the owner sees everything on any device, the web app can **sign in with the admin token**:
+- A server token plus an `X-Rply-Channel: <id>` header authenticates as the human side of that channel (read, reply, answer; not agent actions).
+- `GET /v1/admin/channels` lists every channel. `POST /v1/sync` with a server token as bearer covers every channel.
+- The web app keeps the admin token in localStorage (`rply.admin`). While signed in, it lists channels from the server (refetched every 15s) instead of its paired list. It only offers sign-in when the server has an admin token.
+- This stands in for accounts until the hosted version. ntfy's equivalent is user login with synced subscriptions. On rply.sh, an account would see the channels it owns (`owner_id`).
+
 ### End-to-end encryption (optional, per channel)
 Plaintext is the default. E2E mostly protects against the server operator, which is you when self-hosting, and plaintext keeps `curl` publishing, typed pairing codes, server-side MCP and easy debugging.
 - Every message has an `enc` flag from day one. The body is either plain JSON or ciphertext, so a channel can have mixed history and the API never changes shape.
@@ -236,6 +243,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/channels` (server token if required) → channel, agent token, pairing code
 - `POST /v1/pairings` (agent) → new pairing code; `POST /v1/pairings/claim` (code) → human token
 - `GET /v1/channel` (either token) → channel info
+- `GET /v1/admin/channels` (server token) → all channels; a server token plus `X-Rply-Channel` works on the human-side routes
 - `GET /v1/info` (no auth) → `{ server_token_required }`, used by the web app to show the right setup command
 - `POST /v1/messages` (agent or human), `GET /v1/messages?since=&wait=&sender=` (without `since`: latest page, no waiting)
 - `GET /v1/messages/:id/replies?wait=60` (agent waiting on an ask)
@@ -264,7 +272,7 @@ An ask is an agent message with interactive blocks. A tap or form submit is a hu
 - `npm run dev:server` (watch mode, `rply.db` in the cwd) plus `npm run dev:web` (Vite on 5173, proxies `/v1` to 8080). `npm run build` builds the web app into `apps/web/dist`, which the server serves at `/` with an SPA fallback.
 - `npm test`, `npm run typecheck`.
 - Server env: `PORT` (8080), `RPLY_DB` (path to the SQLite file), `RPLY_ADMIN_TOKEN` (optional), `RPLY_WEB_DIR` (defaults to `apps/web/dist`).
-- Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`) + TanStack Query + wouter. Paired channels live in localStorage (`src/lib/channels.ts`). One `/v1/sync` long-poll loop (`src/lib/sync.ts`) merges new messages and statuses into the query cache.
+- Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`) + TanStack Query + wouter. Paired channels, read positions and the optional admin token live in localStorage (`src/lib/channels.ts`, built on `src/lib/store.ts`). Requests use `auth(entry)`, which adds `X-Rply-Channel` for admin entries. One `/v1/sync` long-poll loop (`src/lib/sync.ts`) merges new messages and statuses into the query cache.
 - Server tests use `app.request()` against an in-memory database (`packages/server/test`).
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) as `{ default, channels: { <key>: { server, token, channel, inbox_cursor } } }`. One machine can hold several channels. `init` saves each under `--channel <key>` or a slug of `--name`, and the first becomes the default. Other commands pick a channel with `--channel` / `RPLY_CHANNEL`, otherwise the default. `rply channels` lists them, and `rply channels use|remove` change the default or forget one. Old single-channel config files are migrated when read. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.

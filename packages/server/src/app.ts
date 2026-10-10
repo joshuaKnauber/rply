@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv, Deps } from "./context.ts";
+import { adminRoutes } from "./routes/admin.ts";
 import { channelRoutes } from "./routes/channels.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { statusRoutes } from "./routes/status.ts";
@@ -12,6 +13,7 @@ import { syncRoutes } from "./routes/sync.ts";
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
   const api = new Hono<AppEnv>()
     .use(bodyLimit({ maxSize: 256 * 1024 }))
+    .route("/", adminRoutes(deps))
     .route("/", channelRoutes(deps))
     .route("/", syncRoutes(deps))
     .route("/", statusRoutes(deps))

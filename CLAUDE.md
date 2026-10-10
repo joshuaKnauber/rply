@@ -218,6 +218,9 @@ rply pair                               # new pairing code for another device
 rply send "Deployed 3 new pages" [--title ..] [--priority high] [--blocks file.json]
 rply ask "Publish these 5 pages?" --buttons yes,no [--wait] [--timeout 1h]
 rply ask --form form.json --wait        # returns JSON answer on stdout
+rply wait <message-id> [--timeout 1h]   # answer to an earlier ask without --wait
+rply whoami
+rply status get
 rply inbox [--wait] [--since <cursor>]  # read human → agent messages
 rply listen                             # stream incoming messages (JSONL)
 rply status set status.json             # replace the status page
@@ -262,6 +265,8 @@ An ask is an agent message with interactive blocks. A tap or form submit is a hu
 - Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`) + TanStack Query + wouter. Paired channels live in localStorage (`src/lib/channels.ts`). One `/v1/sync` long-poll loop (`src/lib/sync.ts`) merges new messages and statuses into the query cache.
 - Server tests use `app.request()` against an in-memory database (`packages/server/test`).
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
+- CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) and holds server, agent token, channel and the inbox cursor. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
+- `inbox` and `listen` skip answers to asks (messages with `reply_to`). Those come through `ask --wait` or `rply wait <id>`. `ask` without `--buttons`/`--form` sends a one-field form (element id `answer`) and prints the plain string.
 - The CLI will need a build step before publishing to npm, because Node won't strip types inside `node_modules`.
 
 ## 13. Name

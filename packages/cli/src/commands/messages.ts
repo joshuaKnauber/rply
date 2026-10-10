@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { AgentMessageBody, Block, Message, MessagesResponse } from "@rply/schema";
 import { CliError } from "../client.ts";
-import { readConfig, saveCursor } from "../config.ts";
+import { saveCursor } from "../config.ts";
 import { connect, json } from "../context.ts";
 import { deadlineFrom, printJson, readJson } from "../io.ts";
 
@@ -54,14 +54,14 @@ export function registerMessages(program: Command) {
     .option("--since <seq>", "start after this cursor instead of the stored one")
     .option("--peek", "don't mark messages as read")
     .action(async (opts: { wait?: boolean; timeout?: string; since?: string; peek?: boolean }) => {
-      const { client } = connect();
-      let cursor = opts.since !== undefined ? Number(opts.since) : (readConfig()?.inbox_cursor ?? 0);
+      const { client, selected } = connect();
+      let cursor = opts.since !== undefined ? Number(opts.since) : (selected.config.inbox_cursor ?? 0);
       const deadline = opts.wait ? deadlineFrom(opts.timeout) : Date.now() + 1;
 
       const messages = await client.poll(deadline, async (waitSeconds) => {
         const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${opts.wait ? waitSeconds : 0}`);
         cursor = res.cursor;
-        if (!opts.peek) saveCursor(cursor);
+        if (!opts.peek) saveCursor(selected, cursor);
         const fresh = res.messages.filter((m) => !m.reply_to);
         return fresh.length || !opts.wait ? fresh : undefined;
       });
@@ -75,12 +75,12 @@ export function registerMessages(program: Command) {
     .command("listen")
     .description("stream messages from the human as they arrive (Ctrl+C to stop)")
     .action(async () => {
-      const { client } = connect();
-      let cursor = readConfig()?.inbox_cursor ?? 0;
+      const { client, selected } = connect();
+      let cursor = selected.config.inbox_cursor ?? 0;
       await client.poll(undefined, async (waitSeconds) => {
         const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${waitSeconds}`);
         cursor = res.cursor;
-        saveCursor(cursor);
+        saveCursor(selected, cursor);
         res.messages.filter((m) => !m.reply_to).forEach(printMessage);
         return undefined;
       });

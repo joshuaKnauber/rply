@@ -1,11 +1,18 @@
 import { createClient } from "./client.ts";
-import { loadConfig } from "./config.ts";
+import { selectChannel } from "./config.ts";
 
 let jsonMode = false;
-export const setJsonMode = (value: boolean) => (jsonMode = value);
+let requestedChannel: string | undefined;
+
+export function setGlobalOptions(opts: { json?: boolean; channel?: string }) {
+  jsonMode = Boolean(opts.json);
+  requestedChannel = opts.channel ?? process.env.RPLY_CHANNEL;
+}
+
 export const json = () => jsonMode;
+export const requested = () => requestedChannel;
 
 export function connect() {
-  const config = loadConfig();
-  return { config, client: createClient(config.server, config.token) };
+  const selected = selectChannel(requestedChannel);
+  return { selected, config: selected.config, client: createClient(selected.config.server, selected.config.token) };
 }

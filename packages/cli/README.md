@@ -32,6 +32,18 @@ rply status get
 rply pair | whoami | update
 ```
 
+## Several channels
+
+One machine can post to several channels, e.g. one per agent or project. `init` saves each channel under a short name (a slug of `--name`, or `--channel <name>`), and the first one becomes the default.
+
+```sh
+rply init https://your-rply-server --name "Shop agent" --channel shop
+rply send "Order synced" --channel shop    # or RPLY_CHANNEL=shop
+rply channels                              # list them, * marks the default
+rply channels use shop                     # change the default
+rply channels remove shop                  # forget it on this machine
+```
+
 Add `--json` to any command for machine-readable output. Exit code 2 means a `--timeout` ran out.
 
 ## Blocks
@@ -49,6 +61,7 @@ Messages and status pages are lists of typed blocks: `markdown`, `heading`, `but
 ## Environment
 
 - `RPLY_SERVER` and `RPLY_TOKEN` replace the config file, which suits CI.
+- `RPLY_CHANNEL` picks a saved channel, like `--channel`.
 - `RPLY_SERVER_TOKEN` supplies `init --server-token`.
 - `RPLY_CONFIG` sets the config path (default `~/.config/rply/config.json`).
 - `RPLY_NO_UPDATE_CHECK=1` turns off the daily update check.

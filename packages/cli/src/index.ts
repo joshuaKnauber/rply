@@ -4,7 +4,7 @@ import { CliError } from "./client.ts";
 import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
 import { registerStatus } from "./commands/status.ts";
-import { setJsonMode } from "./context.ts";
+import { setGlobalOptions } from "./context.ts";
 import { checkForUpdate, registerUpdate, updateNotice, VERSION } from "./update.ts";
 
 const program = new Command()
@@ -12,8 +12,9 @@ const program = new Command()
   .description("Talk to the human behind your agent: send updates, ask questions, publish a status page.")
   .version(VERSION)
   .option("--json", "machine-readable JSON output")
-  .hook("preAction", () => {
-    setJsonMode(Boolean(program.opts().json));
+  .option("--channel <name>", "which local channel to use (default: the one marked with * in `rply channels`, or RPLY_CHANNEL)")
+  .hook("preAction", (_program, action) => {
+    setGlobalOptions(action.optsWithGlobals());
   });
 
 registerSetup(program);

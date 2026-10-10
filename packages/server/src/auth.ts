@@ -40,9 +40,13 @@ async function authenticate(db: DB, token: string) {
   return undefined;
 }
 
-export async function requireServerToken(db: DB, header: string | undefined) {
+export async function serverTokenRequired(db: DB) {
   const { count } = await db.selectFrom("api_keys").select((eb) => eb.fn.countAll<number>().as("count")).executeTakeFirstOrThrow();
-  if (Number(count) === 0) return;
+  return Number(count) > 0;
+}
+
+export async function requireServerToken(db: DB, header: string | undefined) {
+  if (!(await serverTokenRequired(db))) return;
 
   const token = bearer(header);
   const key = token && (await db.selectFrom("api_keys").select("id").where("token_hash", "=", hashToken(token)).executeTakeFirst());

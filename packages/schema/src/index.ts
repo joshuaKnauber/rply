@@ -127,6 +127,8 @@ export type Status = {
 
 export type Pairing = { code: string; expires_at: number };
 
+export type ServerInfo = { server_token_required: boolean };
+
 export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
 export type ClaimPairingResponse = { channel: Channel; token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };

@@ -1,7 +1,14 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { ClaimPairingRequest, CreateChannelRequest, type ClaimPairingResponse, type CreateChannelResponse, type Pairing } from "@rply/schema";
-import { requireAuth, requireServerToken } from "../auth.ts";
+import {
+  ClaimPairingRequest,
+  CreateChannelRequest,
+  type ClaimPairingResponse,
+  type CreateChannelResponse,
+  type Pairing,
+  type ServerInfo,
+} from "@rply/schema";
+import { requireAuth, requireServerToken, serverTokenRequired } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
 import type { DB } from "../db/index.ts";
 import { toChannel } from "../serialize.ts";
@@ -13,6 +20,10 @@ export function channelRoutes(deps: Deps) {
   const { db } = deps;
 
   return new Hono<AppEnv>()
+    .get("/info", async (c) => {
+      const info: ServerInfo = { server_token_required: await serverTokenRequired(db) };
+      return c.json(info);
+    })
     .post("/channels", async (c) => {
       await requireServerToken(db, c.req.header("authorization"));
       const { name } = parse(CreateChannelRequest, await c.req.json());

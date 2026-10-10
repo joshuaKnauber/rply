@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { claimPairing } from "@/lib/pairing";
+import { SetupCommand } from "./SetupCommand";
 
 export function AddChannelDialog({ trigger }: { trigger: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -27,8 +28,8 @@ export function AddChannelDialog({ trigger }: { trigger: React.ReactNode }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
-        <form onSubmit={submit} className="flex flex-col gap-4">
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={submit} className="flex min-w-0 flex-col gap-4">
           <DialogHeader>
             <DialogTitle>Add channel</DialogTitle>
             <DialogDescription>
@@ -43,6 +44,10 @@ export function AddChannelDialog({ trigger }: { trigger: React.ReactNode }) {
             </Button>
           </DialogFooter>
         </form>
+        <div className="flex min-w-0 flex-col gap-3 border-t pt-4">
+          <p className="text-sm font-medium">New agent?</p>
+          <SetupCommand />
+        </div>
       </DialogContent>
     </Dialog>
   );

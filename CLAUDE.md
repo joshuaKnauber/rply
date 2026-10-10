@@ -235,6 +235,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/channels` (server token if required) → channel, agent token, pairing code
 - `POST /v1/pairings` (agent) → new pairing code; `POST /v1/pairings/claim` (code) → human token
 - `GET /v1/channel` (either token) → channel info
+- `GET /v1/info` (no auth) → `{ server_token_required }`, used by the web app to show the right setup command
 - `POST /v1/messages` (agent or human), `GET /v1/messages?since=&wait=&sender=` (without `since`: latest page, no waiting)
 - `GET /v1/messages/:id/replies?wait=60` (agent waiting on an ask)
 - `PUT /v1/status`, `PATCH /v1/status`, `GET /v1/status`

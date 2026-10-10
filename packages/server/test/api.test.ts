@@ -110,9 +110,11 @@ test("channel creation requires the admin token once set", async () => {
   const { db, request } = await setup();
   await syncAdminToken(db, "secret");
 
+  assert.equal((await request("GET", "/info")).json.server_token_required, true);
   assert.equal((await request("POST", "/channels", { body: { name: "x" } })).status, 401);
   assert.equal((await request("POST", "/channels", { token: "secret", body: { name: "x" } })).status, 201);
 
   await syncAdminToken(db, undefined);
+  assert.equal((await request("GET", "/info")).json.server_token_required, false);
   assert.equal((await request("POST", "/channels", { body: { name: "x" } })).status, 201);
 });

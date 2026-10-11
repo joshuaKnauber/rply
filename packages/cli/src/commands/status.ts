@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { Status } from "@rply/schema";
+import type { Message } from "@rply/schema";
 import { CliError } from "../client.ts";
 import { connect, json } from "../context.ts";
 import { printJson, readJson } from "../io.ts";
@@ -15,7 +15,7 @@ export function registerStatus(program: Command) {
       const input = readJson(source);
       const blocks = Array.isArray(input) ? input : (input as { blocks?: unknown }).blocks;
       if (!Array.isArray(blocks)) throw new CliError("Expected a blocks array or an object with a blocks array");
-      report(await connect().client.request<{ status: Status }>("PUT", "/status", { body: { blocks } }));
+      report(await connect().client.request<{ status: Message }>("PUT", "/status", { body: { blocks } }));
     });
 
   status
@@ -25,19 +25,19 @@ export function registerStatus(program: Command) {
     .action(async (source: string) => {
       const input = readJson(source);
       const blocks = Array.isArray(input) ? input : [input];
-      report(await connect().client.request<{ status: Status }>("PATCH", "/status", { blocks }));
+      report(await connect().client.request<{ status: Message }>("PATCH", "/status", { blocks }));
     });
 
   status
     .command("get")
     .description("print the current status page as JSON")
     .action(async () => {
-      const { status } = await connect().client.request<{ status: Status | null }>("GET", "/status");
+      const { status } = await connect().client.request<{ status: Message | null }>("GET", "/status");
       printJson(status?.body ?? null);
     });
 }
 
-function report({ status }: { status: Status }) {
+function report({ status }: { status: Message }) {
   if (json()) return printJson(status);
   console.log("Status page updated");
 }

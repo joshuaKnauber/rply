@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { CliError } from "./client.ts";
+import { registerAsks } from "./commands/asks.ts";
 import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
 import { registerStatus } from "./commands/status.ts";
@@ -19,6 +20,7 @@ const program = new Command()
 
 registerSetup(program);
 registerMessages(program);
+registerAsks(program);
 registerStatus(program);
 registerUpdate(program);
 

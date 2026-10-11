@@ -1,5 +1,5 @@
 import type { Generated, Selectable } from "kysely";
-import type { Sender } from "@rply/schema";
+import type { AskStatus, MessageState, Sender } from "@rply/schema";
 
 export interface Database {
   channels: ChannelsTable;
@@ -7,7 +7,8 @@ export interface Database {
   pairing_codes: PairingCodesTable;
   api_keys: ApiKeysTable;
   messages: MessagesTable;
-  status_pages: StatusPagesTable;
+  asks: AsksTable;
+  changes: ChangesTable;
 }
 
 interface ChannelsTable {
@@ -53,16 +54,28 @@ interface MessagesTable {
   enc: number;
   body: string;
   reply_to: string | null;
+  pin: string | null;
+  state: MessageState | null;
   created_at: number;
+  updated_at: number | null;
 }
 
-interface StatusPagesTable {
+interface AsksTable {
+  message_id: string;
   channel_id: string;
-  enc: number;
-  body: string;
-  updated_at: number;
+  status: AskStatus;
+  expires_at: number | null;
+  answer_id: string | null;
+  closed_at: number | null;
+}
+
+interface ChangesTable {
+  seq: Generated<number>;
+  channel_id: string;
+  message_id: string;
+  created_at: number;
 }
 
 export type ChannelRow = Selectable<ChannelsTable>;
 export type MessageRow = Selectable<MessagesTable>;
-export type StatusRow = Selectable<StatusPagesTable>;
+export type AskRow = Selectable<AsksTable>;

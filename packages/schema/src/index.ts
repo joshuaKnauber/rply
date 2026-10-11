@@ -1,71 +1,115 @@
 import { z } from "zod";
 
 const elementId = z.string().min(1).max(64);
+const Json = z.json();
 
-const FormField = z.discriminatedUnion("type", [
-  z.object({
-    type: z.enum(["text", "textarea"]),
-    name: elementId,
-    label: z.string(),
-    placeholder: z.string().optional(),
-    required: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal("number"),
-    name: elementId,
-    label: z.string(),
-    required: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal("select"),
-    name: elementId,
-    label: z.string(),
-    options: z.array(z.string()).min(1),
-    required: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal("toggle"),
-    name: elementId,
-    label: z.string(),
-  }),
-]);
+const ChoiceOption = z.object({
+  label: z.string().min(1),
+  value: z.string().optional(),
+  description: z.string().optional(),
+  danger: z.boolean().optional(),
+});
 
-export const Block = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("markdown"), id: elementId.optional(), text: z.string() }),
-  z.object({ type: z.literal("heading"), id: elementId.optional(), text: z.string() }),
-  z.object({
-    type: z.literal("buttons"),
-    id: elementId,
-    options: z.array(z.object({ label: z.string(), value: z.string() })).min(1),
-  }),
-  z.object({
-    type: z.literal("form"),
-    id: elementId,
-    fields: z.array(FormField).min(1),
-    submit_label: z.string().optional(),
-  }),
-  z.object({
+const blockSchemas = {
+  markdown: z.object({ type: z.literal("markdown"), id: elementId.optional(), text: z.string() }),
+  heading: z.object({ type: z.literal("heading"), id: elementId.optional(), text: z.string() }),
+  code: z.object({ type: z.literal("code"), id: elementId.optional(), code: z.string(), language: z.string().optional() }),
+  link: z.object({ type: z.literal("link"), id: elementId.optional(), url: z.url(), label: z.string().optional() }),
+  progress: z.object({
     type: z.literal("progress"),
     id: elementId.optional(),
     value: z.number(),
     max: z.number().positive().optional(),
     label: z.string().optional(),
   }),
-  z.object({
+  keyvalue: z.object({
     type: z.literal("keyvalue"),
     id: elementId.optional(),
     items: z.array(z.object({ key: z.string(), value: z.string() })),
   }),
-  z.object({
+  table: z.object({
     type: z.literal("table"),
     id: elementId.optional(),
     columns: z.array(z.string()),
     rows: z.array(z.array(z.union([z.string(), z.number()]))),
   }),
-  z.object({ type: z.literal("code"), id: elementId.optional(), code: z.string(), language: z.string().optional() }),
-  z.object({ type: z.literal("link"), id: elementId.optional(), url: z.url(), label: z.string().optional() }),
-]);
-export type Block = z.infer<typeof Block>;
+  html: z.object({
+    type: z.literal("html"),
+    id: elementId.optional(),
+    html: z.string(),
+    height: z.number().int().positive().max(2000).optional(),
+    label: z.string().optional(),
+  }),
+  choice: z.object({
+    type: z.literal("choice"),
+    id: elementId,
+    label: z.string().optional(),
+    options: z.array(ChoiceOption).min(1),
+    multi: z.boolean().optional(),
+    other: z.boolean().optional(),
+    required: z.boolean().optional(),
+    default: z.union([z.string(), z.array(z.string())]).optional(),
+  }),
+  text_input: z.object({
+    type: z.literal("text_input"),
+    id: elementId,
+    label: z.string().optional(),
+    placeholder: z.string().optional(),
+    multiline: z.boolean().optional(),
+    required: z.boolean().optional(),
+    default: z.string().optional(),
+  }),
+  number_input: z.object({
+    type: z.literal("number_input"),
+    id: elementId,
+    label: z.string().optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    required: z.boolean().optional(),
+    default: z.number().optional(),
+  }),
+  toggle: z.object({
+    type: z.literal("toggle"),
+    id: elementId,
+    label: z.string(),
+    default: z.boolean().optional(),
+  }),
+  confirm: z.object({
+    type: z.literal("confirm"),
+    id: elementId,
+    label: z.string(),
+    description: z.string().optional(),
+    danger: z.boolean().optional(),
+  }),
+};
+
+type BlockSchemas = typeof blockSchemas;
+export type BlockType = keyof BlockSchemas;
+export type KnownBlock = { [K in BlockType]: z.infer<BlockSchemas[K]> }[BlockType];
+export type BlockOf<T extends BlockType> = z.infer<BlockSchemas[T]>;
+export type UnknownBlock = { type: string; id?: string; [key: string]: unknown };
+export type Block = KnownBlock | UnknownBlock;
+
+export const INPUT_TYPES = ["choice", "text_input", "number_input", "toggle", "confirm"] as const;
+
+export const isKnownBlock = (block: Block): block is KnownBlock => block.type in blockSchemas;
+
+export const isInput = (block: Block) =>
+  (INPUT_TYPES as readonly string[]).includes(block.type) || (block.type === "html" && block.id !== undefined);
+
+export const Block = z
+  .looseObject({ type: z.string().min(1), id: elementId.optional() })
+  .superRefine((block, ctx) => {
+    const schema = blockSchemas[block.type as BlockType];
+    if (!schema) return;
+    const result = schema.safeParse(block);
+    if (!result.success) for (const issue of result.error.issues) ctx.addIssue({ ...issue, input: undefined } as never);
+  }) as unknown as z.ZodType<Block>;
+
+const uniqueInputIds = (blocks: Block[] | undefined) => {
+  const ids = (blocks ?? []).filter(isInput).map((b) => b.id);
+  return new Set(ids).size === ids.length;
+};
 
 export const AgentMessageBody = z
   .object({
@@ -73,34 +117,49 @@ export const AgentMessageBody = z
     text: z.string().optional(),
     blocks: z.array(Block).optional(),
   })
-  .refine((b) => b.text !== undefined || (b.blocks?.length ?? 0) > 0, "A message needs text or blocks");
+  .refine((b) => b.text !== undefined || (b.blocks?.length ?? 0) > 0, "A message needs text or blocks")
+  .refine((b) => uniqueInputIds(b.blocks), "Input ids must be unique within a message");
 export type AgentMessageBody = z.infer<typeof AgentMessageBody>;
 
-export const Action = z.object({ element_id: elementId, value: z.json() });
-export type Action = z.infer<typeof Action>;
+export const StatusBody = z.object({ blocks: z.array(Block) });
+export type StatusBody = z.infer<typeof StatusBody>;
+
+export const Answers = z.record(elementId, Json);
+export type Answers = z.infer<typeof Answers>;
 
 export const HumanMessageBody = z
   .object({
     text: z.string().optional(),
-    action: Action.optional(),
+    answers: Answers.optional(),
   })
-  .refine((b) => b.text !== undefined || b.action !== undefined, "A message needs text or an action");
+  .refine((b) => b.text !== undefined || (b.answers && Object.keys(b.answers).length > 0), "A message needs text or answers");
 export type HumanMessageBody = z.infer<typeof HumanMessageBody>;
-
-export const StatusBody = z.object({ blocks: z.array(Block) });
-export type StatusBody = z.infer<typeof StatusBody>;
 
 const Plain = z.object({ enc: z.literal(false).default(false), body: z.unknown() });
 const Encrypted = z.object({ enc: z.literal(true), body: z.string().min(1) });
 const Payload = z.union([Encrypted, Plain]);
 
+export const BlockPatch = z.looseObject({ id: elementId });
+
 export const CreateChannelRequest = z.object({ name: z.string().min(1).max(100) });
 export const ClaimPairingRequest = z.object({ code: z.string().min(1).max(32), label: z.string().max(100).optional() });
-export const PostMessageRequest = z.intersection(Payload, z.object({ reply_to: z.string().optional() }));
+export const PostMessageRequest = z.intersection(
+  Payload,
+  z.object({
+    reply_to: z.string().optional(),
+    ask: z.object({ expires_at: z.number().int().optional() }).optional(),
+  }),
+);
+export const ReplaceMessageRequest = Payload;
 export const PutStatusRequest = Payload;
-export const PatchStatusRequest = z.object({
-  blocks: z.array(z.object({ id: elementId }).catchall(z.unknown())).min(1),
+export const PatchMessageRequest = z.object({
+  title: z.string().max(200).optional(),
+  text: z.string().optional(),
+  blocks: z.array(Block).optional(),
+  block_patches: z.array(BlockPatch).optional(),
 });
+export const PatchStatusRequest = z.object({ blocks: z.array(BlockPatch).min(1) });
+export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
 export const SyncRequest = z.object({
   tokens: z.array(z.string()).max(200),
   cursor: z.string().optional(),
@@ -108,8 +167,12 @@ export const SyncRequest = z.object({
 });
 
 export type Sender = "agent" | "human";
+export type AskStatus = "open" | "answered" | "expired" | "cancelled";
+export type MessageState = "seen" | "working" | "done";
 
 export type Channel = { id: string; name: string; e2e: boolean; created_at: number };
+
+export type Ask = { status: AskStatus; expires_at: number | null; answer_id: string | null };
 
 export type Message = {
   seq: number;
@@ -117,13 +180,12 @@ export type Message = {
   channel_id: string;
   sender: Sender;
   reply_to: string | null;
+  pin: string | null;
+  ask: Ask | null;
+  state: MessageState | null;
   created_at: number;
+  updated_at: number | null;
 } & ({ enc: false; body: AgentMessageBody | HumanMessageBody } | { enc: true; body: string });
-
-export type Status = {
-  channel_id: string;
-  updated_at: number;
-} & ({ enc: false; body: StatusBody } | { enc: true; body: string });
 
 export type Pairing = { code: string; expires_at: number };
 
@@ -132,4 +194,5 @@ export type ServerInfo = { server_token_required: boolean };
 export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
 export type ClaimPairingResponse = { channel: Channel; token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };
-export type SyncResponse = { cursor: string; messages: Message[]; statuses: Status[]; revoked: string[] };
+export type AskResponse = { message: Message; answer: Message | null };
+export type SyncResponse = { cursor: string; messages: Message[]; revoked: string[] };

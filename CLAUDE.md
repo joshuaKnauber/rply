@@ -223,9 +223,13 @@ rply.sh hosting is not part of v1, but the design leaves room for it:
 rply init <server-url> [--name ..] [--server-token ..] [--e2e]   # creates channel, prints QR + link
 rply pair                               # new pairing code for another device
 rply send "Deployed 3 new pages" [--title ..] [--priority high] [--blocks file.json]
-rply ask "Publish these 5 pages?" --buttons yes,no [--wait] [--timeout 1h]
-rply ask --form form.json --wait        # returns JSON answer on stdout
+rply ask "Publish these 5 pages?" --choices yes,no [--multi] [--other] [--default no] [--expires 2h] [--wait] [--timeout 1h]
+rply ask "Delete 40 pages?" --confirm Delete --danger --wait
+rply ask "New page" --blocks questions.json --wait   # several questions, prints JSON keyed by block id
 rply wait <message-id> [--timeout 1h]   # answer to an earlier ask without --wait
+rply asks | cancel <message-id>         # open questions / withdraw one
+rply edit <message-id> [text] [--patch '{"id":"p","value":7}']
+rply ack <message-id> working|done
 rply whoami
 rply channels [use|remove <name>]    # several channels per machine, --channel <name> on any command
 rply status get
@@ -238,33 +242,42 @@ rply e2e enable
 ```
 Output should be machine-friendly (JSON with `--json`) and self-describing (`--help`, perhaps a `describe` command that prints a JSON schema, as Agent Mail CLI does).
 
-### Server API (rough)
+### Server API
 The token decides the channel and the sender side, so most routes don't need a channel ID.
 - `POST /v1/channels` (server token if required) → channel, agent token, pairing code
 - `POST /v1/pairings` (agent) → new pairing code; `POST /v1/pairings/claim` (code) → human token
 - `GET /v1/channel` (either token) → channel info
 - `GET /v1/admin/channels` (server token) → all channels; a server token plus `X-Rply-Channel` works on the human-side routes
 - `GET /v1/info` (no auth) → `{ server_token_required }`, used by the web app to show the right setup command
-- `POST /v1/messages` (agent or human), `GET /v1/messages?since=&wait=&sender=` (without `since`: latest page, no waiting)
-- `GET /v1/messages/:id/replies?wait=60` (agent waiting on an ask)
-- `PUT /v1/status`, `PATCH /v1/status`, `GET /v1/status`
-- `POST /v1/sync` (client sends all its human tokens plus a cursor, long-polls for events across those channels, so the web app needs one open request rather than one per channel)
+- `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
+- `PUT|PATCH /v1/messages/:id` (agent edits), `POST /v1/messages/:id/cancel` (agent cancels a question), `POST /v1/messages/:id/state` (agent: seen|working|done on a human message)
+- `GET /v1/asks` (agent: open questions), `GET /v1/asks/:id?wait=60` (agent: long-poll until answered, expired or cancelled → `{ message, answer }`)
+- `PUT /v1/status`, `PATCH /v1/status`, `GET /v1/status` (the pinned `status` message)
+- `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
 - later: `POST /v1/secrets/requests`, `POST /v1/secrets/:id/fulfil`, `GET /v1/secrets/:id?wait=`, `POST /v1/devices`, `/mcp`
 
 ### Data model
 ```
-channels        id, name, icon, agent_token_hash, agent_public_key, e2e, owner_id (null), created_at
+channels        id, name, agent_token_hash, agent_public_key, e2e, owner_id (null), created_at
 human_tokens    id, channel_id, token_hash, label, created_at, last_seen_at, revoked_at
 pairing_codes   code_hash, channel_id, expires_at, used_at
 api_keys        id, token_hash, owner_id (null), label, created_at
-messages        seq (cursor), id, channel_id, sender ('agent'|'human'), enc,
-                body (JSON text or ciphertext), reply_to, created_at
-status_pages    channel_id, body, enc, updated_at
+messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), enc,
+                body (JSON text or ciphertext), reply_to, pin (null | 'status' | ...), state (human msgs: seen|working|done),
+                created_at, updated_at
+asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
+changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 -- later:
 devices         human_token_id, push_token, platform, created_at
 secret_requests id, channel_id, name, target, reason, ciphertext, status, expires_at
 ```
-An ask is an agent message with interactive blocks. A tap or form submit is a human message with `reply_to` set and `{action: {element_id, value}}` in its body. The action lives inside the body so E2E covers form answers too; only `reply_to` stays visible to the server. "Answered" is derived from that; add a separate `asks` table only if expiry or single-answer rules need it.
+
+### Messages, blocks and questions (decided)
+- **Blocks** are an open list of `{ type, id?, ...fields }`. Display blocks: `markdown`, `heading`, `code`, `link`, `progress`, `keyvalue`, `table`, `html`. Input blocks (need an `id`): `choice` (options with `description`/`danger`, `multi`, `other`, `default`), `text_input`, `number_input`, `toggle`, `confirm`, and `html` when it has an `id`. The server validates known types and **accepts unknown types**; apps render unknown types as an "update the app" placeholder, so new block types don't need a coordinated release.
+- **Questions**: an agent message containing input blocks is an ask (detected from plaintext, or declared with `ask: { expires_at }` for E2E). One message can hold several questions. The human answers **once per message** with `{ reply_to, body: { answers: { <block id>: value } } }`; the first answer wins (later ones get 409), expired and cancelled questions also refuse answers. `default` values live in the blocks and are applied by the CLI on expiry. Apps auto-submit when a message has exactly one simple input (single choice, confirm, html), otherwise they show one "Send answers" button.
+- **Editable messages**: agents can `PATCH` (title/text/blocks, or `block_patches` merged by id) or `PUT` (full replace, for E2E) their own messages. Every change writes a `changes` row, and `/v1/sync` returns the current state of changed messages, so edits, ask status and acknowledgements reach all clients live.
+- **Status page = pinned message** with `pin = 'status'`, kept out of the thread. More pages later are more pin keys.
+- **Acknowledgements**: reading the inbox (without `peek`) marks human messages `seen`; the agent sets `working` / `done` with `rply ack`.
 
 ## 12. Development
 
@@ -280,7 +293,8 @@ An ask is an agent message with interactive blocks. A tap or form submit is a hu
 - The API sends permissive CORS headers (`*`). That's safe because auth is bearer tokens, not cookies, and it lets the Expo web build and future multi-server web clients reach any server.
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) as `{ default, channels: { <key>: { server, token, channel, inbox_cursor } } }`. One machine can hold several channels. `init` saves each under `--channel <key>` or a slug of `--name`, and the first becomes the default. Other commands pick a channel with `--channel` / `RPLY_CHANNEL`, otherwise the default. `rply channels` lists them, and `rply channels use|remove` change the default or forget one. Old single-channel config files are migrated when read. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
-- `inbox` and `listen` skip answers to asks (messages with `reply_to`). Those come through `ask --wait` or `rply wait <id>`. `ask` without `--buttons`/`--form` sends a one-field form (element id `answer`) and prints the plain string.
+- `inbox` and `listen` skip answers to questions (messages with `reply_to`); those come through `ask --wait` or `rply wait <id>`. `ask` without `--choices`/`--confirm`/input blocks adds a `text_input` (id `answer`). With `--wait`, one question prints its value, several print a JSON object; exit 2 = expired without default or timed out, 3 = cancelled. `--timeout` also sets the question's expiry unless `--expires` is given.
+- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once.
 - Publishing the CLI: `npm run build -w @rply/cli` bundles everything with esbuild into `packages/cli/dist/rply.js` (Node won't strip types inside `node_modules`). All runtime libraries are devDependencies because they're inlined, so the published package has no dependencies. `prepublishOnly` runs the build. To release, bump `version` in `packages/cli/package.json`, then `npm publish -w @rply/cli`. The npm package is `@rply/cli` (npm blocked the unscoped name `rply` as too similar to existing packages), but the command it installs is still `rply`.
 - Update check (`packages/cli/src/update.ts`): at most once a day the CLI fetches the latest `@rply/cli` version from the npm registry (1.5s timeout, cached in `update-check.json` next to the config). If a newer version exists, it prints a notice to stderr after the command, telling the agent to run `rply update` (which runs `npm install --global @rply/cli@latest`). `RPLY_NO_UPDATE_CHECK=1` turns it off.
 

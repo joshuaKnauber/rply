@@ -1,5 +1,6 @@
 import type { Command } from "commander";
-import { isAnswer, type AgentMessageBody, type Block, type Message, type MessagesResponse } from "@rply/schema";
+import type { AgentMessageBody, Block, Message, MessagesResponse } from "@rply/schema";
+import { isAnswer } from "@rply/schema/helpers";
 import { CliError } from "../client.ts";
 import { saveCursor } from "../config.ts";
 import { connect, json } from "../context.ts";

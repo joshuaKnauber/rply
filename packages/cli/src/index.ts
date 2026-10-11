@@ -5,6 +5,7 @@ import { registerAsks } from "./commands/asks.ts";
 import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
 import { registerPins } from "./commands/pins.ts";
+import { registerSecrets } from "./commands/secrets.ts";
 import { setGlobalOptions } from "./context.ts";
 import { checkForUpdate, registerUpdate, updateNotice, VERSION } from "./update.ts";
 
@@ -22,6 +23,7 @@ registerSetup(program);
 registerMessages(program);
 registerAsks(program);
 registerPins(program);
+registerSecrets(program);
 registerUpdate(program);
 
 const update = checkForUpdate().catch(() => undefined);

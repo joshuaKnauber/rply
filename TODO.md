@@ -14,6 +14,7 @@
 - [ ] Better UI
 - [ ] File, images, video sharing both ways
 - [ ] Postgres support
+- [ ] File and message retention, part of exposing some configs for the server for different hosts
 
 - [ ] Hosted version
 - [ ] Documentation

@@ -1,10 +1,12 @@
 import "../global.css";
+import "@/lib/polyfills";
 import { useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { loadStores, useChannels } from "@/lib/channels";
+import { loadTrustedKeys } from "@/lib/secrets";
 import { SyncAll } from "@/lib/sync";
 
 SplashScreen.preventAutoHideAsync();
@@ -16,7 +18,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadStores().finally(() => {
+    Promise.all([loadStores(), loadTrustedKeys()]).finally(() => {
       setReady(true);
       SplashScreen.hideAsync();
     });

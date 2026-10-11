@@ -272,3 +272,71 @@ test("the human can unpin a message, which moves it into the thread", async () =
   assert.match(patch.json.error, /unpinned/);
   assert.notEqual((await request("PUT", "/pins/status", { token: agent, body: { body: { text: "New" } } })).json.message.id, id);
 });
+
+test("secrets travel sealed to the agent's key and are deleted after delivery", async () => {
+  const { generateKeyPair, open, seal } = await import("@rply/schema/crypto");
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  const keys = generateKeyPair();
+
+  const request_ = { name: "OPENAI_API_KEY", target: "/srv/app/.env", mode: "env", reason: "keyword research" };
+  assert.equal((await request("POST", "/secrets", { token: agent, body: request_ })).status, 400);
+  assert.equal((await request("PUT", "/channel/key", { token: agent, body: { public_key: "nope" } })).status, 400);
+  await request("PUT", "/channel/key", { token: agent, body: { public_key: keys.publicKey } });
+  assert.equal((await request("POST", "/secrets", { token: agent, body: { ...request_, name: "BAD-NAME" } })).status, 400);
+
+  const created = await request("POST", "/secrets", { token: agent, body: request_ });
+  assert.equal(created.status, 201);
+  const id = created.json.id;
+  assert.equal(created.json.message.body.blocks[0].status, "open");
+
+  const { channel } = (await request("GET", "/channel", { token: human })).json;
+  assert.equal(channel.public_key, keys.publicKey);
+
+  const waiting = request("GET", `/secrets/${id}?wait=5`, { token: agent });
+  await delay(50);
+  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: agent, body: { ciphertext: "x" } })).status, 403);
+  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: human, body: { ciphertext: seal("sk-123", channel.public_key) } })).status, 204);
+  const got = (await waiting).json;
+  assert.equal(got.status, "provided");
+  assert.equal(open(got.ciphertext, keys.secretKey), "sk-123");
+
+  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: human, body: { ciphertext: "again" } })).status, 409);
+  assert.equal((await request("POST", `/secrets/${id}/delivered`, { token: agent })).status, 204);
+  const after = (await request("GET", `/secrets/${id}`, { token: agent })).json;
+  assert.equal(after.status, "delivered");
+  assert.equal(after.ciphertext, null);
+  const shown = (await request("GET", "/messages", { token: human })).json.messages[0];
+  assert.equal(shown.body.blocks[0].status, "delivered");
+  assert.equal(JSON.stringify(shown).includes("sk-123"), false);
+});
+
+test("secret requests can be declined, cancelled, expire, and can't be faked", async () => {
+  const { generateKeyPair } = await import("@rply/schema/crypto");
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  await request("PUT", "/channel/key", { token: agent, body: { public_key: generateKeyPair().publicKey } });
+  const create = (extra = {}) => request("POST", "/secrets", { token: agent, body: { name: "TOKEN", target: "/tmp/.env", mode: "env", ...extra } }).then((r) => r.json);
+
+  const declined = await create();
+  assert.equal((await request("POST", `/secrets/${declined.id}/decline`, { token: human })).status, 204);
+  assert.equal((await request("GET", `/secrets/${declined.id}`, { token: agent })).json.status, "declined");
+
+  const cancelled = await create();
+  assert.equal((await request("POST", `/secrets/${cancelled.id}/cancel`, { token: agent })).status, 204);
+  assert.equal((await request("POST", `/secrets/${cancelled.id}/fulfil`, { token: human, body: { ciphertext: "x" } })).status, 409);
+
+  const expiring = await create({ expires_at: Date.now() + 100 });
+  const waited = await request("GET", `/secrets/${expiring.id}?wait=30`, { token: agent });
+  assert.equal(waited.json.status, "expired");
+  assert.equal((await request("POST", `/secrets/${expiring.id}/fulfil`, { token: human, body: { ciphertext: "x" } })).status, 409);
+
+  const deleted = await create();
+  await request("DELETE", `/messages/${deleted.message.id}`, { token: agent });
+  assert.equal((await request("GET", `/secrets/${deleted.id}`, { token: agent })).json.status, "cancelled");
+
+  const fake = { type: "secret", id: "s", name: "X", target: "/x", mode: "env", status: "open", expires_at: null };
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [fake] } } })).status, 400);
+  assert.equal((await request("PUT", "/pins/x", { token: agent, body: { body: { blocks: [fake] } } })).status, 400);
+  assert.equal((await request("PATCH", `/messages/${declined.message.id}`, { token: agent, body: { text: "edit" } })).status, 400);
+});

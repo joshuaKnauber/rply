@@ -8,6 +8,8 @@ export type ChannelConfig = {
   token: string;
   channel?: { id: string; name: string };
   inbox_cursor?: number;
+  secret_key?: string;
+  public_key?: string;
 };
 
 type ConfigFile = { default?: string; channels: Record<string, ChannelConfig> };
@@ -54,10 +56,14 @@ export function selectChannel(requested?: string): Selected {
   return { key, config };
 }
 
-export function saveCursor({ key }: Selected, cursor: number) {
+export function saveCursor(selected: Selected, cursor: number) {
+  updateChannel(selected, { inbox_cursor: cursor });
+}
+
+export function updateChannel({ key }: Selected, values: Partial<ChannelConfig>) {
   if (!key) return;
   updateConfigFile((file) => {
-    if (file.channels[key]) file.channels[key].inbox_cursor = cursor;
+    if (file.channels[key]) Object.assign(file.channels[key], values);
   });
 }
 

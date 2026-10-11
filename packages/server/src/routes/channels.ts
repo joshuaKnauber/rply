@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import {
   ClaimPairingRequest,
   CreateChannelRequest,
+  PublicKeyRequest,
   type ClaimPairingResponse,
   type CreateChannelResponse,
   type Pairing,
@@ -44,6 +45,11 @@ export function channelRoutes(deps: Deps) {
       return c.json(res, 201);
     })
     .get("/channel", requireAuth(deps), (c) => c.json({ channel: toChannel(c.var.auth.channel) }))
+    .put("/channel/key", requireAuth(deps, "agent"), async (c) => {
+      const { public_key } = parse(PublicKeyRequest, await c.req.json());
+      await db.updateTable("channels").set({ agent_public_key: public_key }).where("id", "=", c.var.auth.channel.id).execute();
+      return c.json({ channel: toChannel({ ...c.var.auth.channel, agent_public_key: public_key }) });
+    })
     .post("/pairings", requireAuth(deps, "agent"), async (c) => c.json(await createPairing(db, c.var.auth.channel.id), 201))
     .post("/pairings/claim", async (c) => {
       const { code, label } = parse(ClaimPairingRequest, await c.req.json());

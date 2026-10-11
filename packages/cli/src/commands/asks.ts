@@ -1,5 +1,6 @@
 import type { Command } from "commander";
-import { inputDefaults, inputsOf, isInput, messageBlocks, type AskResponse, type Block, type Message } from "@rply/schema";
+import type { AskResponse, Block, Message } from "@rply/schema";
+import { inputDefaults, inputsOf, isInput, messageBlocks } from "@rply/schema/helpers";
 import { CliError } from "../client.ts";
 import { connect, json } from "../context.ts";
 import { deadlineFrom, parseDuration, printJson, readJson } from "../io.ts";

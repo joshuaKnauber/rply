@@ -2,6 +2,7 @@ import { Linking, Pressable, Text, View } from "react-native";
 import { isKnownBlock, type Block } from "@rply/schema";
 import { HtmlBlock } from "./HtmlBlock";
 import { Markdown } from "./Markdown";
+import { SecretBlock } from "./SecretBlock";
 
 const text = "text-neutral-900 dark:text-neutral-100";
 const muted = "text-neutral-500 dark:text-neutral-400";
@@ -69,6 +70,8 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           <Text className={`font-medium underline ${text}`}>{block.label ?? block.url}</Text>
         </Pressable>
       ) : null;
+    case "secret":
+      return <SecretBlock block={block} />;
     case "html":
       return <HtmlBlock block={block} onSend={onEvent && ((value, label) => onEvent(block.id ?? null, value, label))} />;
     default:

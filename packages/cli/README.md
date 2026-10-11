@@ -40,10 +40,18 @@ rply pin patch overview --patch '{"id":"pages","value":42}'
 rply pin remove overview | pin list
 rply status set|patch|get                                         # shortcut for the pin "status"
 
+rply secret request OPENAI_API_KEY --to .env --reason "for keyword research" --wait
+rply secret request "Service account" --to keys/sa.json --file --wait   # whole-file secret
+rply secret fetch <id> | secret cancel <id>
+
 rply pair | whoami | update
 ```
 
 Exit codes: 2 when a question expired without a default or `--timeout` ran out, 3 when it was cancelled.
+
+## Secrets
+
+`rply secret request` asks the human for a credential without it ever passing through you or the server. The human types it into the app, which encrypts it to a key that only this machine holds; the CLI decrypts it and writes it straight to the file (permissions 0600). In `.env` mode an existing `NAME=` line is replaced and the rest of the file kept. The CLI only ever prints `NAME written to /path`, never the value. Requests are single use, can expire (`--expires`), and the human can decline them (exit code 3).
 
 ## Several channels
 

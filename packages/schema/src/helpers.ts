@@ -1,4 +1,4 @@
-import type { Answers, Ask, AskStatus, Block, Message } from "./index.ts";
+import type { Answers, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
 
 export const INPUT_TYPES = ["choice", "text_input", "number_input", "toggle", "confirm"] as const;
 
@@ -13,6 +13,14 @@ export const isAnswer = (message: Message) =>
 
 export const isEvent = (message: Message) =>
   !message.enc && message.sender === "human" && "event" in message.body && message.body.event !== undefined;
+
+export const secretStatus = (block: BlockOf<"secret">): SecretStatus =>
+  block.status === "open" && block.expires_at !== null && block.expires_at <= Date.now() ? "expired" : block.status;
+
+export const hasSecretBlock = (blocks: unknown) => Array.isArray(blocks) && blocks.some((b) => b && typeof b === "object" && b.type === "secret");
+
+export const isWaiting = (message: Message) =>
+  askStatus(message.ask) === "open" || messageBlocks(message).some((b) => b.type === "secret" && secretStatus(b as BlockOf<"secret">) === "open");
 
 export const messageBlocks = (message: Message): Block[] => (!message.enc && "blocks" in message.body ? (message.body.blocks ?? []) : []);
 
@@ -53,6 +61,8 @@ export function preview(message: Message) {
   if ("event" in body && body.event) return `Sent: ${eventLabel(body.event)}`;
   if ("title" in body && body.title) return body.title;
   if (body.text) return body.text;
+  const secret = "blocks" in body ? body.blocks?.find((b) => b.type === "secret") : undefined;
+  if (secret) return `Secret requested: ${(secret as BlockOf<"secret">).name}`;
   return message.ask ? "Question" : "Message";
 }
 

@@ -9,6 +9,7 @@ export interface Database {
   messages: MessagesTable;
   asks: AsksTable;
   changes: ChangesTable;
+  secret_requests: SecretRequestsTable;
 }
 
 interface ChannelsTable {
@@ -75,6 +76,20 @@ interface ChangesTable {
   channel_id: string;
   message_id: string;
   created_at: number;
+}
+
+interface SecretRequestsTable {
+  id: string;
+  channel_id: string;
+  message_id: string;
+  name: string;
+  target: string;
+  mode: "env" | "file";
+  status: "open" | "provided" | "delivered" | "declined" | "cancelled";
+  ciphertext: string | null;
+  expires_at: number | null;
+  created_at: number;
+  closed_at: number | null;
 }
 
 export type ChannelRow = Selectable<ChannelsTable>;

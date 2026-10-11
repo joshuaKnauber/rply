@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HtmlBlock } from "./HtmlBlock";
 import { Markdown } from "./Markdown";
+import { SecretBlock } from "./SecretBlock";
 
 export type OnEvent = (blockId: string | null, value: unknown, label?: string) => void;
 
@@ -73,6 +74,8 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           {block.label ?? block.url}
         </a>
       ) : null;
+    case "secret":
+      return <SecretBlock block={block} />;
     case "html":
       return <HtmlBlock block={block} onSend={onEvent && ((value, label) => onEvent(block.id ?? null, value, label))} />;
     default:

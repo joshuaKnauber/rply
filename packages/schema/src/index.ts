@@ -85,6 +85,16 @@ const blockSchemas = {
     description: z.string().optional(),
     danger: z.boolean().optional(),
   }),
+  secret: z.object({
+    type: z.literal("secret"),
+    id: elementId,
+    name: z.string(),
+    target: z.string(),
+    mode: z.enum(["env", "file"]),
+    reason: z.string().optional(),
+    status: z.enum(["open", "provided", "delivered", "declined", "cancelled"]),
+    expires_at: z.number().nullable(),
+  }),
 };
 
 type BlockSchemas = typeof blockSchemas;
@@ -170,6 +180,19 @@ export const PatchMessageRequest = z.object({
   blocks: z.array(Block).optional(),
   block_patches: z.array(BlockPatch).optional(),
 });
+export const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const PublicKeyRequest = z.object({ public_key: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Expected a base64url X25519 public key") });
+export const CreateSecretRequest = z
+  .object({
+    name: z.string().min(1).max(100),
+    target: z.string().min(1).max(500),
+    mode: z.enum(["env", "file"]),
+    reason: z.string().max(500).optional(),
+    expires_at: z.number().int().optional(),
+  })
+  .refine((r) => r.mode !== "env" || ENV_NAME.test(r.name), "Environment variable names may only use letters, digits and _");
+export const FulfilSecretRequest = z.object({ ciphertext: z.string().min(1).max(200_000) });
+
 export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
 export const SyncRequest = z.object({
   tokens: z.array(z.string()).max(200),
@@ -181,7 +204,7 @@ export type Sender = "agent" | "human";
 export type AskStatus = "open" | "answered" | "expired" | "cancelled";
 export type MessageState = "seen" | "working" | "done";
 
-export type Channel = { id: string; name: string; e2e: boolean; created_at: number };
+export type Channel = { id: string; name: string; e2e: boolean; public_key: string | null; created_at: number };
 
 export type Ask = { status: AskStatus; expires_at: number | null; answer_id: string | null };
 
@@ -207,5 +230,7 @@ export type CreateChannelResponse = { channel: Channel; agent_token: string; pai
 export type ClaimPairingResponse = { channel: Channel; token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };
 export type AskResponse = { message: Message; answer: Message | null };
+export type SecretStatus = "open" | "provided" | "delivered" | "declined" | "cancelled" | "expired";
+export type SecretResponse = { id: string; name: string; target: string; mode: "env" | "file"; status: SecretStatus; ciphertext: string | null };
 export type SyncResponse = { cursor: string; messages: Message[]; revoked: string[] };
 export * from "./helpers.ts";

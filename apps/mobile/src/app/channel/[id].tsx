@@ -5,7 +5,8 @@ import type { Answers, Message, MessageState } from "@rply/schema";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
-import { eventLabel } from "@rply/schema";
+import { ChannelContext } from "@/lib/secrets";
+import { eventLabel, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
@@ -35,8 +36,10 @@ export default function ChannelScreen() {
               ),
         }}
       />
-      <Pinned entry={entry} />
-      <Thread entry={entry} />
+      <ChannelContext.Provider value={entry}>
+        <Pinned entry={entry} />
+        <Thread entry={entry} />
+      </ChannelContext.Provider>
     </KeyboardAvoidingView>
   );
 }
@@ -104,7 +107,7 @@ function Thread({ entry }: { entry: StoredChannel }) {
 
   const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
   const visible = messages.filter((m) => !isAnswer(m));
-  const waiting = visible.filter((m) => askStatus(m.ask) === "open");
+  const waiting = visible.filter(isWaiting);
 
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
@@ -152,7 +155,7 @@ function Thread({ entry }: { entry: StoredChannel }) {
           className="mx-3 mb-1 self-start rounded-full bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800"
         >
           <Text className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-            {waiting.length === 1 ? "A question is waiting for you" : `${waiting.length} questions are waiting for you`}
+            {waiting.length === 1 ? "Something is waiting for your reply" : `${waiting.length} things are waiting for your reply`}
           </Text>
         </Pressable>
       )}

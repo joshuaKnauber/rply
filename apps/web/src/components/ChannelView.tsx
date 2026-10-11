@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { removeChannel, type StoredChannel } from "@/lib/channels";
+import { ChannelContext } from "@/lib/secrets";
 import { PinnedMessages } from "./PinnedMessages";
 import { Thread } from "./Thread";
 
@@ -32,8 +33,10 @@ export function ChannelView({ entry }: { entry: StoredChannel }) {
           </Button>
         )}
       </header>
-      <PinnedMessages entry={entry} />
-      <Thread entry={entry} />
+      <ChannelContext.Provider value={entry}>
+        <PinnedMessages entry={entry} />
+        <Thread entry={entry} />
+      </ChannelContext.Provider>
     </div>
   );
 }

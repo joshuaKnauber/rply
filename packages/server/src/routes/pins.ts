@@ -5,6 +5,7 @@ import { requireAuth } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { applyPatch } from "../patch.ts";
+import { rejectSecretBlocks } from "./messages.ts";
 import { now, randomId } from "../tokens.ts";
 
 export function pinRoutes(deps: Deps) {
@@ -46,7 +47,9 @@ export function pinRoutes(deps: Deps) {
     .put("/pins/:key", agent, async (c) => {
       const key = pinKey(c.req.param("key"));
       const req = parse(PutPinRequest, await c.req.json());
-      const body = req.enc ? req.body : JSON.stringify(parse(PinnedBody, req.body));
+      const parsed = req.enc ? undefined : parse(PinnedBody, req.body);
+      rejectSecretBlocks(parsed?.blocks);
+      const body = req.enc ? req.body : JSON.stringify(parsed);
       return c.json({ message: await save(c.var.auth.channel.id, key, req.enc, body) });
     })
     .patch("/pins/:key", agent, async (c) => {
@@ -57,6 +60,7 @@ export function pinRoutes(deps: Deps) {
       if (current.enc) throw new HTTPException(400, { message: "Encrypted pins can't be patched, use PUT" });
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(PinnedBody, applyPatch(current.body, patch)));
+      rejectSecretBlocks(JSON.parse(body).blocks);
       return c.json({ message: await save(channel.id, key, false, body) });
     })
     .delete("/pins/:key", agent, async (c) => {

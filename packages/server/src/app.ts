@@ -9,6 +9,7 @@ import { adminRoutes } from "./routes/admin.ts";
 import { channelRoutes } from "./routes/channels.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { pinRoutes } from "./routes/pins.ts";
+import { secretRoutes } from "./routes/secrets.ts";
 import { syncRoutes } from "./routes/sync.ts";
 
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
@@ -19,6 +20,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", channelRoutes(deps))
     .route("/", syncRoutes(deps))
     .route("/", pinRoutes(deps))
+    .route("/", secretRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

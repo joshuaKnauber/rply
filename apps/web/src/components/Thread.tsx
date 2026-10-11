@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import type { Answers, Message, MessageState } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { markRead, type StoredChannel } from "@/lib/channels";
-import { eventLabel } from "@rply/schema";
+import { eventLabel, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, useSendMessage } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export function Thread({ entry }: { entry: StoredChannel }) {
 
   const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
   const visible = messages.filter((m) => !isAnswer(m));
-  const waiting = visible.filter((m) => askStatus(m.ask) === "open");
+  const waiting = visible.filter(isWaiting);
 
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
@@ -63,7 +63,7 @@ export function Thread({ entry }: { entry: StoredChannel }) {
             onClick={() => document.getElementById(`msg-${waiting[0]!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
           >
             <MessageCircleQuestionIcon />
-            {waiting.length === 1 ? "A question is waiting for you" : `${waiting.length} questions are waiting for you`}
+            {waiting.length === 1 ? "Something is waiting for your reply" : `${waiting.length} things are waiting for your reply`}
           </Button>
         </div>
       )}
@@ -117,7 +117,7 @@ function MessageView({
         className={cn(
           "max-w-[85%] rounded-xl px-4 py-3",
           fromAgent ? "bg-muted" : "bg-primary text-primary-foreground",
-          askStatus(message.ask) === "open" && "ring-primary/30 ring-2",
+          isWaiting(message) && "ring-primary/30 ring-2",
         )}
       >
         {content}

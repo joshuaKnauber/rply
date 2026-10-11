@@ -123,41 +123,25 @@ packages/relay     push relay (later)
 
 ## 6. Component system
 
-- Agents send **typed JSON blocks** validated by zod. The apps render only a known set; **no agent-supplied HTML or JS** runs in v1 (Agent Dash makes the same choice).
-- Initial component set (subject to change):
-  - `text` / `markdown`
-  - `heading`
-  - `buttons` (choices; tapping one sends a reply event with its value)
-  - `form` (text, number, select, toggle, textarea fields; submit returns structured JSON)
-  - `progress` (value plus label)
-  - `table`
-  - `keyvalue` / `stat` (for status pages)
-  - `link`
-  - `image` (URL or uploaded)
-  - `code`
-  - `secret_request` (special, see below)
-- **Status page** = an ordered list of blocks that the agent replaces or patches (`status set`, `status patch`).
-- Every interactive element carries an ID, so replies come back to the agent as structured events: `{ "message_id", "element_id", "value" }`.
-- With E2E on, the server can't validate blocks. Clients validate after decrypting and show unknown or invalid blocks as a placeholder.
+Agents send typed JSON **blocks**; the apps render a known set and show an "update the app" placeholder for unknown types. The current block set, questions, embeds (sandboxed `html` with the `rply.reply` / `rply.send` bridge), pinned messages and secret cards are specified in section 11 ("Messages, blocks and questions").
 
-## 7. Secrets (core differentiator)
+## 7. Secrets (core differentiator, built)
 
 Goal: the human can give an agent credentials (API keys etc.) **without the value ever entering the agent's LLM context or being readable by the server**.
 
 Flow:
-1. On `init`, the CLI generates a **keypair** and registers the public key with the server for that channel.
-2. The agent runs, e.g., `rply secret request OPENAI_API_KEY --to .env --reason "for keyword research API"`.
-3. The app shows a dedicated, masked secret field (never shown in chat history), labelled with the channel, the reason and the target path.
-4. The app **encrypts the value to the CLI's public key** (sealed box) and sends the ciphertext. The server only relays it and **deletes it after delivery**. This is independent of channel E2E: even other paired devices can't read a delivered secret.
-5. The CLI decrypts it and writes it directly:
-   - `.env` mode: add or update `KEY=value`, preserving the rest of the file
-   - whole-file mode
-   - OS keychain mode (later)
-   - file permissions `0600`
-6. The CLI prints / returns only metadata: `OPENAI_API_KEY written to .env`. **Never the value**, not on stdout, not in logs, not in MCP tool results.
-7. Requests are **single use** and **expire**.
+1. On the first `rply secret request` for a channel, the CLI generates an **X25519 keypair**, stores the private key in its config (`secret_key`, file mode 0600) and uploads the public key (`PUT /v1/channel/key`, exposed as `channel.public_key`). Every request re-uploads it, so a reset server gets it back.
+2. `rply secret request OPENAI_API_KEY --to .env [--file] [--reason ".."] [--expires 1h] [--wait] [--timeout 30m]`. The target is resolved to an absolute path and shown to the human. `--file` writes the value as the whole file instead of a `NAME=value` line (env mode requires a variable-style name).
+3. The server creates a `secret_requests` row plus an agent message with a `secret` block (`{ type: "secret", id, name, target, mode, reason, status, expires_at }`). Agents can't create, edit or pin `secret` blocks through the normal message/pin routes.
+4. The app shows a masked field. It **seals** the value to the channel's public key (`@rply/schema/crypto`: ephemeral X25519 + HKDF-SHA256 + XChaCha20-Poly1305, output `v1.<base64url>`) and posts only the ciphertext (`POST /v1/secrets/:id/fulfil`). The human can also decline.
+5. **Key pinning (trust on first use)**: the apps remember each channel's public key (`rply.keys`) and refuse to encrypt to a different one until the human confirms, showing both fingerprints (`keyFingerprint`, e.g. `2e6d-c547-3bcb`).
+6. The CLI long-polls `GET /v1/secrets/:id`, decrypts, writes the file atomically with permissions `0600` (`.env` mode replaces an existing `NAME=` line and keeps the rest), then calls `POST /v1/secrets/:id/delivered`, which **deletes the ciphertext**.
+7. The CLI prints only `NAME written to /abs/path`. **Never the value**, not on stdout, not in logs, not in errors.
+8. Requests are **single use**, **expire**, and can be declined (human) or cancelled (agent, or by deleting the message). The server updates the block's `status` (open → provided → delivered, or declined / cancelled; expired is computed from `expires_at`) and sync carries it to all clients.
 
-Documented limitation: this keeps secrets out of the conversation and off the server, but an agent with shell access can still read the file. `run --with-secrets -- cmd` (environment injection, nothing on disk) is the stronger option for later.
+Exit codes: 2 = expired or timed out, 3 = declined or cancelled. `rply secret fetch <id> [--wait]` writes a secret requested earlier without `--wait`; `rply secret cancel <id>` withdraws one.
+
+Documented limitations: the agent can still read the written file (it has a shell); `run --with-secrets -- cmd` (environment injection, nothing on disk) is the stronger option for later. In the web app, the code that encrypts is served by the server itself, so a compromised server could capture the value as it's typed; the native app doesn't have this weakness. Secrets need a saved channel (`rply init`), not `RPLY_SERVER`/`RPLY_TOKEN`.
 
 The remote MCP endpoint **cannot** deliver secrets to files (the server can't write on the agent's machine, and returning the value would put it into context), so `request_secret` is either missing there or clearly marked as delivering into context.
 
@@ -239,7 +223,7 @@ rply pin set overview "text" [--title ..] [--blocks file.json]   # pinned to the
 rply pin patch overview --patch '{"id":"pages","value":42}' | pin remove overview | pin list
 rply status set|patch|get                # shortcut for the pin "status"
 rply delete <message-id>
-rply secret request NAME --to .env [--reason ".."] [--wait]
+rply secret request NAME --to .env [--file] [--reason ".."] [--expires 1h] [--wait] | secret fetch <id> | secret cancel <id>
 rply e2e enable
 ```
 Output should be machine-friendly (JSON with `--json`) and self-describing (`--help`, perhaps a `describe` command that prints a JSON schema, as Agent Mail CLI does).
@@ -256,7 +240,8 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `GET /v1/asks` (agent: open questions), `GET /v1/asks/:id?wait=60` (agent: long-poll until answered, expired or cancelled → `{ message, answer }`)
 - `GET /v1/pins`, `PUT|PATCH|DELETE /v1/pins/:key` (agent; keys are 1-32 of `a-z0-9_-`), `POST /v1/messages/:id/unpin` (either side, moves it into the thread), `DELETE /v1/messages/:id` (agent, soft delete)
 - `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
-- later: `POST /v1/secrets/requests`, `POST /v1/secrets/:id/fulfil`, `GET /v1/secrets/:id?wait=`, `POST /v1/devices`, `/mcp`
+- `PUT /v1/channel/key` (agent: upload the X25519 public key), `POST /v1/secrets` (agent: create a request + secret message), `GET /v1/secrets/:id?wait=` (agent: long-poll; returns the ciphertext once provided), `POST /v1/secrets/:id/delivered|cancel` (agent), `POST /v1/secrets/:id/fulfil|decline` (human)
+- later: `POST /v1/devices` (push), `/mcp`
 
 ### Data model
 ```
@@ -269,9 +254,10 @@ messages        seq (creation order, agent inbox cursor), id, channel_id, sender
                 created_at, updated_at, deleted_at
 asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
+secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),
+                ciphertext (only while provided), expires_at, created_at, closed_at
 -- later:
 devices         human_token_id, push_token, platform, created_at
-secret_requests id, channel_id, name, target, reason, ciphertext, status, expires_at
 ```
 
 ### Messages, blocks and questions (decided)
@@ -301,7 +287,9 @@ secret_requests id, channel_id, name, target, reason, ciphertext, status, expire
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) as `{ default, channels: { <key>: { server, token, channel, inbox_cursor } } }`. One machine can hold several channels. `init` saves each under `--channel <key>` or a slug of `--name`, and the first becomes the default. Other commands pick a channel with `--channel` / `RPLY_CHANNEL`, otherwise the default. `rply channels` lists them, and `rply channels use|remove` change the default or forget one. Old single-channel config files are migrated when read. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
 - `inbox` and `listen` skip answers to questions (messages with `reply_to`); those come through `ask --wait` or `rply wait <id>`. `ask` without `--choices`/`--confirm`/input blocks adds a `text_input` (id `answer`). With `--wait`, one question prints its value, several print a JSON object; exit 2 = expired without default or timed out, 3 = cancelled. `--timeout` also sets the question's expiry unless `--expires` is given.
-- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once.
+- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once. Since then they're additive again: `0002_secrets` adds `secret_requests`.
+- `@rply/schema` has three entry points: `.` (zod schemas and types), `./helpers` (UI-free logic, imports only types) and `./crypto` (sealed box, keypairs, fingerprints; `@noble/*`). The CLI must import runtime values only from `./helpers` and `./crypto`, never from `.`, or zod ends up in its bundle (~170 KB without, ~630 KB with).
+- Mobile polyfills `crypto.getRandomValues` from `expo-crypto` (`src/lib/polyfills.ts`, imported first in `_layout.tsx`) because the `@noble` libraries need it. Both apps render secret cards through `SecretBlock`, which gets the channel from `ChannelContext` (provided around the thread and pins).
 - Publishing the CLI: `npm run build -w @rply/cli` bundles everything with esbuild into `packages/cli/dist/rply.js` (Node won't strip types inside `node_modules`). All runtime libraries are devDependencies because they're inlined, so the published package has no dependencies. `prepublishOnly` runs the build. To release, bump `version` in `packages/cli/package.json`, then `npm publish -w @rply/cli`. The npm package is `@rply/cli` (npm blocked the unscoped name `rply` as too similar to existing packages), but the command it installs is still `rply`.
 - Website (`apps/site`): Astro + Starlight + Tailwind v4 for rply.sh. Marketing pages are plain Astro pages in `src/pages` (shared `layouts/Page.astro`, reusable pieces in `src/components`), docs are Markdown in `src/content/docs/docs/` and served under `/docs/`, with the sidebar groups defined in `astro.config.mjs`. Design tokens (type scale `text-display/h2/h3/lead/body/ui/small/caption`, colors `ink/secondary/muted/paper/line`, periwinkle `accent-*`) live in `src/styles/theme.css` and are shared by `global.css` (marketing, full Tailwind) and `docs.css` (Starlight via `@astrojs/starlight-tailwind`, no preflight). Use these tokens instead of raw sizes. Run with `npm run dev:site` / `npm run build:site`. The site lists `cookie@^2` as a direct dependency because the web app's tooling hoists `cookie@0.7` to the root, which breaks Astro's prerender build.
 - Update check (`packages/cli/src/update.ts`): at most once a day the CLI fetches the latest `@rply/cli` version from the npm registry (1.5s timeout, cached in `update-check.json` next to the config). If a newer version exists, it prints a notice to stderr after the command, telling the agent to run `rply update` (which runs `npm install --global @rply/cli@latest`). `RPLY_NO_UPDATE_CHECK=1` turns it off.

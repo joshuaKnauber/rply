@@ -2,7 +2,8 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { Link, Stack, router } from "expo-router";
 import type { Message } from "@rply/schema";
 import { useChannels, useReadSeqs } from "@/lib/channels";
-import { askStatus, formatTime, isAnswer, preview } from "@/lib/format";
+import { isWaiting } from "@rply/schema";
+import { formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
 
 export default function Inbox() {
@@ -15,7 +16,7 @@ export default function Inbox() {
       const messages: Message[] = results[i]?.data ?? [];
       const last = messages.filter((m) => !isAnswer(m)).at(-1);
       const unread = messages.filter((m) => m.sender === "agent" && m.seq > (readSeqs[entry.channel.id] ?? 0)).length;
-      const waiting = messages.some((m) => askStatus(m.ask) === "open");
+      const waiting = messages.some(isWaiting);
       return { entry, last, unread, waiting };
     })
     .sort((a, b) => (b.last?.created_at ?? b.entry.channel.created_at) - (a.last?.created_at ?? a.entry.channel.created_at));

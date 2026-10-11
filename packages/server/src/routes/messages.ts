@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
   AgentMessageBody,
+  hasSecretBlock,
   HumanMessageBody,
   isInput,
   MessageStateRequest,
@@ -19,6 +20,10 @@ import { longPoll } from "../notifier.ts";
 import { applyPatch } from "../patch.ts";
 import { now, randomId } from "../tokens.ts";
 
+export function rejectSecretBlocks(blocks: unknown) {
+  if (hasSecretBlock(blocks)) throw new HTTPException(400, { message: "Secret requests are created with rply secret request" });
+}
+
 export function messageRoutes(deps: Deps) {
   const { db, notifier } = deps;
   const auth = requireAuth(deps);
@@ -35,6 +40,7 @@ export function messageRoutes(deps: Deps) {
       const { channel, sender } = c.var.auth;
       const req = parse(PostMessageRequest, await c.req.json());
       const body = req.enc ? undefined : parse(sender === "agent" ? AgentMessageBody : HumanMessageBody, req.body);
+      if (body && "blocks" in body) rejectSecretBlocks(body.blocks);
       if (sender === "human" && req.ask) throw new HTTPException(400, { message: "Only the agent can ask" });
 
       const id = randomId();
@@ -135,7 +141,10 @@ export function messageRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       const req = parse(ReplaceMessageRequest, await c.req.json());
-      const body = req.enc ? req.body : JSON.stringify(parse(AgentMessageBody, req.body));
+      rejectSecretBlocks(JSON.parse(target.enc ? "{}" : target.body).blocks);
+      const parsed = req.enc ? undefined : parse(AgentMessageBody, req.body);
+      rejectSecretBlocks(parsed?.blocks);
+      const body = req.enc ? req.body : JSON.stringify(parsed);
       await db.updateTable("messages").set({ enc: req.enc ? 1 : 0, body, updated_at: now() }).where("id", "=", target.id).execute();
       await recordChanges(deps, channel.id, [target.id]);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
@@ -144,8 +153,10 @@ export function messageRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       if (target.enc) throw new HTTPException(400, { message: "Encrypted messages can't be patched, replace them with PUT" });
+      rejectSecretBlocks(JSON.parse(target.body).blocks);
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(AgentMessageBody, applyPatch(target.body, patch)));
+      rejectSecretBlocks(JSON.parse(body).blocks);
       await db.updateTable("messages").set({ body, updated_at: now() }).where("id", "=", target.id).execute();
       await recordChanges(deps, channel.id, [target.id]);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
@@ -155,6 +166,12 @@ export function messageRoutes(deps: Deps) {
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", target.id).execute();
       await db.updateTable("asks").set({ status: "cancelled", closed_at: now() }).where("message_id", "=", target.id).where("status", "=", "open").execute();
+      await db
+        .updateTable("secret_requests")
+        .set({ status: "cancelled", ciphertext: null, closed_at: now() })
+        .where("message_id", "=", target.id)
+        .where("status", "in", ["open", "provided"])
+        .execute();
       await recordChanges(deps, channel.id, [target.id]);
       return c.body(null, 204);
     })

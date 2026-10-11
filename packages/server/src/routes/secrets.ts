@@ -40,8 +40,9 @@ export function secretRoutes(deps: Deps) {
 
   return new Hono<AppEnv>()
     .post("/secrets", agent, async (c) => {
-      const { channel } = c.var.auth;
-      if (!channel.agent_public_key) throw new HTTPException(400, { message: "Upload a public key first (PUT /v1/channel/key)" });
+      const { channel, agentId } = c.var.auth;
+      const { public_key: publicKey } = await db.selectFrom("agent_tokens").select("public_key").where("id", "=", agentId!).executeTakeFirstOrThrow();
+      if (!publicKey) throw new HTTPException(400, { message: "Upload a public key first (PUT /v1/channel/key)" });
       const req = parse(CreateSecretRequest, await c.req.json());
       const id = randomId();
       const messageId = randomId();
@@ -54,6 +55,7 @@ export function secretRoutes(deps: Deps) {
         reason: req.reason,
         status: "open",
         expires_at: req.expires_at ?? null,
+        public_key: publicKey,
       };
       await db.transaction().execute(async (trx) => {
         await trx
@@ -74,7 +76,7 @@ export function secretRoutes(deps: Deps) {
           .execute();
         await trx
           .insertInto("secret_requests")
-          .values({ id, channel_id: channel.id, message_id: messageId, name: req.name, target: req.target, mode: req.mode, status: "open", ciphertext: null, expires_at: req.expires_at ?? null, created_at: now(), closed_at: null })
+          .values({ id, channel_id: channel.id, message_id: messageId, name: req.name, target: req.target, mode: req.mode, status: "open", ciphertext: null, public_key: publicKey, expires_at: req.expires_at ?? null, created_at: now(), closed_at: null })
           .execute();
       });
       await recordChanges(deps, channel.id, [messageId]);

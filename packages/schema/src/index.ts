@@ -109,6 +109,7 @@ const blockSchemas = {
     reason: z.string().optional(),
     status: z.enum(["open", "provided", "delivered", "declined", "cancelled"]),
     expires_at: z.number().nullable(),
+    public_key: z.string().optional(),
   }),
 };
 
@@ -191,7 +192,13 @@ const Payload = z.union([Encrypted, Plain]);
 
 export const BlockPatch = z.looseObject({ id: elementId });
 
-export const CreateChannelRequest = z.object({ name: z.string().min(1).max(100) });
+export const CreateChannelRequest = z.object({
+  name: z.string().min(1).max(100),
+  label: z.string().max(100).optional(),
+  as: z.enum(["agent", "human"]).default("agent"),
+});
+export const RenameAgentRequest = z.object({ label: z.string().trim().min(1).max(100) });
+export const CreatePairingRequest = z.object({ role: z.enum(["agent", "human"]).default("human") });
 export const ClaimPairingRequest = z.object({ code: z.string().min(1).max(32), label: z.string().max(100).optional() });
 export const PostMessageRequest = z.intersection(
   Payload,
@@ -264,6 +271,8 @@ export type Message = {
 
 export type Pairing = { code: string; expires_at: number };
 
+export type Participant = { id: string; label: string | null; created_at: number; last_seen_at: number | null; current: boolean };
+
 export type ServerInfo = {
   server_token_required: boolean;
   files: { enabled: boolean; max_size: number };
@@ -276,6 +285,10 @@ export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "imag
 
 export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
 export type ClaimPairingResponse = { channel: Channel; token: string };
+export type DevicesResponse = { devices: Participant[] };
+export type AgentsResponse = { agents: Participant[] };
+export type CreateChannelAsHumanResponse = { channel: Channel; token: string; agent_code: Pairing };
+export type JoinChannelResponse = { channel: Channel; agent_token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };
 export type AskResponse = { message: Message; answer: Message | null };
 export type SecretStatus = "open" | "provided" | "delivered" | "declined" | "cancelled" | "expired";

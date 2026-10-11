@@ -4,6 +4,7 @@ import type { AskStatus, MessageState, Sender } from "@rply/schema";
 export interface Database {
   channels: ChannelsTable;
   human_tokens: HumanTokensTable;
+  agent_tokens: AgentTokensTable;
   pairing_codes: PairingCodesTable;
   api_keys: ApiKeysTable;
   messages: MessagesTable;
@@ -35,9 +36,21 @@ interface HumanTokensTable {
   revoked_at: number | null;
 }
 
+interface AgentTokensTable {
+  id: string;
+  channel_id: string;
+  token_hash: string;
+  label: string | null;
+  public_key: string | null;
+  created_at: number;
+  last_seen_at: number | null;
+  revoked_at: number | null;
+}
+
 interface PairingCodesTable {
   code_hash: string;
   channel_id: string;
+  role: Generated<Sender>;
   expires_at: number;
   used_at: number | null;
 }
@@ -90,6 +103,7 @@ interface SecretRequestsTable {
   mode: "env" | "file";
   status: "open" | "provided" | "delivered" | "declined" | "cancelled";
   ciphertext: string | null;
+  public_key: string | null;
   expires_at: number | null;
   created_at: number;
   closed_at: number | null;

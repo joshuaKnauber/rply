@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
 import { CheckCheckIcon, CircleDotIcon, CornerDownRightIcon, EyeIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { Answers, Message, MessageState } from "@rply/schema";
@@ -16,17 +16,34 @@ import { Composer } from "./Composer";
 export function Thread({ entry }: { entry: StoredChannel }) {
   const { data: messages = [], isPending, error } = useMessages(entry);
   const send = useSendMessage(entry);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
 
   const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
   const visible = messages.filter((m) => !isAnswer(m));
-  const waiting = visible.filter(isWaiting);
 
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
     if (lastSeq) markRead(entry.channel.id, lastSeq);
   }, [lastSeq, entry.channel.id]);
+
+  const lastVisible = visible.at(-1)?.id;
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  };
+  useLayoutEffect(scrollToBottom, [lastVisible]);
+  useEffect(() => {
+    const observer = new ResizeObserver(scrollToBottom);
+    if (contentRef.current) observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const onScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   const answer = (message: Message) => (answers: Answers) =>
     send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => toast.error(err.message) });
@@ -35,8 +52,8 @@ export function Thread({ entry }: { entry: StoredChannel }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-6" onScroll={onScroll}>
+        <div ref={contentRef} className="mx-auto flex max-w-3xl flex-col gap-1">
           {isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
           {error && <p className="text-destructive text-sm">{error.message}</p>}
           {!isPending && visible.length === 0 && <p className="text-muted-foreground text-sm">No messages yet.</p>}
@@ -47,49 +64,56 @@ export function Thread({ entry }: { entry: StoredChannel }) {
               <MessageView
                 key={message.id}
                 message={message}
+                agentName={entry.channel.name}
                 submitted={message.ask?.answer_id ? answersById.get(message.ask.answer_id) : undefined}
                 onAnswer={entry.revoked ? undefined : answer(message)}
                 onEvent={entry.revoked ? undefined : sendEvent(message)}
               />
             ),
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
-      {waiting.length > 0 && (
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => document.getElementById(`msg-${waiting[0]!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-          >
-            <MessageCircleQuestionIcon />
-            {waiting.length === 1 ? "Something is waiting for your reply" : `${waiting.length} things are waiting for your reply`}
-          </Button>
-        </div>
-      )}
       {!entry.revoked && (
         <Composer
           disabled={send.isPending}
-          onSend={(text, attachments) =>
+          onSend={(text, attachments) => {
+            atBottom.current = true;
             send.mutate(
               { body: { ...(text && { text }), ...(attachments.length && { attachments }) } },
               { onError: (err) => toast.error(err.message) },
-            )
-          }
+            );
+          }}
         />
       )}
     </div>
   );
 }
 
+export function WaitingIndicator({ entry }: { entry: StoredChannel }) {
+  const { data: messages = [] } = useMessages(entry);
+  const waiting = messages.filter((m) => !isAnswer(m) && isWaiting(m));
+  if (waiting.length === 0) return null;
+  const label = waiting.length === 1 ? "Waiting for your reply" : `${waiting.length} waiting for your reply`;
+  return (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      aria-label={label}
+      title={label}
+      onClick={() => document.getElementById(`msg-${waiting[0]!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+    >
+      <MessageCircleQuestionIcon className="text-attention" />
+    </Button>
+  );
+}
+
 function EventLine({ message }: { message: Message }) {
   const event = !message.enc && "event" in message.body ? message.body.event : undefined;
   return (
-    <div className="text-muted-foreground flex items-center justify-end gap-1.5 px-1 text-xs">
+    <div className="text-muted-foreground flex items-center gap-1.5 px-3 py-1 text-xs">
       <CornerDownRightIcon className="size-3" />
       <span className="max-w-[70%] truncate">Sent: {event ? eventLabel(event) : ""}</span>
-      <span>· {formatTime(message.created_at)}</span>
+      <span className="tabular-nums">{formatTime(message.created_at)}</span>
       {message.state && <StateLabel state={message.state} />}
     </div>
   );
@@ -97,11 +121,13 @@ function EventLine({ message }: { message: Message }) {
 
 function MessageView({
   message,
+  agentName,
   submitted,
   onAnswer,
   onEvent,
 }: {
   message: Message;
+  agentName: string;
   submitted?: Answers;
   onAnswer?: (answers: Answers) => void;
   onEvent?: (blockId: string | null, value: unknown, label?: string) => void;
@@ -124,21 +150,17 @@ function MessageView({
   })();
 
   return (
-    <div id={`msg-${message.id}`} className={cn("flex flex-col gap-1", fromAgent ? "items-start" : "items-end")}>
-      <div
-        className={cn(
-          "max-w-[85%] rounded-xl px-4 py-3",
-          fromAgent ? "bg-muted" : "bg-primary text-primary-foreground",
-          isWaiting(message) && "ring-primary/30 ring-2",
-        )}
-      >
-        {content}
-      </div>
-      <span className="text-muted-foreground flex items-center gap-2 px-1 text-xs">
-        {formatTime(message.created_at)}
-        {message.updated_at && <span>· edited</span>}
+    <div
+      id={`msg-${message.id}`}
+      className={cn("flex flex-col gap-1.5 rounded-md border-l-2 border-transparent px-3 py-2.5", !fromAgent && "bg-muted", isWaiting(message) && "border-attention rounded-l-none")}
+    >
+      <div className="flex items-baseline gap-2 text-xs">
+        <span className="font-medium">{fromAgent ? agentName : "You"}</span>
+        <span className="text-muted-foreground tabular-nums">{formatTime(message.created_at)}</span>
+        {message.updated_at && <span className="text-muted-foreground">edited</span>}
         {message.state && <StateLabel state={message.state} />}
-      </span>
+      </div>
+      {content}
     </div>
   );
 }
@@ -152,7 +174,7 @@ const states: Record<MessageState, { label: string; icon: typeof EyeIcon }> = {
 function StateLabel({ state }: { state: MessageState }) {
   const { label, icon: Icon } = states[state];
   return (
-    <span className={cn("flex items-center gap-1", state === "working" && "text-amber-600 dark:text-amber-400", state === "done" && "text-emerald-600 dark:text-emerald-400")}>
+    <span className={cn("flex items-center gap-1", "text-muted-foreground", state === "done" && "text-foreground")}>
       <Icon className="size-3" />
       {label}
     </span>

@@ -131,11 +131,11 @@ Agents send typed JSON **blocks**; the apps render a known set and show an "upda
 Goal: the human can give an agent credentials (API keys etc.) **without the value ever entering the agent's LLM context or being readable by the server**.
 
 Flow:
-1. On the first `rply secret request` for a channel, the CLI generates an **X25519 keypair**, stores the private key in its config (`secret_key`, file mode 0600) and uploads the public key (`PUT /v1/channel/key`, exposed as `channel.public_key`). Every request re-uploads it, so a reset server gets it back.
+1. On the first `rply secret request` for a channel, the CLI generates an **X25519 keypair**, stores the private key in its config (`secret_key`, file mode 0600) and uploads the public key (`PUT /v1/channel/key`, stored on that agent's token). Every request re-uploads it, so a reset server gets it back. With several agents each has its own key: the secret block carries `public_key`, the key of the agent that asked, and the apps seal to that.
 2. `rply secret request OPENAI_API_KEY --to .env [--file] [--reason ".."] [--expires 1h] [--wait] [--timeout 30m]`. The target is resolved to an absolute path and shown to the human. `--file` writes the value as the whole file instead of a `NAME=value` line (env mode requires a variable-style name).
 3. The server creates a `secret_requests` row plus an agent message with a `secret` block (`{ type: "secret", id, name, target, mode, reason, status, expires_at }`). Agents can't create, edit or pin `secret` blocks through the normal message/pin routes.
 4. The app shows a masked field. It **seals** the value to the channel's public key (`@rply/schema/crypto`: ephemeral X25519 + HKDF-SHA256 + XChaCha20-Poly1305, output `v1.<base64url>`) and posts only the ciphertext (`POST /v1/secrets/:id/fulfil`). The human can also decline.
-5. **Key pinning (trust on first use)**: the apps remember each channel's public key (`rply.keys`) and refuse to encrypt to a different one until the human confirms, showing both fingerprints (`keyFingerprint`, e.g. `2e6d-c547-3bcb`).
+5. **Key pinning (trust on first use)**: the apps remember the public keys they've used per channel (`rply.keys`, a list) and refuse to encrypt to a new one until the human confirms, showing the last trusted and the new fingerprint (`keyFingerprint`, e.g. `2e6d-c547-3bcb`). A new agent joining or an agent being set up again triggers this once.
 6. The CLI long-polls `GET /v1/secrets/:id`, decrypts, writes the file atomically with permissions `0600` (`.env` mode replaces an existing `NAME=` line and keeps the rest), then calls `POST /v1/secrets/:id/delivered`, which **deletes the ciphertext**.
 7. The CLI prints only `NAME written to /abs/path`. **Never the value**, not on stdout, not in logs, not in errors.
 8. Requests are **single use**, **expire**, and can be declined (human) or cancelled (agent, or by deleting the message). The server updates the block's `status` (open → provided → delivered, or declined / cancelled; expired is computed from `expires_at`) and sync carries it to all clients.
@@ -173,7 +173,7 @@ ntfy has no accounts: the topic name is the identity and the app keeps a local l
 
 | credential | held by | can |
 |---|---|---|
-| agent token `rply_a_…` | CLI on the agent machine | post as agent, read human messages, set status, request secrets |
+| agent token `rply_a_…` (one per agent) | CLI on the agent machine | post as agent, read human messages, set status, request secrets |
 | human token `rply_h_…` (one per device) | web / mobile app | read agent messages, reply as human, fulfil secrets |
 
 - No user accounts. Clients store a list of (server, channel, human token). Several servers in one inbox works.
@@ -186,6 +186,7 @@ ntfy has no accounts: the topic name is the identity and the app keeps a local l
 3. Pasting the pairing string into an "add channel" field works for setups where scanning is awkward.
 4. Claiming the code gives that device its own human token. `rply pair` issues a new code for another device. Each device token can be revoked on its own.
 5. The code, not the human token, is printed because CLI output can end up in the agent's context or logs. A used code is worthless.
+6. The reverse works too: the web app can create a channel (`POST /v1/channels { as: "human" }`), which pairs that browser and returns a single-use **agent code**. The agent runs `rply join <server-url> <code>`. A paired device can create more agent codes (`POST /v1/pairings { role: "agent" }`), so a channel can have several agents, and an agent that lost its config can rejoin. Agent codes and pairing codes share `pairing_codes` (column `role`) and only work on their own claim route.
 
 ### Server tokens (who may create channels)
 - Self-host: if `RPLY_ADMIN_TOKEN` is unset, channel creation is open (fine for a private instance). If it is set, `init` needs `--server-token`.
@@ -227,6 +228,8 @@ rply.sh hosting is not part of v1, but the design leaves room for it:
 ### CLI commands
 ```
 rply init <server-url> [--name ..] [--server-token ..] [--e2e]   # creates channel, prints QR + link
+rply join <server-url> <code>           # join a channel created in the app (agent code)
+rply rename <name>                      # name this agent shows in the app (init/join take --agent-name, default: hostname)
 rply pair                               # new pairing code for another device
 rply send "Deployed 3 new pages" [--title ..] [--blocks file.json] [--silent]
 rply ask "Publish these 5 pages?" --choices yes,no [--multi] [--other] [--default no] [--expires 2h] [--wait] [--timeout 1h]
@@ -253,9 +256,9 @@ Output should be machine-friendly (JSON with `--json`) and self-describing (`--h
 
 ### Server API
 The token decides the channel and the sender side, so most routes don't need a channel ID.
-- `POST /v1/channels` (server token if required) → channel, agent token, pairing code
-- `POST /v1/pairings` (agent) → new pairing code; `POST /v1/pairings/claim` (code) → human token
-- `GET /v1/channel` (either token) → channel info
+- `POST /v1/channels` (server token if required) → channel, agent token, pairing code; with `as: "human"` → channel, human token, agent code
+- `POST /v1/pairings { role? }` (either side, so the apps can link another device; `role: "agent"` is human-only) → new pairing or agent code; `POST /v1/agents/join` (agent code) → agent token; `POST /v1/pairings/claim` (code) → human token
+- `GET /v1/channel` (either token) → channel info; `GET /v1/devices` / `GET /v1/agents` (either token) → paired human / agent tokens `{ id, label, created_at, last_seen_at, current }`; `DELETE /v1/devices/:id` / `DELETE /v1/agents/:id` (human) revoke one; `PATCH /v1/agent { label }` (agent) renames itself
 - `GET /v1/admin/channels` (server token) → all channels; a server token plus `X-Rply-Channel` works on the human-side routes
 - `GET /v1/info` (no auth) → `{ server_token_required }`, used by the web app to show the right setup command
 - `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
@@ -270,9 +273,10 @@ The token decides the channel and the sender side, so most routes don't need a c
 
 ### Data model
 ```
-channels        id, name, agent_token_hash, agent_public_key, e2e, owner_id (null), created_at
+channels        id, name, agent_token_hash (legacy, unused), agent_public_key (latest key, for old clients), e2e, owner_id (null), created_at
 human_tokens    id, channel_id, token_hash, label, created_at, last_seen_at, revoked_at
-pairing_codes   code_hash, channel_id, expires_at, used_at
+agent_tokens    id, channel_id, token_hash, label (hostname), public_key, created_at, last_seen_at, revoked_at
+pairing_codes   code_hash, channel_id, role (human|agent), expires_at, used_at
 api_keys        id, token_hash, owner_id (null), label, created_at
 messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), enc,
                 body (JSON text or ciphertext), reply_to, pin (null | key), state (human msgs: seen|working|done),
@@ -280,7 +284,7 @@ messages        seq (creation order, agent inbox cursor), id, channel_id, sender
 asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),
-                ciphertext (only while provided), expires_at, created_at, closed_at
+                ciphertext (only while provided), public_key (the requesting agent's), expires_at, created_at, closed_at
 files           id, channel_id, message_id (first referencing message), uploader, name, mime, size, created_at, deleted_at
 settings        key, value                                   -- e.g. the VAPID keypair
 push_subscriptions id, endpoint, p256dh, auth, human_token_id | api_key_id (cascade), created_at
@@ -315,7 +319,7 @@ devices         human_token_id, push_token, platform, created_at   -- mobile pus
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) as `{ default, channels: { <key>: { server, token, channel, inbox_cursor } } }`. One machine can hold several channels. `init` saves each under `--channel <key>` or a slug of `--name`, and the first becomes the default. Other commands pick a channel with `--channel` / `RPLY_CHANNEL`, otherwise the default. `rply channels` lists them, and `rply channels use|remove` change the default or forget one. Old single-channel config files are migrated when read. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
 - `inbox` and `listen` skip answers to questions (messages with `reply_to`); those come through `ask --wait` or `rply wait <id>`. `ask` without `--choices`/`--confirm`/input blocks adds a `text_input` (id `answer`). With `--wait`, one question prints its value, several print a JSON object; exit 2 = expired without default or timed out, 3 = cancelled. `--timeout` also sets the question's expiry unless `--expires` is given.
-- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once. Since then they're additive again: `0002_secrets` adds `secret_requests`, `0003_files` adds `files`.
+- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once. Since then they're additive again: `0002_secrets` adds `secret_requests`, `0003_files` adds `files`, `0004_push` adds push subscriptions, `0005_agents` adds `agent_tokens` (copying each channel's old agent token), `pairing_codes.role` and `secret_requests.public_key`. `channels.agent_token_hash` is no longer read and can be dropped in a later release.
 - `@rply/schema` has three entry points: `.` (zod schemas and types), `./helpers` (UI-free logic, imports only types) and `./crypto` (sealed box, keypairs, fingerprints; `@noble/*`). The CLI must import runtime values only from `./helpers` and `./crypto`, never from `.`, or zod ends up in its bundle (~170 KB without, ~630 KB with).
 - Mobile polyfills `crypto.getRandomValues` from `expo-crypto` (`src/lib/polyfills.ts`, imported first in `_layout.tsx`) because the `@noble` libraries need it. Both apps render secret cards through `SecretBlock`, which gets the channel from `ChannelContext` (provided around the thread and pins).
 - Publishing the CLI: `npm run build -w @rply/cli` bundles everything with esbuild into `packages/cli/dist/rply.js` (Node won't strip types inside `node_modules`). All runtime libraries are devDependencies because they're inlined, so the published package has no dependencies. `prepublishOnly` runs the build. To release, bump `version` in `packages/cli/package.json`, then `npm publish -w @rply/cli`. The npm package is `@rply/cli` (npm blocked the unscoped name `rply` as too similar to existing packages), but the command it installs is still `rply`.

@@ -1,5 +1,5 @@
 import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
-import { Loader2Icon, PaperclipIcon, SendIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { FileRef } from "@rply/schema";
 import { Button } from "@/components/ui/button";
@@ -66,42 +66,44 @@ export function Composer({ onSend, disabled }: { onSend: (text: string, attachme
       onDragOver={(e) => filesEnabled && (e.preventDefault(), setDragging(true))}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className="p-3"
+      className="shrink-0 px-6 pb-5"
     >
-      <div className={cn("mx-auto flex max-w-3xl flex-col gap-2 rounded-lg", dragging && "ring-primary/40 ring-2")}>
+      <div className={cn("bg-muted focus-within:border-ring/60 mx-auto flex max-w-3xl flex-col rounded-xl border transition-colors", dragging && "border-ring")}>
         {pending.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
             {pending.map((p) => (
-              <span key={p.key} className="bg-muted flex items-center gap-1.5 rounded-md py-1 pr-1 pl-2 text-sm">
+              <span key={p.key} className="bg-background flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2 text-sm">
                 {!p.file && <Loader2Icon className="size-3.5 animate-spin" />}
                 <span className="max-w-48 truncate">{p.name}</span>
-                <button type="button" className="hover:bg-background rounded p-0.5" onClick={() => setPending((x) => x.filter((y) => y.key !== p.key))} aria-label={`Remove ${p.name}`}>
+                <button type="button" className="hover:bg-muted rounded p-0.5" onClick={() => setPending((x) => x.filter((y) => y.key !== p.key))} aria-label={`Remove ${p.name}`}>
                   <XIcon className="size-3.5" />
                 </button>
               </span>
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2">
-          {filesEnabled && (
+        <Textarea
+          rows={1}
+          placeholder="Message the agent…"
+          className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-4 pt-3.5 pb-1 text-base shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+        />
+        <div className="flex items-center justify-between px-2 pb-2">
+          {filesEnabled ? (
             <>
               <input ref={input} type="file" multiple hidden onChange={(e) => (e.target.files && add(e.target.files), (e.target.value = ""))} />
-              <Button type="button" size="icon" variant="ghost" onClick={() => input.current?.click()} aria-label="Attach files">
-                <PaperclipIcon />
+              <Button type="button" size="icon-sm" variant="ghost" className="text-muted-foreground" onClick={() => input.current?.click()} aria-label="Attach files">
+                <PlusIcon />
               </Button>
             </>
+          ) : (
+            <span />
           )}
-          <Textarea
-            rows={1}
-            placeholder="Message the agent…"
-            className="max-h-40 min-h-10 resize-none"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-          />
-          <Button type="submit" size="icon" disabled={!canSend} aria-label="Send">
-            <SendIcon />
+          <Button type="submit" size="icon-sm" variant={canSend ? "default" : "ghost"} disabled={!canSend} aria-label="Send">
+            <ArrowUpIcon />
           </Button>
         </div>
       </div>

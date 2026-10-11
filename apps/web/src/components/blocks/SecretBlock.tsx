@@ -28,15 +28,16 @@ export function SecretBlock({ block }: { block: BlockOf<"secret"> }) {
   const [keyChange, setKeyChange] = useState<KeyChangedError | null>(null);
   const open = status === "open" && entry && !entry.revoked;
 
-  const { data: publicKey } = useQuery({
+  const { data: fetchedKey } = useQuery({
     queryKey: ["public-key", entry?.channel.id],
     queryFn: () => fetchPublicKey(entry!),
-    enabled: Boolean(open),
+    enabled: Boolean(open) && !block.public_key,
     staleTime: 60_000,
   });
 
+  const publicKey = block.public_key ?? fetchedKey;
   const provide = useMutation({
-    mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block.id, value, acceptNewKey),
+    mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block, value, acceptNewKey),
     onSuccess: () => {
       setValue("");
       setKeyChange(null);
@@ -99,10 +100,10 @@ export function SecretBlock({ block }: { block: BlockOf<"secret"> }) {
           {keyChange ? (
             <div className="bg-destructive/10 text-destructive flex flex-col gap-2 rounded-md p-3 text-sm">
               <p className="flex items-center gap-1.5 font-medium">
-                <ShieldAlertIcon className="size-4" /> This agent's encryption key changed
+                <ShieldAlertIcon className="size-4" /> This request uses a new encryption key
               </p>
               <p>
-                It was <code>{keyChange.previous}</code> and is now <code>{keyChange.current}</code>. That's expected if the agent was set up again; otherwise
+                You trusted <code>{keyChange.previous}</code> before, this one is <code>{keyChange.current}</code>. That's expected if an agent joined or was set up again; otherwise
                 someone may be trying to intercept the secret.
               </p>
               <div className="flex gap-2">

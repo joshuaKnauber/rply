@@ -16,6 +16,67 @@ test("pairing codes are single use and accept sloppy input", async () => {
   assert.equal((await request("POST", "/pairings/claim", { body: { code: json.pairing.code } })).status, 404);
 });
 
+test("devices lists the channel's paired human tokens and marks the caller", async () => {
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+
+  const { json } = await request("GET", "/devices", { token: human });
+  assert.equal(json.devices.length, 1);
+  assert.equal(json.devices[0].current, true);
+  assert.ok(json.devices[0].last_seen_at);
+  assert.equal((await request("GET", "/devices", { token: agent })).json.devices[0].current, false);
+
+  const pairing = await request("POST", "/pairings", { token: human });
+  assert.equal(pairing.status, 201);
+  assert.equal((await request("POST", "/pairings/claim", { body: { code: pairing.json.code, label: "Phone" } })).status, 201);
+  assert.equal((await request("GET", "/devices", { token: human })).json.devices.length, 2);
+});
+
+test("a channel created in the app gets its agent through a single-use agent code", async () => {
+  const { request } = await setup();
+  const created = await request("POST", "/channels", { body: { name: "Web", as: "human", label: "Chrome on macOS" } });
+  assert.equal(created.status, 201);
+  const { token: human, agent_code } = created.json;
+  assert.match(human, /^rply_h_/);
+
+  assert.equal((await request("POST", "/pairings/claim", { body: { code: agent_code.code } })).status, 404);
+  const joined = await request("POST", "/agents/join", { body: { code: agent_code.code, label: "box-1" } });
+  assert.equal(joined.status, 201);
+  assert.equal(joined.json.channel.id, created.json.channel.id);
+  assert.equal((await request("POST", "/agents/join", { body: { code: agent_code.code } })).status, 404);
+
+  const agent = joined.json.agent_token;
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } })).status, 201);
+  const { json } = await request("GET", "/agents", { token: human });
+  assert.deepEqual(json.agents.map((a: any) => [a.label, a.current]), [["box-1", false]]);
+});
+
+test("the human can add more agents and revoke agents and devices", async () => {
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+
+  assert.equal((await request("POST", "/pairings", { token: agent, body: { role: "agent" } })).status, 403);
+  const code = (await request("POST", "/pairings", { token: human, body: { role: "agent" } })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+
+  assert.equal((await request("PATCH", "/agent", { token: human, body: { label: "x" } })).status, 403);
+  assert.equal((await request("PATCH", "/agent", { token: second, body: { label: " " } })).status, 400);
+  assert.equal((await request("PATCH", "/agent", { token: second, body: { label: "Deploy runner" } })).status, 200);
+  const agents = (await request("GET", "/agents", { token: second })).json.agents;
+  assert.equal(agents[1].label, "Deploy runner");
+  assert.equal(agents.length, 2);
+  assert.deepEqual(agents.map((a: any) => a.current), [false, true]);
+
+  assert.equal((await request("DELETE", `/agents/${agents[0].id}`, { token: agent })).status, 403);
+  assert.equal((await request("DELETE", `/agents/${agents[0].id}`, { token: human })).status, 204);
+  assert.equal((await request("GET", "/channel", { token: agent })).status, 401);
+  assert.equal((await request("GET", "/channel", { token: second })).status, 200);
+
+  const device = (await request("GET", "/devices", { token: human })).json.devices[0].id;
+  assert.equal((await request("DELETE", `/devices/${device}`, { token: human })).status, 204);
+  assert.equal((await request("GET", "/channel", { token: human })).status, 401);
+});
+
 test("a question is answered once and the agent's wait returns the answer", async () => {
   const { request, pairedChannel } = await setup();
   const { agent, human } = await pairedChannel();
@@ -309,6 +370,23 @@ test("secrets travel sealed to the agent's key and are deleted after delivery", 
   const shown = (await request("GET", "/messages", { token: human })).json.messages[0];
   assert.equal(shown.body.blocks[0].status, "delivered");
   assert.equal(JSON.stringify(shown).includes("sk-123"), false);
+});
+
+test("each secret request carries the key of the agent that asked", async () => {
+  const { generateKeyPair } = await import("@rply/schema/crypto");
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  const code = (await request("POST", "/pairings", { token: human, body: { role: "agent" } })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+  const [a, b] = [generateKeyPair().publicKey, generateKeyPair().publicKey];
+  await request("PUT", "/channel/key", { token: agent, body: { public_key: a } });
+  await request("PUT", "/channel/key", { token: second, body: { public_key: b } });
+
+  const body = { name: "TOKEN", target: "/tmp/.env", mode: "env" };
+  const first = await request("POST", "/secrets", { token: agent, body });
+  const other = await request("POST", "/secrets", { token: second, body });
+  assert.equal(first.json.message.body.blocks[0].public_key, a);
+  assert.equal(other.json.message.body.blocks[0].public_key, b);
 });
 
 test("secret requests can be declined, cancelled, expire, and can't be faked", async () => {

@@ -13,6 +13,16 @@ rply init https://your-rply-server --name "SEO bot" [--server-token <admin token
 
 `init` creates a channel and prints a one-time pairing link (and a QR code when run in a terminal). Open it to add the channel to your inbox. Use `rply pair` to add another device.
 
+If the human created the channel in the app instead, it shows an agent code. Join with it:
+
+```sh
+rply join https://your-rply-server K7QX-M2PD
+```
+
+The same works for adding a second agent to a channel, or reconnecting one that lost its config.
+
+Each agent shows up in the app under a name, the machine's hostname unless you pass `--agent-name "SEO agent"` to `init` or `join`. Change it later with `rply rename <name>`.
+
 Or run it without installing: `npx @rply/cli <command>`.
 
 ## Commands
@@ -48,7 +58,7 @@ rply send "Weekly report" --image chart.png --file keywords.csv  # attachments, 
 rply file upload chart.png                                        # prints a file id for image/file blocks
 rply file get <file-id> [--to path]                               # download an attachment from the human
 
-rply pair | whoami | update
+rply join <server-url> <code> | rename <name> | pair | whoami | update
 ```
 
 Exit codes: 2 when a question expired without a default or `--timeout` ran out, 3 when it was cancelled.

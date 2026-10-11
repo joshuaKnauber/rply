@@ -25,13 +25,13 @@ export function SecretBlock({ block }: { block: BlockOf<"secret"> }) {
   const open = status === "open" && entry && !entry.revoked;
 
   const provide = useMutation({
-    mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block.id, value, acceptNewKey),
+    mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block, value, acceptNewKey),
     onSuccess: () => setValue(""),
     onError: (err) => {
       if (!(err instanceof KeyChangedError)) return Alert.alert("Couldn't send", err.message);
       Alert.alert(
-        "This agent's encryption key changed",
-        `It was ${err.previous} and is now ${err.current}. That's expected if the agent was set up again; otherwise someone may be trying to intercept the secret.`,
+        "This request uses a new encryption key",
+        `You trusted ${err.previous} before, this one is ${err.current}. That's expected if an agent joined or was set up again; otherwise someone may be trying to intercept the secret.`,
         [
           { text: "Cancel", style: "cancel" },
           { text: "Trust and send", style: "destructive", onPress: () => provide.mutate(true) },

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeyRoundIcon, ShieldCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "./ConfirmDialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { signInAsAdmin, signOutAdmin, useAdminToken } from "@/lib/channels";
@@ -29,7 +30,10 @@ export function OwnerButton() {
         variant="ghost"
         aria-label="Signed in as owner. Click to sign out"
         title="Signed in as owner. Click to sign out"
-        onClick={() => confirm("Sign out as owner? Only channels paired with this browser will stay visible.") && signOutAdmin()}
+        onClick={async () => {
+          const ok = await confirmDialog({ title: "Sign out as owner?", description: "Only channels paired with this browser will stay visible.", action: "Sign out" });
+          if (ok) signOutAdmin();
+        }}
       >
         <ShieldCheckIcon />
       </Button>

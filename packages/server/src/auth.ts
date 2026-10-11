@@ -22,8 +22,16 @@ export function requireAuth({ db }: Deps, role?: Sender) {
 async function authenticate(db: DB, token: string, channelId: string | undefined) {
   const hash = hashToken(token);
   if (token.startsWith("rply_a_")) {
-    const channel = await db.selectFrom("channels").selectAll().where("agent_token_hash", "=", hash).executeTakeFirst();
-    return channel && { channel, sender: "agent" as const };
+    const agent = await db
+      .updateTable("agent_tokens")
+      .set({ last_seen_at: now() })
+      .where("token_hash", "=", hash)
+      .where("revoked_at", "is", null)
+      .returning(["id", "channel_id"])
+      .executeTakeFirst();
+    if (!agent) return undefined;
+    const channel = await db.selectFrom("channels").selectAll().where("id", "=", agent.channel_id).executeTakeFirstOrThrow();
+    return { channel, sender: "agent" as const, agentId: agent.id };
   }
   if (token.startsWith("rply_h_")) {
     const human = await db
@@ -31,11 +39,11 @@ async function authenticate(db: DB, token: string, channelId: string | undefined
       .set({ last_seen_at: now() })
       .where("token_hash", "=", hash)
       .where("revoked_at", "is", null)
-      .returning("channel_id")
+      .returning(["id", "channel_id"])
       .executeTakeFirst();
     if (!human) return undefined;
     const channel = await db.selectFrom("channels").selectAll().where("id", "=", human.channel_id).executeTakeFirstOrThrow();
-    return { channel, sender: "human" as const };
+    return { channel, sender: "human" as const, deviceId: human.id };
   }
   if (channelId && (await isServerToken(db, token))) {
     const channel = await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirst();

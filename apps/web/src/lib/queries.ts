@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { HumanMessageBody, Message, MessagesResponse, ServerInfo } from "@rply/schema";
+import type { AgentsResponse, DevicesResponse, HumanMessageBody, Message, MessagesResponse, ServerInfo } from "@rply/schema";
 import { api } from "./api";
 import { auth, type StoredChannel } from "./channels";
 
@@ -29,6 +29,30 @@ export const usePins = (entry: StoredChannel) =>
     staleTime: Infinity,
     enabled: !entry.revoked,
   });
+
+export const useDevices = (entry: StoredChannel) =>
+  useQuery({
+    queryKey: ["devices", entry.channel.id],
+    queryFn: () => api<DevicesResponse>("/devices", auth(entry)).then((r) => r.devices),
+    refetchInterval: 60_000,
+    enabled: !entry.revoked,
+  });
+
+export const useAgents = (entry: StoredChannel, refetchInterval = 60_000) =>
+  useQuery({
+    queryKey: ["agents", entry.channel.id],
+    queryFn: () => api<AgentsResponse>("/agents", auth(entry)).then((r) => r.agents),
+    refetchInterval,
+    enabled: !entry.revoked,
+  });
+
+export function useRevoke(entry: StoredChannel, kind: "agents" | "devices") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/${kind}/${id}`, { ...auth(entry), method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [kind, entry.channel.id] }),
+  });
+}
 
 function upsert(queryClient: QueryClient, key: string[], incoming: Message[], belongs: (m: Message) => boolean) {
   if (!queryClient.getQueryData(key)) {

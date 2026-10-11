@@ -1,10 +1,27 @@
 import { hostname } from "node:os";
 import { Option, type Command } from "commander";
-import type { Channel, CreateChannelResponse, Pairing } from "@rply/schema";
+import type { Channel, CreateChannelResponse, JoinChannelResponse, Pairing } from "@rply/schema";
 import { CliError, createClient } from "../client.ts";
 import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from "../config.ts";
 import { connect, json, requested } from "../context.ts";
 import { printJson, printPairing } from "../io.ts";
+
+function checkFree(key: string, force?: boolean) {
+  const existing = readConfigFile().channels[key];
+  if (existing && !force) {
+    throw new CliError(`A channel "${key}" is already set up on ${existing.server}. Use --force to replace it, or pick another --channel.`);
+  }
+}
+
+function saveChannel(key: string, server: string, token: string, channel: Channel) {
+  let isDefault = false;
+  updateConfigFile((file) => {
+    file.channels[key] = { server, token, channel: { id: channel.id, name: channel.name }, inbox_cursor: 0 };
+    if (!file.default || !file.channels[file.default]) file.default = key;
+    isDefault = file.default === key;
+  });
+  return isDefault;
+}
 
 export function registerSetup(program: Command) {
   program
@@ -12,28 +29,39 @@ export function registerSetup(program: Command) {
     .description("create a channel on a server and store its agent token")
     .argument("<server-url>", "your rply server, e.g. https://rply.example.com")
     .option("--name <name>", "channel name shown in the app", hostname())
+    .option("--agent-name <name>", "name of this agent in the app", hostname())
     .addOption(new Option("--server-token <token>", "needed if the server sets RPLY_ADMIN_TOKEN").env("RPLY_SERVER_TOKEN"))
     .option("--force", "replace a local channel with the same name")
     .addHelpText("after", "\nThe channel is stored under --channel <name> if given, otherwise under a slug of --name.\nThe first channel becomes the default.")
-    .action(async (serverUrl: string, opts: { name: string; serverToken?: string; force?: boolean }) => {
+    .action(async (serverUrl: string, opts: { name: string; agentName: string; serverToken?: string; force?: boolean }) => {
       const key = requested() ?? channelKey(opts.name);
-      const existing = readConfigFile().channels[key];
-      if (existing && !opts.force) {
-        throw new CliError(`A channel "${key}" is already set up on ${existing.server}. Use --force to replace it, or pick another --channel.`);
-      }
-
+      checkFree(key, opts.force);
       const server = normalizeServer(serverUrl);
-      const res = await createClient(server, opts.serverToken).request<CreateChannelResponse>("POST", "/channels", { name: opts.name });
-      let isDefault = false;
-      updateConfigFile((file) => {
-        file.channels[key] = { server, token: res.agent_token, channel: { id: res.channel.id, name: res.channel.name }, inbox_cursor: 0 };
-        if (!file.default || !file.channels[file.default]) file.default = key;
-        isDefault = file.default === key;
-      });
+      const res = await createClient(server, opts.serverToken).request<CreateChannelResponse>("POST", "/channels", { name: opts.name, label: opts.agentName });
+      const isDefault = saveChannel(key, server, res.agent_token, res.channel);
 
       if (json()) return printJson({ key, default: isDefault, channel: res.channel, pairing: { ...res.pairing, url: `${server}/pair?c=${res.pairing.code}` } });
       console.log(`Created channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}\n`);
       await printPairing(server, res.pairing.code, res.pairing.expires_at);
+    });
+
+  program
+    .command("join")
+    .description("join a channel created in the app, using the agent code it shows")
+    .argument("<server-url>", "your rply server, e.g. https://rply.example.com")
+    .argument("<code>", "the agent code from the app, e.g. K7QX-M2PD")
+    .option("--agent-name <name>", "name of this agent in the app", hostname())
+    .option("--force", "replace a local channel with the same name")
+    .addHelpText("after", "\nThe channel is stored under --channel <name> if given, otherwise under a slug of its name.")
+    .action(async (serverUrl: string, code: string, opts: { agentName: string; force?: boolean }) => {
+      const server = normalizeServer(serverUrl);
+      const res = await createClient(server).request<JoinChannelResponse>("POST", "/agents/join", { code, label: opts.agentName });
+      const key = requested() ?? channelKey(res.channel.name);
+      checkFree(key, opts.force);
+      const isDefault = saveChannel(key, server, res.agent_token, res.channel);
+
+      if (json()) return printJson({ key, default: isDefault, channel: res.channel });
+      console.log(`Joined channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}`);
     });
 
   program
@@ -44,6 +72,17 @@ export function registerSetup(program: Command) {
       const pairing = await client.request<Pairing>("POST", "/pairings");
       if (json()) return printJson({ ...pairing, url: `${config.server}/pair?c=${pairing.code}` });
       await printPairing(config.server, pairing.code, pairing.expires_at);
+    });
+
+  program
+    .command("rename")
+    .description("set the name this agent shows in the app")
+    .argument("<name>")
+    .action(async (name: string) => {
+      const { client } = connect();
+      const { label } = await client.request<{ label: string }>("PATCH", "/agent", { label: name });
+      if (json()) return printJson({ label });
+      console.log(`This agent is now "${label}"`);
     });
 
   program

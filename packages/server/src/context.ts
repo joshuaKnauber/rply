@@ -9,7 +9,7 @@ import type { Push } from "./push/index.ts";
 
 export type Deps = { db: DB; notifier: Notifier; files?: FilesConfig | null; push?: Push | null };
 
-export type Auth = { channel: ChannelRow; sender: Sender };
+export type Auth = { channel: ChannelRow; sender: Sender; deviceId?: string; agentId?: string };
 
 export type AppEnv = { Variables: { auth: Auth } };
 

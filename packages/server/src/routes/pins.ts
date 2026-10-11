@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { PatchMessageRequest, PIN_KEY, PinnedBody, PutPinRequest } from "@rply/schema";
+import { isApp, PatchMessageRequest, PIN_KEY, PinnedBody, PutPinRequest } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
@@ -66,10 +66,11 @@ export function pinRoutes(deps: Deps) {
       rejectSecretBlocks(JSON.parse(body).blocks);
       return c.json({ message: await save(channel.id, key, false, body) });
     })
-    .delete("/pins/:key", agent, async (c) => {
-      const { channel } = c.var.auth;
+    .delete("/pins/:key", requireAuth(deps), async (c) => {
+      const { channel, sender } = c.var.auth;
       const current = await findPinned(channel.id, pinKey(c.req.param("key")));
       if (!current) throw new HTTPException(404, { message: "Nothing pinned under that key" });
+      if (sender === "human" && !isApp(toMessage(current))) throw new HTTPException(403, { message: "Unpin it instead, only apps can be removed" });
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", current.id).execute();
       await deleteFilesOf(deps, current.id);
       await recordChanges(deps, channel.id, [current.id]);

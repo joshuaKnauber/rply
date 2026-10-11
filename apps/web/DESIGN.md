@@ -218,6 +218,7 @@ Don't use large radii or pill-shaped buttons in the app. The marketing site's ro
 - **Answer inputs.** Choices are outline buttons. The selected one becomes primary (or destructive for danger options). Confirms are a single primary or destructive button.
 - **Pinned messages** live in the right panel as sections with a muted label and time, collapsible, unpin on hover.
 - **Files** are grouped in one bordered list with a row per file: a mono extension badge (CSV, PDF) on a muted tile, the name, and the size, which turns into a download icon on hover. Images get a 1px border and the card radius.
+- **Apps** are listed in the sidebar under their channel: indented rows with an app icon and the title in `muted-foreground`, selected like channel rows. An open app fills the whole content area below the header (title "Channel / App", the channel name links back to the chat), without the right panel and without a card around it.
 - **HTML embeds** sit in a bordered card with the label as a header row. The embed inherits the app theme and can use `--rply-fg`, `--rply-muted`, `--rply-border`, `--rply-surface` and `--rply-accent`.
 - **Option lists** (choosing how to add a channel) are one bordered box with divided rows: icon, title, description, and a radio dot that fills with the accent when selected.
 - **Steps** are numbered circles joined by a vertical line. Finished steps fill with the accent and show a check. Upcoming steps are muted.

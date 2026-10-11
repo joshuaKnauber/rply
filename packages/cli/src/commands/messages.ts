@@ -134,6 +134,11 @@ function printMessage(message: Message) {
     const name = label ? ` "${label}"` : "";
     return console.log(`[${time}] (${message.id}) event${name} from ${block_id ?? "embed"} in message ${message.reply_to}: ${JSON.stringify(value)}`);
   }
+  if (!message.enc && "call" in message.body && message.body.call) {
+    const { name, block_id, args } = message.body.call;
+    console.log(`[${time}] (${message.id}) call "${name}" from ${block_id ?? "embed"} in message ${message.reply_to}: ${JSON.stringify(args)}`);
+    return console.log(`  answer with: rply respond ${message.id} '<json>'`);
+  }
   if (message.enc) return console.log(`[${time}] (${message.id}) (encrypted)`);
   const body = message.body;
   const attachments = "attachments" in body ? (body.attachments ?? []) : [];

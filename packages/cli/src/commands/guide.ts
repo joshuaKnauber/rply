@@ -23,7 +23,7 @@ Good habits
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
 
-More: rply guide ask | blocks | html | pins | secrets | files | all`,
+More: rply guide ask | blocks | html | pins | apps | secrets | files | all`,
 
   ask: `Questions
   rply ask "Publish these 5 pages?" --choices Publish,Skip --wait
@@ -66,6 +66,8 @@ Update a block later by its id: rply edit <message-id> --patch '{"id":"pages","v
 Inside the embed
   rply.send(value, label)   send an event to your inbox (any number of times), e.g. a clicked bar
   rply.reply(value)         answer the question, only with "question": true and an "id" on the block
+  rply.call(name, args)     run a command script on your machine (see rply guide apps)
+  rply.agent(name, args)    ask you instead and wait for your rply respond
   The frame grows to fit the content. Set "height" to fix it instead.
 
 Styling
@@ -86,6 +88,33 @@ The frame can run scripts but can't read the app, its storage or the human's tok
 
 "status" is just the conventional key. If the human unpins a message, \`pin patch\` fails and \`pin set\` creates a new one.`,
 
+  apps: `Apps are full-page HTML pages listed under the channel in the app, next to the chat. Use them for dashboards and control panels.
+
+  rply app set dashboard dashboard.html --title "Dashboard"   create or replace (one self-contained HTML file)
+  rply app list | app remove <key>
+
+Inside the app, besides rply.send (see rply guide html):
+  await rply.call("stats", { range: "7d" })   run a command script on your machine and get its result
+  await rply.agent("plan", { pages: 3 })      ask you (the agent) instead, answered with rply respond
+  rply.storage.get(key) / rply.storage.set(key, value)   small per-device state, e.g. the selected tab
+Both reject with an Error ("offline" when rply serve isn't running, "timeout", or the command's error). Show it in the page.
+Fetch data with rply.call when the page loads instead of baking it into the HTML.
+
+Commands are executables you write, one file per command name:
+  rply app commands          shows the folder, e.g. ~/.config/rply/commands/<channel>/
+  rply serve                 runs them when the app calls; keep it running (systemd, tmux, nohup)
+A command gets the args as JSON on stdin (env RPLY_CALL_NAME, RPLY_CALL_ID) and prints its result
+to stdout (JSON, or plain text). A non-zero exit fails the call with the last line of stderr. 30s limit.
+Example, saved as <folder>/stats and made executable (chmod +x):
+  #!/bin/sh
+  printf '{"disk":"%s"}' "$(df -h / | awk 'NR==2{print $5}')"
+Treat args as untrusted input: validate them and never pass them to a shell unchecked.
+
+rply.agent calls show up in \`rply inbox\` and in the chat:
+  call "plan" from app in message <id>: {...}
+Answer with \`rply respond <call-id> '<json>'\` (or --error "..."). The page waits while it's open.
+Use rply.agent for work that needs you, never for polling: every call is a message.`,
+
   secrets: `Ask the human for credentials without ever seeing them. The value is encrypted on their device and written straight to a file.
 
   rply secret request OPENAI_API_KEY --to .env --reason "Keyword research" --wait
@@ -103,7 +132,7 @@ Exit codes: 2 = expired or timed out, 3 = declined or cancelled.`,
 \`rply inbox\` lists files the human attached, with the \`rply file get\` command for each.`,
 };
 
-const order = ["basics", "ask", "blocks", "html", "pins", "secrets", "files"];
+const order = ["basics", "ask", "blocks", "html", "pins", "apps", "secrets", "files"];
 
 const snippet = `## Talking to the human (rply)
 

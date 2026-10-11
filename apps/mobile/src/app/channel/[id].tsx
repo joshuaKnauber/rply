@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import type { Answers, Message, MessageState } from "@rply/schema";
+import type { Answers, BlockOf, Message, MessageState } from "@rply/schema";
 import { AttachmentList } from "@/components/Attachments";
 import { Composer } from "@/components/Composer";
+import { HtmlBlock } from "@/components/HtmlBlock";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
-import { ChannelContext } from "@/lib/channel-context";
-import { eventLabel, isWaiting } from "@rply/schema";
+import { ChannelContext, MessageContext } from "@/lib/channel-context";
+import { appTitle, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
 export default function ChannelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const entry = useChannels().find((c) => c.channel.id === id);
+  const [tab, setTab] = useState<string | null>(null);
 
   if (!entry) return <Text className="p-6 text-neutral-500">Channel not found.</Text>;
 
@@ -39,15 +41,69 @@ export default function ChannelScreen() {
         }}
       />
       <ChannelContext.Provider value={entry}>
-        <Pinned entry={entry} />
-        <Thread entry={entry} />
+        <Body entry={entry} tab={tab} setTab={setTab} />
       </ChannelContext.Provider>
     </KeyboardAvoidingView>
   );
 }
 
-function Pinned({ entry }: { entry: StoredChannel }) {
+function Body({ entry, tab, setTab }: { entry: StoredChannel; tab: string | null; setTab: (tab: string | null) => void }) {
   const { data: pins = [] } = usePins(entry);
+  const apps = pins.filter(isApp);
+  const app = apps.find((m) => m.pin === tab);
+
+  return (
+    <>
+      {apps.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="grow-0 border-b border-neutral-200 dark:border-neutral-800" contentContainerClassName="gap-1 px-2 py-2">
+          {[{ key: null, label: "Chat" }, ...apps.map((m) => ({ key: m.pin, label: appTitle(m) }))].map((t) => {
+            const active = (app?.pin ?? null) === t.key;
+            return (
+              <Pressable key={t.key ?? ""} onPress={() => setTab(t.key)} className={`rounded-lg px-3 py-1.5 ${active ? "bg-neutral-100 dark:bg-neutral-800" : ""}`}>
+                <Text className={`text-sm font-medium ${active ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500"}`}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+      {app ? (
+        <AppView entry={entry} app={app} />
+      ) : (
+        <>
+          <Pinned entry={entry} pins={pins.filter((m) => !isApp(m))} />
+          <Thread entry={entry} />
+        </>
+      )}
+    </>
+  );
+}
+
+function AppView({ entry, app }: { entry: StoredChannel; app: Message }) {
+  const send = useSendMessage(entry);
+  const body = app.enc ? null : app.body;
+  const blocks = body && "blocks" in body ? (body.blocks ?? []) : [];
+  const only = blocks.length === 1 && !body?.text && blocks[0]!.type === "html" ? (blocks[0] as BlockOf<"html">) : undefined;
+  const onEvent = entry.revoked
+    ? undefined
+    : (blockId: string | null, value: unknown, label?: string) =>
+        send.mutate({ reply_to: app.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
+
+  return (
+    <MessageContext.Provider value={app}>
+      {only ? (
+        <HtmlBlock key={app.id} block={only} fill onSend={onEvent && ((value, label) => onEvent(only.id ?? null, value, label))} />
+      ) : (
+        <ScrollView className="flex-1" contentContainerClassName="gap-3 p-4">
+          {!body && <Text className="italic text-neutral-500">Encrypted</Text>}
+          {body?.text && <Markdown text={body.text} />}
+          {blocks.length > 0 && <MessageBlocks blocks={blocks} status={null} onEvent={onEvent} />}
+        </ScrollView>
+      )}
+    </MessageContext.Provider>
+  );
+}
+
+function Pinned({ entry, pins }: { entry: StoredChannel; pins: Message[] }) {
   const send = useSendMessage(entry);
   const unpin = useUnpin(entry);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -85,11 +141,13 @@ function Pinned({ entry }: { entry: StoredChannel }) {
                 {!body && <Text className="italic text-neutral-500">Encrypted</Text>}
                 {body?.text && <Markdown text={body.text} />}
                 {body && "blocks" in body && body.blocks?.length ? (
-                  <MessageBlocks
-                    blocks={body.blocks}
-                    status={null}
-                    onEvent={entry.revoked ? undefined : (blockId, value, label) => send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } })}
-                  />
+                  <MessageContext.Provider value={message}>
+                    <MessageBlocks
+                      blocks={body.blocks}
+                      status={null}
+                      onEvent={entry.revoked ? undefined : (blockId, value, label) => send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } })}
+                    />
+                  </MessageContext.Provider>
                 ) : null}
               </View>
             )}
@@ -130,9 +188,10 @@ function Thread({ entry }: { entry: StoredChannel }) {
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={<Text className="text-neutral-500">{isPending ? "Loading…" : error ? error.message : "No messages yet."}</Text>}
         renderItem={({ item }) =>
-          isEvent(item) ? (
+          isEvent(item) || isCall(item) ? (
             <Text className="self-end px-1 text-xs text-neutral-500">
-              ↳ Sent: {!item.enc && "event" in item.body && item.body.event ? eventLabel(item.body.event) : ""} · {formatTime(item.created_at)}
+              ↳ {actionLabel(item)} · {formatTime(item.created_at)}
+              {item.state ? ` · ${stateLabels[item.state].label}` : ""}
             </Text>
           ) : (
             <MessageView
@@ -170,6 +229,12 @@ function Thread({ entry }: { entry: StoredChannel }) {
   );
 }
 
+function actionLabel(message: Message) {
+  const body = message.enc ? undefined : message.body;
+  if (body && "call" in body && body.call) return `Called ${body.call.name}`;
+  return body && "event" in body && body.event ? `Sent: ${eventLabel(body.event)}` : "";
+}
+
 const stateLabels: Record<MessageState, { label: string; className: string }> = {
   seen: { label: "Seen", className: "text-neutral-500" },
   working: { label: "Working on it", className: "text-amber-600 dark:text-amber-400" },
@@ -199,7 +264,11 @@ function MessageView({
         {"title" in body && body.title && <Text className={`font-semibold ${textColor}`}>{body.title}</Text>}
         {body.text && (fromAgent ? <Markdown text={body.text} /> : <Text className={`text-[15px] leading-6 ${textColor}`}>{body.text}</Text>)}
         {"attachments" in body && body.attachments?.length ? <AttachmentList attachments={body.attachments} /> : null}
-        {"blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} /> : null}
+        {"blocks" in body && body.blocks?.length ? (
+          <MessageContext.Provider value={message}>
+            <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} />
+          </MessageContext.Provider>
+        ) : null}
       </View>
     );
   })();

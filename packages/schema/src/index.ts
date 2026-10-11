@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isInput } from "./helpers.ts";
+import { COMMAND_NAME, isInput } from "./helpers.ts";
 
 const elementId = z.string().min(1).max(64);
 const Json = z.json();
@@ -150,6 +150,7 @@ export const PinnedBody = z.object({
   title: z.string().max(200).optional(),
   text: z.string().optional(),
   blocks: z.array(Block).optional(),
+  view: z.literal("app").optional(),
 });
 export type PinnedBody = z.infer<typeof PinnedBody>;
 
@@ -184,7 +185,8 @@ export const HumanMessageBody = z
       (b.answers && Object.keys(b.answers).length > 0),
     "A message needs text, answers, attachments or an event",
   );
-export type HumanMessageBody = z.infer<typeof HumanMessageBody>;
+export type Call = { name: string; block_id: string | null; args: z.infer<typeof Json>; result?: z.infer<typeof Json>; error?: string };
+export type HumanMessageBody = z.infer<typeof HumanMessageBody> & { call?: Call };
 
 const Plain = z.object({ enc: z.literal(false).default(false), body: z.unknown() });
 const Encrypted = z.object({ enc: z.literal(true), body: z.string().min(1) });
@@ -228,6 +230,17 @@ export const CreateSecretRequest = z
   })
   .refine((r) => r.mode !== "env" || ENV_NAME.test(r.name), "Environment variable names may only use letters, digits and _");
 export const FulfilSecretRequest = z.object({ ciphertext: z.string().min(1).max(200_000) });
+
+const commandName = z.string().regex(COMMAND_NAME, "Command names are 1-64 letters, digits, - or _");
+export const CallRequest = z.object({
+  message_id: z.string().min(1).max(64),
+  block_id: elementId.nullable().default(null),
+  name: commandName,
+  args: Json.default(null),
+  agent: z.boolean().default(false),
+  wait: z.number().min(0).max(60).optional(),
+});
+export const CallResultRequest = z.union([z.object({ error: z.string().max(2000) }), z.object({ result: Json })]);
 
 export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
 export const SyncRequest = z.object({
@@ -293,5 +306,11 @@ export type MessagesResponse = { messages: Message[]; cursor: number };
 export type AskResponse = { message: Message; answer: Message | null };
 export type SecretStatus = "open" | "provided" | "delivered" | "declined" | "cancelled" | "expired";
 export type SecretResponse = { id: string; name: string; target: string; mode: "env" | "file"; status: SecretStatus; ciphertext: string | null };
+export type PendingCall = { id: string; name: string; args: unknown; block_id: string | null; message_id: string };
+export type CallsResponse = { calls: PendingCall[] };
+export type CallResponse =
+  | { id: string; status: "done"; result: unknown }
+  | { id: string; status: "error"; error: string }
+  | { id: string; status: "pending" };
 export type SyncResponse = { cursor: string; messages: Message[]; revoked: string[] };
 export * from "./helpers.ts";

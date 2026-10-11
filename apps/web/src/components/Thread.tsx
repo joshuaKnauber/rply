@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import type { Answers, Message, MessageState } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { markRead, type StoredChannel } from "@/lib/channels";
-import { eventLabel, isWaiting } from "@rply/schema";
+import { MessageContext } from "@/lib/channel-context";
+import { eventLabel, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, useSendMessage } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,7 @@ export function Thread({ entry }: { entry: StoredChannel }) {
           {error && <p className="text-destructive text-sm">{error.message}</p>}
           {!isPending && visible.length === 0 && <p className="text-muted-foreground text-sm">No messages yet.</p>}
           {visible.map((message) =>
-            isEvent(message) ? (
+            isEvent(message) || isCall(message) ? (
               <EventLine key={message.id} message={message} />
             ) : (
               <MessageView
@@ -108,11 +109,12 @@ export function WaitingIndicator({ entry }: { entry: StoredChannel }) {
 }
 
 function EventLine({ message }: { message: Message }) {
-  const event = !message.enc && "event" in message.body ? message.body.event : undefined;
+  const body = message.enc ? undefined : message.body;
+  const label = body && "call" in body && body.call ? `Called ${body.call.name}` : body && "event" in body && body.event ? `Sent: ${eventLabel(body.event)}` : "";
   return (
     <div className="text-muted-foreground flex items-center gap-1.5 px-3 py-1 text-xs">
       <CornerDownRightIcon className="size-3" />
-      <span className="max-w-[70%] truncate">Sent: {event ? eventLabel(event) : ""}</span>
+      <span className="max-w-[70%] truncate">{label}</span>
       <span className="tabular-nums">{formatTime(message.created_at)}</span>
       {message.state && <StateLabel state={message.state} />}
     </div>
@@ -143,7 +145,9 @@ function MessageView({
         {body.text && (fromAgent ? <Markdown text={body.text} /> : <p className="whitespace-pre-wrap">{body.text}</p>)}
         {"attachments" in body && body.attachments?.length ? <AttachmentList attachments={body.attachments} /> : null}
         {"blocks" in body && body.blocks?.length ? (
-          <MessageBlocks blocks={body.blocks} status={askStatus(message.ask)} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} />
+          <MessageContext.Provider value={message}>
+            <MessageBlocks blocks={body.blocks} status={askStatus(message.ask)} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} />
+          </MessageContext.Provider>
         ) : null}
       </div>
     );

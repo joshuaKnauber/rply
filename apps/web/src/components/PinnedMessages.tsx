@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChevronDownIcon, PinOffIcon } from "lucide-react";
-import type { Message } from "@rply/schema";
+import { isApp, type Message } from "@rply/schema";
 import type { StoredChannel } from "@/lib/channels";
+import { MessageContext } from "@/lib/channel-context";
 import { formatTime } from "@/lib/format";
 import { toast } from "sonner";
 import { usePins, useSendMessage, useUnpin } from "@/lib/queries";
@@ -20,7 +21,7 @@ export function PinnedMessages({ entry }: { entry: StoredChannel }) {
       { onSuccess: () => toast.success("Sent to the agent"), onError: (err) => toast.error(err.message) },
     );
 
-  return pins.map((message) => (
+  return pins.filter((m) => !isApp(m)).map((message) => (
     <Pinned
       key={message.id}
       message={message}
@@ -61,7 +62,11 @@ function Pinned({
         <div className="flex flex-col gap-3">
           {!body && <p className="text-muted-foreground text-sm italic">Encrypted</p>}
           {body?.text && <Markdown text={body.text} />}
-          {body && "blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={null} onEvent={onEvent} /> : null}
+          {body && "blocks" in body && body.blocks?.length ? (
+            <MessageContext.Provider value={message}>
+              <MessageBlocks blocks={body.blocks} status={null} onEvent={onEvent} />
+            </MessageContext.Provider>
+          ) : null}
         </div>
       )}
     </section>

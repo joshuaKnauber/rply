@@ -52,6 +52,11 @@ rply pin patch overview --patch '{"id":"pages","value":42}'
 rply pin remove overview | pin list
 rply status set|patch|get                                         # shortcut for the pin "status"
 
+rply app set dashboard dashboard.html --title Dashboard           # full-page HTML app, shown as a tab
+rply app list | app remove <key> | app commands                   # app commands: where command scripts go
+rply serve                                                        # runs command scripts when an app calls rply.call()
+rply respond <call-id> '{"ok":true}'                              # answer a call that has no script
+
 rply secret request OPENAI_API_KEY --to .env --reason "for keyword research" --wait
 rply secret request "Service account" --to keys/sa.json --file --wait   # whole-file secret
 rply secret fetch <id> | secret cancel <id>

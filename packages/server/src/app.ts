@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv, Deps } from "./context.ts";
 import { adminRoutes } from "./routes/admin.ts";
+import { callRoutes } from "./routes/calls.ts";
 import { channelRoutes } from "./routes/channels.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { messageRoutes } from "./routes/messages.ts";
@@ -25,6 +26,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", secretRoutes(deps))
     .route("/", fileRoutes(deps))
     .route("/", pushRoutes(deps))
+    .route("/", callRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

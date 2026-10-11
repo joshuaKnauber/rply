@@ -8,17 +8,21 @@ import { removeChannel, type StoredChannel } from "@/lib/channels";
 import { ChannelContext } from "@/lib/channel-context";
 import { cn } from "@/lib/utils";
 import { formatAgo } from "@/lib/format";
-import { useAgents, useDevices, useRevoke } from "@/lib/queries";
+import { useAgents, useDevices, usePins, useRemoveApp, useRevoke } from "@/lib/queries";
 import { toast } from "sonner";
-import type { Participant } from "@rply/schema";
+import { appTitle, isApp, type Participant } from "@rply/schema";
 import { AddAgentDialog } from "./AddAgentDialog";
+import { AppView } from "./AppView";
 import { LinkDeviceDialog } from "./LinkDeviceDialog";
 import { confirmDialog } from "./ConfirmDialog";
 import { PinnedMessages } from "./PinnedMessages";
 import { Thread, WaitingIndicator } from "./Thread";
 
-export function ChannelView({ entry }: { entry: StoredChannel }) {
+export function ChannelView({ entry, appKey }: { entry: StoredChannel; appKey?: string }) {
   const [, navigate] = useLocation();
+  const { data: pins = [] } = usePins(entry);
+  const app = appKey ? pins.find((m) => isApp(m) && m.pin === appKey) : undefined;
+  const removeApp = useRemoveApp(entry);
 
   const remove = async () => {
     const ok = await confirmDialog({
@@ -32,6 +36,18 @@ export function ChannelView({ entry }: { entry: StoredChannel }) {
     navigate("/");
   };
 
+  const confirmRemoveApp = async () => {
+    if (!app) return;
+    const ok = await confirmDialog({
+      title: `Remove "${appTitle(app)}"?`,
+      description: "It's deleted for every device. The agent can add it again.",
+      action: "Remove",
+      destructive: true,
+    });
+    if (!ok) return;
+    removeApp.mutate(app.pin!, { onSuccess: () => navigate(`/c/${entry.channel.id}`), onError: (err) => toast.error(err.message) });
+  };
+
   return (
     <ChannelContext.Provider value={entry}>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -41,43 +57,83 @@ export function ChannelView({ entry }: { entry: StoredChannel }) {
               <ArrowLeftIcon />
             </Link>
           </Button>
-          <h1 className="truncate font-medium tracking-normal">{entry.channel.name}</h1>
+          <h1 className="flex min-w-0 items-baseline gap-1.5 font-medium tracking-normal">
+            {app ? (
+              <>
+                <Link href={`/c/${entry.channel.id}`} className="text-muted-foreground hover:text-foreground truncate">
+                  {entry.channel.name}
+                </Link>
+                <span className="text-muted-foreground">/</span>
+                <span className="truncate">{appTitle(app)}</span>
+              </>
+            ) : (
+              <span className="truncate">{entry.channel.name}</span>
+            )}
+          </h1>
           {entry.revoked && <Badge variant="destructive">Revoked</Badge>}
           <WaitingIndicator entry={entry} />
-          <div className="-mr-2 ml-auto flex items-center gap-1">
-            {!entry.admin && (
+          {app && !entry.revoked && (
+            <div className="-mr-2 ml-auto flex items-center gap-1">
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="Channel options">
+                  <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="App options">
                     <EllipsisIcon />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-auto">
-                  <DropdownMenuItem variant="destructive" onSelect={remove}>
-                    Remove from this browser
+                  <DropdownMenuItem variant="destructive" onSelect={confirmRemoveApp}>
+                    Remove app
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button size="icon" variant="ghost" className="text-muted-foreground lg:hidden" aria-label="Channel details">
-                  <PanelRightIcon />
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="gap-0 overflow-y-auto px-6 pt-4">
-                <SheetTitle className="text-lg">{entry.channel.name}</SheetTitle>
-                <Panel entry={entry} />
-              </SheetContent>
-            </Sheet>
-          </div>
+            </div>
+          )}
+          {!appKey && (
+            <div className="-mr-2 ml-auto flex items-center gap-1">
+              {!entry.admin && (
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="Channel options">
+                      <EllipsisIcon />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-auto">
+                    <DropdownMenuItem variant="destructive" onSelect={remove}>
+                      Remove from this browser
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground lg:hidden" aria-label="Channel details">
+                    <PanelRightIcon />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="gap-0 overflow-y-auto px-6 pt-4">
+                  <SheetTitle className="text-lg">{entry.channel.name}</SheetTitle>
+                  <Panel entry={entry} />
+                </SheetContent>
+              </Sheet>
+            </div>
+          )}
         </header>
-        <div className="flex min-h-0 flex-1">
-          <Thread entry={entry} />
-          <aside className="hidden w-80 shrink-0 overflow-y-auto border-l px-6 lg:block">
-            <Panel entry={entry} />
-          </aside>
-        </div>
+        {appKey ? (
+          app ? (
+            <AppView entry={entry} app={app} />
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <p className="text-muted-foreground text-sm">This app was removed.</p>
+            </div>
+          )
+        ) : (
+          <div className="flex min-h-0 flex-1">
+            <Thread entry={entry} />
+            <aside className="hidden w-80 shrink-0 overflow-y-auto border-l px-6 lg:block">
+              <Panel entry={entry} />
+            </aside>
+          </div>
+        )}
       </div>
     </ChannelContext.Provider>
   );

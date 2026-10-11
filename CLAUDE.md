@@ -166,6 +166,17 @@ The web app can notify about agent messages while the tab is closed (desktop bro
 - **Web app**: `public/sw.js` (shows the notification, focuses an open tab via a `rply:open` message or opens one), `public/manifest.webmanifest` + icons (installable PWA, required for iOS push), `src/lib/push.ts`, `components/NotificationsButton.tsx`. The endpoint is stored as `rply.push` in localStorage.
 - Mobile push (relay, section 5) is separate and not built yet.
 
+## 7d. Apps (built)
+
+Full-page HTML apps per channel for dashboards and control spaces, replacing custom agent-hosted websites.
+- **An app is a pin** whose body has `view: "app"` (in `PinnedBody`, so E2E pins can carry it too). No separate entity: it reuses pins, sync, editing, deletion and files. `rply app set <key> <file.html> [--title ..]` puts one `html` block (id `app`) into it. The agent only sends HTML; apps fetch their own data with `rply.call`.
+- **Where apps show**: web lists them in the sidebar under their channel (`ChannelList`, pins fetched for every channel with `useAllPins`), route `/c/:id/a/:key` (`AppView.tsx`; header "Channel / App", the right panel is hidden). Mobile shows them as a row of tabs under the header (component state, no route). An app with exactly one `html` block and no text fills the area (`HtmlBlock` with `fill`); anything else renders as scrollable blocks. Apps are filtered out of the pinned list (`isApp` from helpers). The human removes an app from its header menu ("Remove app"): `DELETE /v1/pins/:key` is allowed for the human side only when the pin is an app (other pins are unpinned instead, which would dump a full-page app into the chat).
+- **Bridge** (`embedDocument` in helpers, all clients): `rply.call(name, args) → Promise` runs a command script, `rply.agent(name, args) → Promise` asks the agent (both reject with an `Error`: `offline`, `timeout`, or the command's error), and `rply.storage.get/set`. The page says explicitly which one it wants, so a dashboard polling scripts can never flood the chat. Storage is a snapshot injected into the document plus `{ rply: "storage" }` messages, persisted per channel + pin key (or message id) in localStorage on web (`rply.app.<channel>.<key>`, max 256 KB) and in `Paths.document/rply-apps/` on mobile (`lib/apps.ts`). Results go back as `{ rply: "result", id, result | error }`, via `postMessage` on web and `injectJavaScript(__rplyReceive(..))` on native. `HtmlBlock` reads the channel from `ChannelContext` and the message from `MessageContext` (provided around thread messages, pins and apps), so calls work from any agent message's html block, not only apps.
+- **Command scripts**: executables in `~/.config/rply/commands/<channel key>/<name>` (`rply app commands` prints the folder; `serve --dir` overrides). Names match `COMMAND_NAME` (`[A-Za-z0-9_-]{1,64}`), which also keeps them safe as file names. `rply serve` long-polls `GET /v1/calls?wait=55&commands=..` (re-reading the folder each poll, so new scripts need no restart), runs the script directly (no shell) with `args` as JSON on stdin and env `RPLY_CALL_NAME` / `RPLY_CALL_ID`, and posts stdout (JSON if it parses, else the trimmed string, empty → null; max 200 KB). Non-zero exit → `{ error }` with the last stderr line; 30s limit. The HTML can only name a command; scripts must validate `args`.
+- **Agent commands**: `rply.agent` (request `agent: true`) always becomes a human message `{ call: { name, block_id, args } }` with `reply_to` the app message; the call id is that message id. `inbox`/`listen` print `call "plan" from app in message <id>: {...}` plus the `rply respond` hint. `rply respond <id> [json|text|-] [--error ..]` stores `result`/`error` in the call body and sets state `done`. The apps show it as a compact "Called plan" line. Humans can't forge calls through `POST /messages` (zod strips `call`). If the app was closed before the answer, the result is only in the message.
+- **Server** (`routes/calls.ts`, state in memory per app instance, nothing stored for script calls): serve registrations are per agent token (`{ commands, polling, seen, queue }`), online while polling or within 15s of the last poll; `serve` re-registers within seconds after a server restart. `POST /v1/calls { message_id, block_id, name, args, agent?, wait? }` (human): without `agent`, the call is queued for an online `serve` that registered the name and waits up to 35s (503 `offline` if no `serve` is online for the channel, 404 if none has that command, 504 `timeout`). With `agent: true` it creates the call message and waits `wait` seconds. Response: `{ id, status: "done", result } | { id, status: "error", error } | { id, status: "pending" }`; clients keep polling `GET /v1/calls/:id?wait=`. `POST /v1/calls/:id/result { result } | { error }` (agent) resolves a waiting script call or answers an agent call (409 if already answered).
+- **Later**: MCP access is just a command script that calls the MCP server. E2E channels need call args and results sealed with the channel key (call messages are plaintext today). A `serve --install` for systemd could come later.
+
 ## 8. Channels, auth and E2E (decided)
 
 ### Channels, modelled on ntfy
@@ -213,7 +224,7 @@ Plaintext is the default. E2E mostly protects against the server operator, which
 - **The CLI is the core and comes first.** Any agent with a shell can use it immediately; it works for non-agent scripts too; long blocking waits are easy (no MCP client timeouts); and secret writing happens locally.
 - **Remote MCP on the server** later, for ChatGPT, Claude connectors and hosted agents that have no shell.
 - **Local `mcp` subcommand in the CLI**: low priority. Only useful for local agents without a shell or with locked-down shell permissions. Cheap to add later since it reuses the CLI code.
-- **`rply guide`** teaches agents the CLI (topics: basics, ask, blocks, html, pins, secrets, files; `--snippet` prints lines for AGENTS.md/CLAUDE.md). To make sure agents read it: `init`/`join` end with "Next: run `rply guide`", every command prints a stderr hint until the guide was read for the installed version (stored in `guide.json` next to the config, `RPLY_NO_GUIDE_HINT=1` turns it off), 400s on `/messages` and `/pins` point to `rply guide blocks`, and the join command the app shows ends with `rply guide`. Keep the guide in `packages/cli/src/commands/guide.ts` in sync when commands or blocks change.
+- **`rply guide`** teaches agents the CLI (topics: basics, ask, blocks, html, pins, apps, secrets, files; `--snippet` prints lines for AGENTS.md/CLAUDE.md). To make sure agents read it: `init`/`join` end with "Next: run `rply guide`", every command prints a stderr hint until the guide was read for the installed version (stored in `guide.json` next to the config, `RPLY_NO_GUIDE_HINT=1` turns it off), 400s on `/messages` and `/pins` point to `rply guide blocks`, and the join command the app shows ends with `rply guide`. Keep the guide in `packages/cli/src/commands/guide.ts` in sync when commands or blocks change.
 
 ## 10. Hosted version (later, plan for it now)
 
@@ -230,7 +241,7 @@ rply.sh hosting is not part of v1, but the design leaves room for it:
 rply init <server-url> [--name ..] [--server-token ..] [--e2e]   # creates channel, prints QR + link
 rply join <server-url> <code>           # join a channel created in the app (agent code)
 rply rename <name>                      # name this agent shows in the app (init/join take --agent-name, default: hostname)
-rply guide [basics|ask|blocks|html|pins|secrets|files|all] [--snippet]   # usage guide for agents
+rply guide [basics|ask|blocks|html|pins|apps|secrets|files|all] [--snippet]   # usage guide for agents
 rply pair                               # new pairing code for another device
 rply send "Deployed 3 new pages" [--title ..] [--blocks file.json] [--silent]
 rply ask "Publish these 5 pages?" --choices yes,no [--multi] [--other] [--default no] [--expires 2h] [--wait] [--timeout 1h]
@@ -247,6 +258,9 @@ rply listen                             # stream incoming messages (JSONL)
 rply pin set overview "text" [--title ..] [--blocks file.json]   # pinned to the top of the chat
 rply pin patch overview --patch '{"id":"pages","value":42}' | pin remove overview | pin list
 rply status set|patch|get                # shortcut for the pin "status"
+rply app set <key> <file.html> [--title ..] | app list | app remove <key> | app commands   # apps (section 7d)
+rply serve [--dir ..]                    # run command scripts for rply.call
+rply respond <call-id> [json] [--error ..]   # answer a call without a script
 rply delete <message-id>
 rply send "Weekly report" --image chart.png --file data.csv      # --image/--file repeatable, also on pin set
 rply file upload <path> | file get <file-id> [--to path] [--force]
@@ -265,11 +279,12 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
 - `PUT|PATCH /v1/messages/:id` (agent edits), `POST /v1/messages/:id/cancel` (agent cancels a question), `POST /v1/messages/:id/state` (agent: seen|working|done on a human message)
 - `GET /v1/asks` (agent: open questions), `GET /v1/asks/:id?wait=60` (agent: long-poll until answered, expired or cancelled → `{ message, answer }`)
-- `GET /v1/pins`, `PUT|PATCH|DELETE /v1/pins/:key` (agent; keys are 1-32 of `a-z0-9_-`), `POST /v1/messages/:id/unpin` (either side, moves it into the thread), `DELETE /v1/messages/:id` (agent, soft delete)
+- `GET /v1/pins`, `PUT|PATCH|DELETE /v1/pins/:key` (agent; the human may DELETE apps; keys are 1-32 of `a-z0-9_-`), `POST /v1/messages/:id/unpin` (either side, moves it into the thread), `DELETE /v1/messages/:id` (agent, soft delete)
 - `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
 - `PUT /v1/channel/key` (agent: upload the X25519 public key), `POST /v1/secrets` (agent: create a request + secret message), `GET /v1/secrets/:id?wait=` (agent: long-poll; returns the ciphertext once provided), `POST /v1/secrets/:id/delivered|cancel` (agent), `POST /v1/secrets/:id/fulfil|decline` (human)
 - `POST /v1/files?name=` (either side, raw body), `GET /v1/files/:id` (either side of the file's channel)
 - `PUT /v1/push/subscription` (human tokens in the body and/or admin bearer), `DELETE /v1/push/subscription { endpoint }`
+- `POST /v1/calls`, `GET /v1/calls/:id?wait=` (human), `GET /v1/calls?wait=&commands=` (agent, `serve`), `POST /v1/calls/:id/result` (agent); section 7d
 - later: `POST /v1/devices` (mobile push), `/mcp`
 
 ### Data model

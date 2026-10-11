@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { CliError } from "./client.ts";
+import { registerApps } from "./commands/apps.ts";
 import { registerAsks } from "./commands/asks.ts";
 import { registerFiles } from "./commands/files.ts";
 import { guideHint, registerGuide } from "./commands/guide.ts";
@@ -27,6 +28,7 @@ registerMessages(program);
 registerAsks(program);
 registerFiles(program);
 registerPins(program);
+registerApps(program);
 registerSecrets(program);
 registerUpdate(program);
 

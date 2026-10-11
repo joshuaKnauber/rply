@@ -22,13 +22,16 @@ export const useAllMessages = (entries: StoredChannel[]) =>
     })),
   });
 
-export const usePins = (entry: StoredChannel) =>
-  useQuery({
-    queryKey: pinsKey(entry.channel.id),
-    queryFn: () => api<{ messages: Message[] }>("/pins", auth(entry)).then((r) => r.messages),
-    staleTime: Infinity,
-    enabled: !entry.revoked,
-  });
+const pinsQuery = (entry: StoredChannel) => ({
+  queryKey: pinsKey(entry.channel.id),
+  queryFn: () => api<{ messages: Message[] }>("/pins", auth(entry)).then((r) => r.messages),
+  staleTime: Infinity,
+  enabled: !entry.revoked,
+});
+
+export const usePins = (entry: StoredChannel) => useQuery(pinsQuery(entry));
+
+export const useAllPins = (entries: StoredChannel[]) => useQueries({ queries: entries.map(pinsQuery) });
 
 export const useDevices = (entry: StoredChannel) =>
   useQuery({
@@ -84,6 +87,14 @@ export function useUnpin(entry: StoredChannel) {
   return useMutation({
     mutationFn: (id: string) => api<{ message: Message }>(`/messages/${id}/unpin`, { ...auth(entry), method: "POST" }).then((r) => r.message),
     onSuccess: (message) => applySynced(queryClient, [message]),
+  });
+}
+
+export function useRemoveApp(entry: StoredChannel) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api(`/pins/${key}`, { ...auth(entry), method: "DELETE" }),
+    onSuccess: (_, key) => queryClient.setQueryData<Message[]>(pinsKey(entry.channel.id), (pins = []) => pins.filter((m) => m.pin !== key)),
   });
 }
 

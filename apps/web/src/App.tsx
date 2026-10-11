@@ -21,8 +21,9 @@ export function App() {
 
 function Inbox() {
   const channels = useChannels();
-  const [, params] = useRoute("/c/:id");
-  const active = channels.find((c) => c.channel.id === params?.id);
+  const [, chat] = useRoute("/c/:id");
+  const [, app] = useRoute("/c/:id/a/:key");
+  const active = channels.find((c) => c.channel.id === (chat ?? app)?.id);
   const [adding] = useRoute("/add");
   const [settings] = useRoute("/settings");
   const showMain = Boolean(active) || adding || settings || channels.length === 0;
@@ -43,7 +44,7 @@ function Inbox() {
   return (
     <div className="flex h-full">
       <aside className={cn("bg-sidebar w-full md:flex md:w-72 md:shrink-0 md:border-r", showMain ? "hidden" : "flex")}>
-        <ChannelList channels={channels} activeId={active?.channel.id} adding={adding} settings={settings} />
+        <ChannelList channels={channels} activeId={active?.channel.id} activeApp={app?.key} adding={adding} settings={settings} />
       </aside>
       <main
         className={cn(
@@ -52,7 +53,7 @@ function Inbox() {
         )}
       >
         {active ? (
-          <ChannelView key={active.channel.id} entry={active} />
+          <ChannelView key={active.channel.id} entry={active} appKey={app?.key} />
         ) : settings ? (
           <SettingsPage />
         ) : adding || channels.length === 0 ? (

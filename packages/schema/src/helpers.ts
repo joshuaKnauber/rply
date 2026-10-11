@@ -1,5 +1,7 @@
 import type { Answers, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
 
+export const COMMAND_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
 export const INPUT_TYPES = ["choice", "text_input", "number_input", "toggle", "confirm"] as const;
 
 export const isInput = (block: Block) =>
@@ -13,6 +15,13 @@ export const isAnswer = (message: Message) =>
 
 export const isEvent = (message: Message) =>
   !message.enc && message.sender === "human" && "event" in message.body && message.body.event !== undefined;
+
+export const isCall = (message: Message) =>
+  !message.enc && message.sender === "human" && "call" in message.body && message.body.call !== undefined;
+
+export const isApp = (message: Message) => !message.enc && message.pin !== null && "view" in message.body && message.body.view === "app";
+
+export const appTitle = (message: Message) => (!message.enc && "title" in message.body && message.body.title) || message.pin || "App";
 
 export const secretStatus = (block: BlockOf<"secret">): SecretStatus =>
   block.status === "open" && block.expires_at !== null && block.expires_at <= Date.now() ? "expired" : block.status;
@@ -59,6 +68,7 @@ export function preview(message: Message) {
   const body = message.body;
   if ("answers" in body && body.answers) return "Answered";
   if ("event" in body && body.event) return `Sent: ${eventLabel(body.event)}`;
+  if ("call" in body && body.call) return `Called: ${body.call.name}`;
   if ("title" in body && body.title) return body.title;
   if (body.text) return body.text;
   if ("attachments" in body && body.attachments?.length) return `📎 ${body.attachments.map((a) => a.name).join(", ")}`;
@@ -101,23 +111,53 @@ const embedPost = {
   native: `window.ReactNativeWebView.postMessage(JSON.stringify(m))`,
 };
 
-export function embedDocument(block: { html: string; height?: number }, transport: keyof typeof embedPost, theme: EmbedTheme) {
+const scriptJson = (value: unknown) => JSON.stringify(value).replaceAll("<", "\\u003c");
+
+export type EmbedOptions = { storage?: Record<string, unknown>; fill?: boolean };
+
+export function embedDocument(block: { html: string; height?: number }, transport: keyof typeof embedPost, theme: EmbedTheme, opts: EmbedOptions = {}) {
   return `<!doctype html><html data-theme="${theme === "dark" ? "dark" : "light"}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <script>
 const post = (m) => ${embedPost[transport]};
+const calls = new Map();
+const store = ${scriptJson(opts.storage ?? {})};
+let callId = 0;
+const call = (name, args, agent) => new Promise((resolve, reject) => {
+  const id = ++callId;
+  calls.set(id, { resolve, reject });
+  post({ rply: "call", id, name, args, agent });
+});
 window.rply = {
   reply: (value) => post({ rply: "reply", value }),
   send: (value, label) => post({ rply: "send", value, label }),
   resize: (height) => post({ rply: "resize", height }),
+  call: (name, args) => call(name, args, false),
+  agent: (name, args) => call(name, args, true),
+  storage: {
+    get: (key) => store[key],
+    set: (key, value) => {
+      if (value === undefined) delete store[key];
+      else store[key] = value;
+      post({ rply: "storage", key, value });
+    },
+  },
 };
-addEventListener("message", (e) => {
-  if (e.data && e.data.rply === "theme") document.documentElement.dataset.theme = e.data.theme === "dark" ? "dark" : "light";
-});
+window.__rplyReceive = (m) => {
+  if (!m || typeof m !== "object") return;
+  if (m.rply === "theme") document.documentElement.dataset.theme = m.theme === "dark" ? "dark" : "light";
+  if (m.rply === "result" && calls.has(m.id)) {
+    const call = calls.get(m.id);
+    calls.delete(m.id);
+    if (m.error === undefined) call.resolve(m.result);
+    else call.reject(new Error(m.error));
+  }
+};
+addEventListener("message", (e) => __rplyReceive(e.data));
 addEventListener("load", () => {
   const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
   new ResizeObserver(report).observe(document.body);
   report();
 });
 </script>
-<style>${embedCss}</style>${block.height ? "" : "<style>html,body{overflow:hidden}</style>"}${block.html}`;
+<style>${embedCss}</style>${block.height || opts.fill ? "" : "<style>html,body{overflow:hidden}</style>"}${block.html}`;
 }

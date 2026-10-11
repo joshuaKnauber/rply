@@ -61,7 +61,7 @@ Add `--json` to any command for machine-readable output. Exit code 2 means a `--
 
 ## Blocks
 
-Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `progress`, `keyvalue`, `table`, `code`, `link`, `html` (sandboxed; call `rply.reply(value)` inside it to answer). Questions: `choice`, `text_input`, `number_input`, `toggle`, `confirm`. Several question blocks in one message are answered together.
+Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `progress`, `keyvalue`, `table`, `code`, `link`, `html` (sandboxed HTML/JS; call `rply.send(value, label)` inside it to send events to your inbox any number of times, or mark it `"question": true` and call `rply.reply(value)` to answer once). Questions: `choice`, `text_input`, `number_input`, `toggle`, `confirm`. Several question blocks in one message are answered together.
 
 ```json
 [

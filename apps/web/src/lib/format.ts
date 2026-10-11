@@ -1,4 +1,4 @@
-export { askStatus, formatValue, isAnswer, preview } from "@rply/schema";
+export { askStatus, formatValue, isAnswer, isEvent, preview } from "@rply/schema";
 
 export function formatTime(ts: number) {
   const date = new Date(ts);

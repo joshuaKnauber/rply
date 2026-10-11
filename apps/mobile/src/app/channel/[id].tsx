@@ -5,7 +5,8 @@ import type { Answers, Message, MessageState } from "@rply/schema";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
-import { askStatus, formatTime, isAnswer } from "@/lib/format";
+import { eventLabel } from "@rply/schema";
+import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, usePins, useSendMessage } from "@/lib/queries";
 
 export default function ChannelScreen() {
@@ -42,6 +43,7 @@ export default function ChannelScreen() {
 
 function Pinned({ entry }: { entry: StoredChannel }) {
   const { data: pins = [] } = usePins(entry);
+  const send = useSendMessage(entry);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [contentHeight, setContentHeight] = useState(0);
   if (pins.length === 0) return null;
@@ -67,7 +69,13 @@ function Pinned({ entry }: { entry: StoredChannel }) {
               <View className="gap-3 px-3 pb-3">
                 {!body && <Text className="italic text-neutral-500">Encrypted</Text>}
                 {body?.text && <Markdown text={body.text} />}
-                {body && "blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={null} /> : null}
+                {body && "blocks" in body && body.blocks?.length ? (
+                  <MessageBlocks
+                    blocks={body.blocks}
+                    status={null}
+                    onEvent={entry.revoked ? undefined : (blockId, value, label) => send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } })}
+                  />
+                ) : null}
               </View>
             )}
           </View>
@@ -95,6 +103,8 @@ function Thread({ entry }: { entry: StoredChannel }) {
 
   const answer = (message: Message) => (answers: Answers) =>
     send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
+  const sendEvent = (message: Message) => (blockId: string | null, value: unknown, label?: string) =>
+    send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
 
   const submit = () => {
     if (!text.trim()) return;
@@ -111,13 +121,20 @@ function Thread({ entry }: { entry: StoredChannel }) {
         contentContainerClassName="gap-3 p-4"
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={<Text className="text-neutral-500">{isPending ? "Loading…" : error ? error.message : "No messages yet."}</Text>}
-        renderItem={({ item }) => (
-          <MessageView
-            message={item}
-            submitted={item.ask?.answer_id ? answersById.get(item.ask.answer_id) : undefined}
-            onAnswer={entry.revoked ? undefined : answer(item)}
-          />
-        )}
+        renderItem={({ item }) =>
+          isEvent(item) ? (
+            <Text className="self-end px-1 text-xs text-neutral-500">
+              ↳ Sent: {!item.enc && "event" in item.body && item.body.event ? eventLabel(item.body.event) : ""} · {formatTime(item.created_at)}
+            </Text>
+          ) : (
+            <MessageView
+              message={item}
+              submitted={item.ask?.answer_id ? answersById.get(item.ask.answer_id) : undefined}
+              onAnswer={entry.revoked ? undefined : answer(item)}
+              onEvent={entry.revoked ? undefined : sendEvent(item)}
+            />
+          )
+        }
       />
       {waiting.length > 0 && (
         <Pressable
@@ -153,7 +170,17 @@ const stateLabels: Record<MessageState, { label: string; className: string }> = 
   done: { label: "Done ✓", className: "text-emerald-600 dark:text-emerald-400" },
 };
 
-function MessageView({ message, submitted, onAnswer }: { message: Message; submitted?: Answers; onAnswer?: (answers: Answers) => void }) {
+function MessageView({
+  message,
+  submitted,
+  onAnswer,
+  onEvent,
+}: {
+  message: Message;
+  submitted?: Answers;
+  onAnswer?: (answers: Answers) => void;
+  onEvent?: (blockId: string | null, value: unknown, label?: string) => void;
+}) {
   const fromAgent = message.sender === "agent";
   const textColor = fromAgent ? "text-neutral-900 dark:text-neutral-100" : "text-white dark:text-neutral-900";
   const status = askStatus(message.ask);
@@ -165,7 +192,7 @@ function MessageView({ message, submitted, onAnswer }: { message: Message; submi
       <View className="gap-3">
         {"title" in body && body.title && <Text className={`font-semibold ${textColor}`}>{body.title}</Text>}
         {body.text && (fromAgent ? <Markdown text={body.text} /> : <Text className={`text-[15px] leading-6 ${textColor}`}>{body.text}</Text>)}
-        {"blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} /> : null}
+        {"blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} /> : null}
       </View>
     );
   })();

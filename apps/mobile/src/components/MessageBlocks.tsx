@@ -14,14 +14,14 @@ import {
   type AskStatus,
   type Block,
 } from "@rply/schema";
-import { BlockView } from "./BlockView";
+import { BlockView, type OnEvent } from "./BlockView";
 import { Button } from "./Button";
 import { HtmlBlock } from "./HtmlBlock";
 import { ChoiceInput, ConfirmInput, NumberInput, TextInput, ToggleInput } from "./Inputs";
 
-type Props = { blocks: Block[]; status: AskStatus | null; submitted?: Answers; onSubmit?: (answers: Answers) => void };
+type Props = { blocks: Block[]; status: AskStatus | null; submitted?: Answers; onSubmit?: (answers: Answers) => void; onEvent?: OnEvent };
 
-export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
+export function MessageBlocks({ blocks, status, submitted, onSubmit, onEvent }: Props) {
   const inputs = inputsOf(blocks);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const open = status === "open" && Boolean(onSubmit);
@@ -40,9 +40,9 @@ export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
   return (
     <View className="gap-3">
       {blocks.map((block, i) => {
-        if (!isInput(block)) return <BlockView key={block.id ?? i} block={block} />;
+        if (!isInput(block)) return <BlockView key={block.id ?? i} block={block} onEvent={onEvent} />;
         number++;
-        const input = renderInput(block, shown[block.id!], !open, (v) => change(block.id!, v));
+        const input = renderInput(block, shown[block.id!], !open, (v) => change(block.id!, v), onEvent);
         return inputs.length > 1 ? (
           <View key={block.id} className="flex-row gap-3 border-l-2 border-neutral-200 pl-3 dark:border-neutral-800">
             <Text className="text-neutral-500">{number}.</Text>
@@ -85,7 +85,7 @@ function StatusLine({ status, usedDefaults }: { status: AskStatus | null; usedDe
   return label ? <Text className="text-xs text-neutral-500">{label}</Text> : null;
 }
 
-function renderInput(block: Block, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
+function renderInput(block: Block, value: unknown, disabled: boolean, onChange: (value: unknown) => void, onEvent?: OnEvent) {
   if (!isKnownBlock(block)) return null;
   const props = { value, disabled, onChange };
   switch (block.type) {
@@ -102,7 +102,7 @@ function renderInput(block: Block, value: unknown, disabled: boolean, onChange: 
     case "html":
       return (
         <View className="gap-1">
-          <HtmlBlock block={block} onReply={disabled ? undefined : onChange} />
+          <HtmlBlock block={block} onReply={disabled ? undefined : onChange} onSend={onEvent && ((v, label) => onEvent(block.id ?? null, v, label))} />
           {value !== undefined && <Text className="text-neutral-900 dark:text-neutral-100">Answer: {formatValue(value)}</Text>}
         </View>
       );

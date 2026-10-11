@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { AgentMessageBody, Block, Message, MessagesResponse } from "@rply/schema";
+import { isAnswer, type AgentMessageBody, type Block, type Message, type MessagesResponse } from "@rply/schema";
 import { CliError } from "../client.ts";
 import { saveCursor } from "../config.ts";
 import { connect, json } from "../context.ts";
@@ -67,7 +67,7 @@ export function registerMessages(program: Command) {
 
   program
     .command("inbox")
-    .description("print new messages from the human and mark them as seen (answers to questions come through ask/wait)")
+    .description("print new messages and embed events from the human, and mark them as seen (answers to questions come through ask/wait)")
     .option("--wait", "block until at least one message arrives")
     .option("--timeout <duration>", "give up waiting after e.g. 10m (exit code 2)")
     .option("--since <seq>", "start after this cursor instead of the stored one")
@@ -82,7 +82,7 @@ export function registerMessages(program: Command) {
         const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${opts.wait ? waitSeconds : 0}${peek}`);
         cursor = res.cursor;
         if (!opts.peek) saveCursor(selected, cursor);
-        const fresh = res.messages.filter((m) => !m.reply_to);
+        const fresh = res.messages.filter((m) => !isAnswer(m));
         return fresh.length || !opts.wait ? fresh : undefined;
       });
 
@@ -102,7 +102,7 @@ export function registerMessages(program: Command) {
         const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${waitSeconds}`);
         cursor = res.cursor;
         saveCursor(selected, cursor);
-        res.messages.filter((m) => !m.reply_to).forEach(printMessage);
+        res.messages.filter((m) => !isAnswer(m)).forEach(printMessage);
         return undefined;
       });
     });
@@ -123,6 +123,11 @@ export function parseBlocks(input: unknown): Block[] {
 function printMessage(message: Message) {
   if (json()) return printJson(message);
   const time = new Date(message.created_at).toLocaleString();
+  if (!message.enc && "event" in message.body && message.body.event) {
+    const { block_id, value, label } = message.body.event;
+    const name = label ? ` "${label}"` : "";
+    return console.log(`[${time}] (${message.id}) event${name} from ${block_id ?? "embed"} in message ${message.reply_to}: ${JSON.stringify(value)}`);
+  }
   const text = message.enc ? "(encrypted)" : ("text" in message.body && message.body.text) || JSON.stringify(message.body);
   console.log(`[${time}] (${message.id}) ${text}`);
 }

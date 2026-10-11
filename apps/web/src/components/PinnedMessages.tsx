@@ -3,27 +3,34 @@ import { ChevronDownIcon, PinIcon } from "lucide-react";
 import type { Message } from "@rply/schema";
 import type { StoredChannel } from "@/lib/channels";
 import { formatTime } from "@/lib/format";
-import { usePins } from "@/lib/queries";
+import { toast } from "sonner";
+import { usePins, useSendMessage } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { Markdown } from "./blocks/Markdown";
 import { MessageBlocks } from "./blocks/MessageBlocks";
 
 export function PinnedMessages({ entry }: { entry: StoredChannel }) {
   const { data: pins = [] } = usePins(entry);
+  const send = useSendMessage(entry);
   if (pins.length === 0) return null;
+  const onEvent = (message: Message) => (blockId: string | null, value: unknown, label?: string) =>
+    send.mutate(
+      { reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } },
+      { onSuccess: () => toast.success("Sent to the agent"), onError: (err) => toast.error(err.message) },
+    );
 
   return (
     <div className="bg-background/95 supports-backdrop-filter:bg-background/80 border-b backdrop-blur">
       <div className="mx-auto flex max-h-[45vh] max-w-3xl flex-col gap-2 overflow-y-auto px-4 py-2">
         {pins.map((message) => (
-          <Pinned key={message.id} message={message} />
+          <Pinned key={message.id} message={message} onEvent={entry.revoked ? undefined : onEvent(message)} />
         ))}
       </div>
     </div>
   );
 }
 
-function Pinned({ message }: { message: Message }) {
+function Pinned({ message, onEvent }: { message: Message; onEvent?: (blockId: string | null, value: unknown, label?: string) => void }) {
   const [open, setOpen] = useState(true);
   const body = message.enc ? null : message.body;
   const title = (body && "title" in body && body.title) || (message.pin === "status" ? "Status" : message.pin);
@@ -40,7 +47,7 @@ function Pinned({ message }: { message: Message }) {
         <div className="flex flex-col gap-3 px-3 pb-3">
           {!body && <p className="text-muted-foreground text-sm italic">Encrypted</p>}
           {body?.text && <Markdown text={body.text} />}
-          {body && "blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={null} /> : null}
+          {body && "blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={null} onEvent={onEvent} /> : null}
         </div>
       )}
     </div>

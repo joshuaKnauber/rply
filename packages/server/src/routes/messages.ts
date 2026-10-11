@@ -42,9 +42,12 @@ export function messageRoutes(deps: Deps) {
       const changed = [id];
 
       await db.transaction().execute(async (trx) => {
+        const isEvent = Boolean(body && "event" in body && body.event);
+        if (isEvent && !req.reply_to) throw new HTTPException(400, { message: "An event needs reply_to, the message it came from" });
         if (req.reply_to) {
           const target = await loadMessage(trx, channel.id, req.reply_to);
-          if (sender === "human" && target.ask_status) {
+          if (isEvent && target.sender !== "agent") throw new HTTPException(400, { message: "Events can only come from agent messages" });
+          if (sender === "human" && target.ask_status && !isEvent) {
             if (body && !("answers" in body && body.answers)) throw new HTTPException(400, { message: "Answer a question with answers" });
             const result = await trx
               .updateTable("asks")

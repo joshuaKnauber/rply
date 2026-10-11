@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatValue } from "@/lib/format";
-import { BlockView } from "./BlockView";
+import { BlockView, type OnEvent } from "./BlockView";
 import { HtmlBlock } from "./HtmlBlock";
 import { ChoiceInput, ConfirmInput, NumberInput, TextInput, ToggleInput } from "./Inputs";
 
@@ -24,9 +24,10 @@ type Props = {
   status: AskStatus | null;
   submitted?: Answers;
   onSubmit?: (answers: Answers) => void;
+  onEvent?: OnEvent;
 };
 
-export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
+export function MessageBlocks({ blocks, status, submitted, onSubmit, onEvent }: Props) {
   const inputs = inputsOf(blocks);
   const uid = useId();
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -48,9 +49,9 @@ export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
   return (
     <div className="flex flex-col gap-3">
       {blocks.map((block, i) => {
-        if (!isInput(block)) return <BlockView key={block.id ?? i} block={block} />;
+        if (!isInput(block)) return <BlockView key={block.id ?? i} block={block} onEvent={onEvent} />;
         questionNumber++;
-        const input = renderInput(block, `${uid}-${block.id}`, shown[block.id!], !open, (v) => change(block.id!, v));
+        const input = renderInput(block, `${uid}-${block.id}`, shown[block.id!], !open, (v) => change(block.id!, v), onEvent);
         return inputs.length > 1 ? (
           <div key={block.id} className="flex gap-3 border-l-2 pl-3">
             <span className="text-muted-foreground text-sm tabular-nums">{questionNumber}.</span>
@@ -85,7 +86,7 @@ function StatusLine({ status, usedDefaults }: { status: AskStatus | null; usedDe
   return null;
 }
 
-function renderInput(block: Block, domId: string, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
+function renderInput(block: Block, domId: string, value: unknown, disabled: boolean, onChange: (value: unknown) => void, onEvent?: OnEvent) {
   if (!isKnownBlock(block)) return null;
   const props = { domId, value, disabled, onChange };
   switch (block.type) {
@@ -102,7 +103,7 @@ function renderInput(block: Block, domId: string, value: unknown, disabled: bool
     case "html":
       return (
         <div className="flex flex-col gap-1">
-          <HtmlBlock block={block} onReply={disabled ? undefined : onChange} />
+          <HtmlBlock block={block} onReply={disabled ? undefined : onChange} onSend={onEvent && ((v, label) => onEvent(block.id ?? null, v, label))} />
           {value !== undefined && <span className="text-sm">Answer: {formatValue(value)}</span>}
         </div>
       );

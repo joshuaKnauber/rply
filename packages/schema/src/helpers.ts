@@ -3,13 +3,16 @@ import type { Answers, Ask, AskStatus, Block, Message } from "./index.ts";
 export const INPUT_TYPES = ["choice", "text_input", "number_input", "toggle", "confirm"] as const;
 
 export const isInput = (block: Block) =>
-  (INPUT_TYPES as readonly string[]).includes(block.type) || (block.type === "html" && block.id !== undefined);
+  (INPUT_TYPES as readonly string[]).includes(block.type) || (block.type === "html" && block.question === true && block.id !== undefined);
 
 export const askStatus = (ask: Ask | null): AskStatus | null =>
   ask && (ask.status === "open" && ask.expires_at !== null && ask.expires_at <= Date.now() ? "expired" : ask.status);
 
 export const isAnswer = (message: Message) =>
   !message.enc && message.sender === "human" && "answers" in message.body && message.body.answers !== undefined;
+
+export const isEvent = (message: Message) =>
+  !message.enc && message.sender === "human" && "event" in message.body && message.body.event !== undefined;
 
 export const messageBlocks = (message: Message): Block[] => (!message.enc && "blocks" in message.body ? (message.body.blocks ?? []) : []);
 
@@ -47,7 +50,10 @@ export function preview(message: Message) {
   if (message.enc) return "Encrypted message";
   const body = message.body;
   if ("answers" in body && body.answers) return "Answered";
+  if ("event" in body && body.event) return `Sent: ${eventLabel(body.event)}`;
   if ("title" in body && body.title) return body.title;
   if (body.text) return body.text;
   return message.ask ? "Question" : "Message";
 }
+
+export const eventLabel = (event: { value: unknown; label?: string }) => event.label ?? formatValue(event.value);

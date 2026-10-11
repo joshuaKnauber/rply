@@ -6,7 +6,9 @@ import { Markdown } from "./Markdown";
 const text = "text-neutral-900 dark:text-neutral-100";
 const muted = "text-neutral-500 dark:text-neutral-400";
 
-export function BlockView({ block }: { block: Block }) {
+export type OnEvent = (blockId: string | null, value: unknown, label?: string) => void;
+
+export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent }) {
   if (!isKnownBlock(block)) return <Text className={muted}>Update rply to see this "{block.type}" block</Text>;
 
   switch (block.type) {
@@ -68,7 +70,7 @@ export function BlockView({ block }: { block: Block }) {
         </Pressable>
       ) : null;
     case "html":
-      return <HtmlBlock block={block} />;
+      return <HtmlBlock block={block} onSend={onEvent && ((value, label) => onEvent(block.id ?? null, value, label))} />;
     default:
       return null;
   }

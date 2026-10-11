@@ -34,13 +34,16 @@ const blockSchemas = {
     columns: z.array(z.string()),
     rows: z.array(z.array(z.union([z.string(), z.number()]))),
   }),
-  html: z.object({
-    type: z.literal("html"),
-    id: elementId.optional(),
-    html: z.string(),
-    height: z.number().int().positive().max(2000).optional(),
-    label: z.string().optional(),
-  }),
+  html: z
+    .object({
+      type: z.literal("html"),
+      id: elementId.optional(),
+      html: z.string(),
+      height: z.number().int().positive().max(2000).optional(),
+      label: z.string().optional(),
+      question: z.boolean().optional(),
+    })
+    .refine((b) => !b.question || b.id !== undefined, "An html question needs an id"),
   choice: z.object({
     type: z.literal("choice"),
     id: elementId,
@@ -129,12 +132,19 @@ export const PIN_KEY = /^[a-z0-9_-]{1,32}$/;
 export const Answers = z.record(elementId, Json);
 export type Answers = z.infer<typeof Answers>;
 
+export const MessageEvent = z.object({ block_id: elementId.nullable(), value: Json, label: z.string().max(200).optional() });
+export type MessageEvent = z.infer<typeof MessageEvent>;
+
 export const HumanMessageBody = z
   .object({
     text: z.string().optional(),
     answers: Answers.optional(),
+    event: MessageEvent.optional(),
   })
-  .refine((b) => b.text !== undefined || (b.answers && Object.keys(b.answers).length > 0), "A message needs text or answers");
+  .refine(
+    (b) => b.text !== undefined || b.event !== undefined || (b.answers && Object.keys(b.answers).length > 0),
+    "A message needs text, answers or an event",
+  );
 export type HumanMessageBody = z.infer<typeof HumanMessageBody>;
 
 const Plain = z.object({ enc: z.literal(false).default(false), body: z.unknown() });

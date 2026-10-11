@@ -87,8 +87,8 @@ test("blocks: unknown types pass, invalid known types and duplicate input ids fa
   assert.equal((await post({ blocks: [{ type: "choice", options: [] }] })).status, 400);
   assert.equal((await post({ blocks: [choice("a"), choice("a")] })).status, 400);
   assert.equal((await post({ text: "plain" })).json.message.ask, null);
-  assert.notEqual((await post({ blocks: [{ type: "html", id: "chart", html: "<b>hi</b>" }] })).json.message.ask, null);
-  assert.equal((await post({ blocks: [{ type: "html", html: "<b>hi</b>" }] })).json.message.ask, null);
+  assert.notEqual((await post({ blocks: [{ type: "html", id: "chart", question: true, html: "<b>hi</b>" }] })).json.message.ask, null);
+  assert.equal((await post({ blocks: [{ type: "html", id: "chart", html: "<b>hi</b>" }] })).json.message.ask, null);
 });
 
 test("inbox marks messages seen, the agent can acknowledge progress", async () => {
@@ -224,4 +224,29 @@ test("the admin token sees and talks to every channel", async () => {
   await delay(50);
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "for admin" } } });
   assert.deepEqual((await waiting).json.messages.map((m: any) => m.body.text), ["for admin"]);
+});
+
+test("embeds send events that reach the agent's inbox without being answers", async () => {
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  const dashboard = await request("POST", "/messages", {
+    token: agent,
+    body: { body: { blocks: [{ type: "html", id: "dash", html: "<button onclick=\"rply.send('x')\">x</button>" }] } },
+  });
+  assert.equal(dashboard.json.message.ask, null);
+  const id = dashboard.json.message.id;
+
+  const event = (body: unknown) => request("POST", "/messages", { token: human, body });
+  assert.equal((await event({ reply_to: id, body: { event: { block_id: "dash", value: { page: "/pricing" } } } })).status, 201);
+  assert.equal((await event({ reply_to: id, body: { event: { block_id: "dash", value: { page: "/about" } } } })).status, 201);
+  assert.equal((await event({ body: { event: { block_id: "dash", value: 1 } } })).status, 400);
+
+  const inbox = await request("GET", "/messages?since=0&sender=human", { token: agent });
+  assert.deepEqual(inbox.json.messages.map((m: any) => m.body.event.value.page), ["/pricing", "/about"]);
+
+  const ask = await request("POST", "/messages", { token: agent, body: { body: { text: "Pick", blocks: [{ type: "html", id: "q", question: true, html: "<b>q</b>" }] } } });
+  assert.equal(ask.json.message.ask.status, "open");
+  await event({ reply_to: ask.json.message.id, body: { event: { block_id: "q", value: "hover" } } });
+  assert.equal((await request("GET", `/asks/${ask.json.message.id}`, { token: agent })).json.message.ask.status, "open");
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [{ type: "html", question: true, html: "x" }] } } })).status, 400);
 });

@@ -3,21 +3,24 @@ import { Linking, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import type { BlockOf } from "@rply/schema";
 
-const bridge = `<meta name="viewport" content="width=device-width,initial-scale=1">
+const bridge = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <script>
 window.rply = {
   reply: (value) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "reply", value })),
+  send: (value, label) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "send", value, label })),
   resize: (height) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "resize", height })),
 };
 addEventListener("load", () => {
-  new ResizeObserver(() => rply.resize(document.documentElement.scrollHeight)).observe(document.documentElement);
+  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
+  new ResizeObserver(report).observe(document.body);
+  report();
 });
 </script>
 <style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}</style>`;
 
-type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void };
+type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
-export function HtmlBlock({ block, onReply }: Props) {
+export function HtmlBlock({ block, onReply, onSend }: Props) {
   const [height, setHeight] = useState(block.height ?? 150);
 
   return (
@@ -38,6 +41,7 @@ export function HtmlBlock({ block, onReply }: Props) {
               const data = JSON.parse(e.nativeEvent.data);
               if (data.rply === "resize" && !block.height) setHeight(Math.min(Math.max(Number(data.height) || 0, 40), 2000));
               if (data.rply === "reply") onReply?.(data.value);
+              if (data.rply === "send") onSend?.(data.value, typeof data.label === "string" ? data.label : undefined);
             } catch {}
           }}
         />

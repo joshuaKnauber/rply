@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Message, SyncResponse } from "@rply/schema";
+import type { SyncResponse } from "@rply/schema";
 import { api } from "./api";
 import { markRevoked, useAdminToken, type StoredChannel } from "./channels";
-import { mergeMessages, statusKey } from "./queries";
+import { applySynced } from "./queries";
 
 export function useSync(channels: StoredChannel[]) {
   const queryClient = useQueryClient();
@@ -25,10 +25,7 @@ export function useSync(channels: StoredChannel[]) {
             signal: controller.signal,
           });
           cursor = res.cursor;
-          for (const [channelId, messages] of Map.groupBy(res.messages, (m: Message) => m.channel_id)) {
-            mergeMessages(queryClient, channelId, messages);
-          }
-          for (const status of res.statuses) queryClient.setQueryData(statusKey(status.channel_id), status);
+          applySynced(queryClient, res.messages);
           if (res.revoked.length) markRevoked(res.revoked);
         } catch {
           if (controller.signal.aborted) return;

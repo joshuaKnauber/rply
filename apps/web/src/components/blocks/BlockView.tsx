@@ -1,47 +1,23 @@
-import type { Block } from "@rply/schema";
+import { isKnownBlock, type Block } from "@rply/schema";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FormBlock } from "./FormBlock";
+import { HtmlBlock } from "./HtmlBlock";
 import { Markdown } from "./Markdown";
 
-type Props = {
-  block: Block;
-  answer?: unknown;
-  onAction?: (elementId: string, value: unknown) => void;
-};
+export function BlockView({ block }: { block: Block }) {
+  if (!isKnownBlock(block)) return <Badge variant="outline">Update rply to see this "{block.type}" block</Badge>;
 
-export function BlockView({ block, answer, onAction }: Props) {
   switch (block.type) {
     case "markdown":
       return <Markdown text={block.text} />;
     case "heading":
       return <h3 className="text-base font-semibold">{block.text}</h3>;
-    case "buttons":
-      return (
-        <div className="flex flex-wrap gap-2">
-          {block.options.map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={answer === option.value ? "default" : "outline"}
-              className={answer === option.value ? "disabled:opacity-100" : undefined}
-              disabled={answer !== undefined || !onAction}
-              onClick={() => onAction?.(block.id, option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      );
-    case "form":
-      return <FormBlock block={block} answer={answer} onSubmit={onAction && ((values) => onAction(block.id, values))} />;
     case "progress": {
       const max = block.max ?? 100;
       return (
         <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between gap-4 text-sm">
             <span>{block.label}</span>
             <span className="text-muted-foreground tabular-nums">
               {block.value} / {max}
@@ -95,7 +71,9 @@ export function BlockView({ block, answer, onAction }: Props) {
           {block.label ?? block.url}
         </a>
       ) : null;
+    case "html":
+      return <HtmlBlock block={block} />;
     default:
-      return <Badge variant="outline">Unsupported block</Badge>;
+      return null;
   }
 }

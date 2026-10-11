@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import type { Message } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { useReadSeqs, type StoredChannel } from "@/lib/channels";
-import { formatTime, preview } from "@/lib/format";
+import { askStatus, formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { AddChannelDialog } from "./AddChannelDialog";
@@ -15,9 +15,10 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
   const rows = channels
     .map((entry, i) => {
       const messages: Message[] = results[i]?.data ?? [];
-      const last = messages.at(-1);
+      const last = messages.filter((m) => !isAnswer(m)).at(-1);
       const unread = messages.filter((m) => m.sender === "agent" && m.seq > (readSeqs[entry.channel.id] ?? 0)).length;
-      return { entry, last, unread };
+      const waiting = messages.some((m) => askStatus(m.ask) === "open");
+      return { entry, last, unread, waiting };
     })
     .sort((a, b) => (b.last?.created_at ?? b.entry.channel.created_at) - (a.last?.created_at ?? a.entry.channel.created_at));
 
@@ -37,7 +38,7 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto">
-        {rows.map(({ entry, last, unread }) => (
+        {rows.map(({ entry, last, unread, waiting }) => (
           <Link
             key={entry.channel.id}
             href={`/c/${entry.channel.id}`}
@@ -51,6 +52,7 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
               <span className="text-muted-foreground truncate text-sm">
                 {entry.revoked ? "Access revoked" : last ? preview(last) : "No messages yet"}
               </span>
+              {waiting && <span className="text-primary shrink-0 text-xs font-medium">Needs reply</span>}
               {unread > 0 && (
                 <span className="bg-primary text-primary-foreground shrink-0 rounded-full px-1.5 text-xs font-medium tabular-nums">{unread}</span>
               )}

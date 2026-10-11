@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { HumanMessageBody, Message, MessagesResponse, ServerInfo, Status } from "@rply/schema";
+import type { HumanMessageBody, Message, MessagesResponse, ServerInfo } from "@rply/schema";
 import { api } from "./api";
 import { auth, type StoredChannel } from "./channels";
 
@@ -25,7 +25,7 @@ export const useAllMessages = (entries: StoredChannel[]) =>
 export const useStatus = (entry: StoredChannel) =>
   useQuery({
     queryKey: statusKey(entry.channel.id),
-    queryFn: () => api<{ status: Status | null }>("/status", auth(entry)).then((r) => r.status),
+    queryFn: () => api<{ status: Message | null }>("/status", auth(entry)).then((r) => r.status),
     staleTime: Infinity,
   });
 
@@ -36,9 +36,16 @@ export function mergeMessages(queryClient: QueryClient, channelId: string, incom
     return;
   }
   queryClient.setQueryData<Message[]>(key, (current = []) => {
-    const known = new Set(current.map((m) => m.id));
-    return [...current, ...incoming.filter((m) => !known.has(m.id))].sort((a, b) => a.seq - b.seq);
+    const byId = new Map(current.map((m) => [m.id, m]));
+    for (const m of incoming) byId.set(m.id, m);
+    return [...byId.values()].sort((a, b) => a.seq - b.seq);
   });
+}
+
+export function applySynced(queryClient: QueryClient, messages: Message[]) {
+  const thread = messages.filter((m) => m.pin === null);
+  for (const m of messages) if (m.pin === "status") queryClient.setQueryData(statusKey(m.channel_id), m);
+  for (const [channelId, group] of Map.groupBy(thread, (m) => m.channel_id)) mergeMessages(queryClient, channelId, group);
 }
 
 export function useSendMessage(entry: StoredChannel) {

@@ -1,7 +1,7 @@
 import type { StoredChannel } from "@/lib/channels";
 import { formatTime } from "@/lib/format";
 import { useStatus } from "@/lib/queries";
-import { BlockView } from "./blocks/BlockView";
+import { MessageBlocks } from "./blocks/MessageBlocks";
 
 export function StatusView({ entry }: { entry: StoredChannel }) {
   const { data: status, isPending } = useStatus(entry);
@@ -12,12 +12,10 @@ export function StatusView({ entry }: { entry: StoredChannel }) {
         {isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
         {!isPending && !status && <p className="text-muted-foreground text-sm">This agent hasn't published a status page yet.</p>}
         {status?.enc && <p className="text-muted-foreground italic">Encrypted status page</p>}
-        {status && !status.enc && (
+        {status && !status.enc && "blocks" in status.body && (
           <>
-            {status.body.blocks.map((block, i) => (
-              <BlockView key={block.id ?? i} block={block} />
-            ))}
-            <p className="text-muted-foreground text-xs">Updated {formatTime(status.updated_at)}</p>
+            <MessageBlocks blocks={status.body.blocks ?? []} status={null} />
+            <p className="text-muted-foreground text-xs">Updated {formatTime(status.updated_at ?? status.created_at)}</p>
           </>
         )}
       </div>

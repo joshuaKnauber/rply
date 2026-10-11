@@ -1,4 +1,4 @@
-import type { Message } from "@rply/schema";
+import type { Ask, AskStatus, Message } from "@rply/schema";
 
 export function formatTime(ts: number) {
   const date = new Date(ts);
@@ -11,14 +11,21 @@ export function formatTime(ts: number) {
 export function preview(message: Message) {
   if (message.enc) return "Encrypted message";
   const body = message.body;
-  if ("action" in body && body.action) return `Answered: ${formatValue(body.action.value)}`;
+  if ("answers" in body && body.answers) return "Answered";
   if ("title" in body && body.title) return body.title;
-  return body.text ?? "Interactive message";
+  if (body.text) return body.text;
+  return message.ask ? "Question" : "Message";
 }
 
 export function formatValue(value: unknown): string {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return Object.entries(value).map(([k, v]) => `${k}: ${formatValue(v)}`).join(", ");
-  }
-  return typeof value === "string" ? value : JSON.stringify(value);
+  if (Array.isArray(value)) return value.map(formatValue).join(", ");
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
+
+export const askStatus = (ask: Ask | null): AskStatus | null =>
+  ask && (ask.status === "open" && ask.expires_at !== null && ask.expires_at <= Date.now() ? "expired" : ask.status);
+
+export const isAnswer = (message: Message) => !message.enc && message.sender === "human" && "answers" in message.body && message.body.answers !== undefined;

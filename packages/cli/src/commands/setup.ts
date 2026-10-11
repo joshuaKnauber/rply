@@ -6,6 +6,8 @@ import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from ".
 import { connect, json, requested } from "../context.ts";
 import { printJson, printPairing } from "../io.ts";
 
+const nextSteps = "\nNext: run `rply guide` to learn how to talk to the human.\nTip: `rply guide --snippet` prints lines for AGENTS.md or CLAUDE.md, so future sessions know about rply.";
+
 function checkFree(key: string, force?: boolean) {
   const existing = readConfigFile().channels[key];
   if (existing && !force) {
@@ -43,6 +45,7 @@ export function registerSetup(program: Command) {
       if (json()) return printJson({ key, default: isDefault, channel: res.channel, pairing: { ...res.pairing, url: `${server}/pair?c=${res.pairing.code}` } });
       console.log(`Created channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}\n`);
       await printPairing(server, res.pairing.code, res.pairing.expires_at);
+      console.log(nextSteps);
     });
 
   program
@@ -62,6 +65,7 @@ export function registerSetup(program: Command) {
 
       if (json()) return printJson({ key, default: isDefault, channel: res.channel });
       console.log(`Joined channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}`);
+      console.log(nextSteps);
     });
 
   program

@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { DownloadIcon, FileIcon, ImageOffIcon } from "lucide-react";
+import { DownloadIcon, ImageOffIcon } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes, INLINE_IMAGE_TYPES, type FileRef } from "@rply/schema";
-import { Button } from "@/components/ui/button";
 import { useChannelEntry } from "@/lib/channel-context";
 import { downloadFile, useFileUrl } from "@/lib/files";
 import { ImagePreview } from "./ImagePreview";
@@ -18,45 +17,55 @@ export function ImageView({ fileId, name }: { fileId: string; name?: string }) {
       </div>
     );
   }
-  if (isPending) return <div className="bg-muted h-40 w-64 animate-pulse rounded-md" />;
+  if (isPending) return <div className="bg-muted h-40 w-64 animate-pulse rounded-lg" />;
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="block w-fit cursor-zoom-in" aria-label={`Preview ${name ?? "image"}`}>
-        <img src={url} alt={name ?? "Image"} className="max-h-80 max-w-full rounded-md" />
+        <img src={url} alt={name ?? "Image"} className="max-h-80 max-w-full rounded-lg border" />
       </button>
       <ImagePreview url={url} name={name ?? "image"} open={open} onOpenChange={setOpen} />
     </>
   );
 }
 
-export function FileView({ fileId, name, mime, size }: { fileId: string; name: string; mime?: string; size?: number }) {
-  const entry = useChannelEntry();
-  const download = () => entry && downloadFile(entry, fileId, name).catch((err) => toast.error(err.message));
+export function FileView(props: FileProps) {
   return (
-    <div className="bg-muted text-foreground flex max-w-sm items-center gap-3 rounded-md px-3 py-2">
-      <FileIcon className="text-muted-foreground size-5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{name}</p>
-        {(size !== undefined || mime) && (
-          <p className="text-muted-foreground truncate text-xs">{[size !== undefined && formatBytes(size), mime].filter(Boolean).join(" · ")}</p>
-        )}
-      </div>
-      <Button size="icon" variant="ghost" className="size-8" onClick={download} aria-label={`Download ${name}`}>
-        <DownloadIcon />
-      </Button>
+    <div className="max-w-md overflow-hidden rounded-lg border">
+      <FileRow {...props} />
     </div>
   );
 }
 
+type FileProps = { fileId: string; name: string; mime?: string; size?: number };
+
+function FileRow({ fileId, name, size }: FileProps) {
+  const entry = useChannelEntry();
+  const download = () => entry && downloadFile(entry, fileId, name).catch((err) => toast.error(err.message));
+  const ext = name.includes(".") ? name.split(".").pop()!.slice(0, 4).toUpperCase() : "FILE";
+  return (
+    <button type="button" onClick={download} className="group hover:bg-muted/60 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors" aria-label={`Download ${name}`}>
+      <span className="bg-muted text-muted-foreground flex h-6 min-w-9 shrink-0 items-center justify-center rounded px-1 font-mono text-xs font-medium">{ext}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+      {size !== undefined && <span className="text-muted-foreground shrink-0 text-xs tabular-nums group-hover:hidden">{formatBytes(size)}</span>}
+      <DownloadIcon className="text-muted-foreground hidden size-4 shrink-0 group-hover:block" />
+    </button>
+  );
+}
+
 export function AttachmentList({ attachments }: { attachments: FileRef[] }) {
+  const images = attachments.filter((a) => INLINE_IMAGE_TYPES.includes(a.mime));
+  const files = attachments.filter((a) => !INLINE_IMAGE_TYPES.includes(a.mime));
   return (
     <div className="flex flex-col gap-2">
-      {attachments.map((a) =>
-        INLINE_IMAGE_TYPES.includes(a.mime) ? (
-          <ImageView key={a.file_id} fileId={a.file_id} name={a.name} />
-        ) : (
-          <FileView key={a.file_id} fileId={a.file_id} name={a.name} mime={a.mime} size={a.size} />
-        ),
+      {images.map((a) => (
+        <ImageView key={a.file_id} fileId={a.file_id} name={a.name} />
+      ))}
+      {files.length > 0 && (
+        <div className="flex max-w-md flex-col divide-y overflow-hidden rounded-lg border">
+          {files.map((a) => (
+            <FileRow key={a.file_id} fileId={a.file_id} name={a.name} mime={a.mime} size={a.size} />
+          ))}
+        </div>
       )}
     </div>
   );

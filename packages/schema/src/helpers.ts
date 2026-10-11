@@ -83,3 +83,41 @@ export function formatBytes(size: number) {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
+
+export type EmbedTheme = "light" | "dark";
+
+const embedCss = `:root{color-scheme:light;--rply-fg:#2b2a28;--rply-muted:#76736f;--rply-border:#e6e4e1;--rply-surface:#f4f3f1;--rply-accent:#6f7ef6}
+:root[data-theme=dark]{color-scheme:dark;--rply-fg:#f4f3f1;--rply-muted:#a29f9a;--rply-border:rgb(255 255 255/.1);--rply-surface:#2b2a28}
+html,body{margin:0;background:transparent;color:var(--rply-fg);font:14px/1.5 system-ui,-apple-system,sans-serif}
+body{display:flow-root}
+:where(button){font:inherit;color:inherit;background:var(--rply-surface);border:1px solid var(--rply-border);border-radius:6px;padding:4px 10px;cursor:pointer}
+:where(input,select,textarea){font:inherit;color:inherit;background:transparent;border:1px solid var(--rply-border);border-radius:6px;padding:4px 8px}
+:where(a){color:var(--rply-accent)}
+:where(table){border-collapse:collapse}
+:where(th,td){padding:4px 8px;border-bottom:1px solid var(--rply-border);text-align:left}`;
+
+const embedPost = {
+  parent: `parent.postMessage(m, "*")`,
+  native: `window.ReactNativeWebView.postMessage(JSON.stringify(m))`,
+};
+
+export function embedDocument(block: { html: string; height?: number }, transport: keyof typeof embedPost, theme: EmbedTheme) {
+  return `<!doctype html><html data-theme="${theme === "dark" ? "dark" : "light"}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+const post = (m) => ${embedPost[transport]};
+window.rply = {
+  reply: (value) => post({ rply: "reply", value }),
+  send: (value, label) => post({ rply: "send", value, label }),
+  resize: (height) => post({ rply: "resize", height }),
+};
+addEventListener("message", (e) => {
+  if (e.data && e.data.rply === "theme") document.documentElement.dataset.theme = e.data.theme === "dark" ? "dark" : "light";
+});
+addEventListener("load", () => {
+  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
+  new ResizeObserver(report).observe(document.body);
+  report();
+});
+</script>
+<style>${embedCss}</style>${block.height ? "" : "<style>html,body{overflow:hidden}</style>"}${block.html}`;
+}

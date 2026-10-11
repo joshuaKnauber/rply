@@ -1,27 +1,16 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import type { BlockOf } from "@rply/schema";
-
-const bridge = `<!doctype html><meta charset="utf-8">
-<script>
-window.rply = {
-  reply: (value) => parent.postMessage({ rply: "reply", value }, "*"),
-  send: (value, label) => parent.postMessage({ rply: "send", value, label }, "*"),
-  resize: (height) => parent.postMessage({ rply: "resize", height }, "*"),
-};
-addEventListener("load", () => {
-  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
-  new ResizeObserver(report).observe(document.body);
-  report();
-});
-</script>
-<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}body{display:flow-root}</style>`;
-const autoHeight = `<style>html,body{overflow:hidden}</style>`;
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
+import { embedDocument, type BlockOf, type EmbedTheme } from "@rply/schema";
 
 type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
+
+const currentTheme = (): EmbedTheme => (document.documentElement.classList.contains("dark") ? "dark" : "light");
 
 export function HtmlBlock({ block, onReply, onSend }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(block.height ?? 150);
+  const theme: EmbedTheme = useTheme().resolvedTheme === "dark" ? "dark" : "light";
+  const [initialTheme] = useState(currentTheme);
 
   useLayoutEffect(() => {
     const listener = (e: MessageEvent) => {
@@ -34,19 +23,23 @@ export function HtmlBlock({ block, onReply, onSend }: Props) {
     return () => window.removeEventListener("message", listener);
   }, [block.height, onReply, onSend]);
 
+  useEffect(() => {
+    frame.current?.contentWindow?.postMessage({ rply: "theme", theme }, "*");
+  }, [theme]);
+
   return (
-    <div className="flex flex-col gap-1">
-      <div className="overflow-hidden rounded-md border bg-white">
+    <div className="bg-background overflow-hidden rounded-lg border dark:bg-input/20">
+      {block.label && <div className="text-muted-foreground border-b px-3 py-2 text-sm">{block.label}</div>}
+      <div className="p-3">
         <iframe
           ref={frame}
           title={block.label ?? "Embedded content"}
           sandbox="allow-scripts"
-          srcDoc={bridge + (block.height ? "" : autoHeight) + block.html}
-          style={{ height }}
-          className="block w-full border-0"
+          srcDoc={embedDocument(block, "parent", initialTheme)}
+          style={{ height, colorScheme: theme }}
+          className="block w-full border-0 bg-transparent"
         />
       </div>
-      <span className="text-muted-foreground text-xs">{block.label ?? "Embedded content from the agent"}</span>
     </div>
   );
 }

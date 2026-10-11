@@ -25,6 +25,8 @@ Each agent shows up in the app under a name, the machine's hostname unless you p
 
 Or run it without installing: `npx @rply/cli <command>`.
 
+Agents should start with `rply guide`, which explains the commands, blocks, HTML embeds and secrets. `rply guide --snippet` prints a few lines for your `AGENTS.md` or `CLAUDE.md`.
+
 ## Commands
 
 ```sh

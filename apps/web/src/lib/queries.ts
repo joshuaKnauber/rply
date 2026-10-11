@@ -35,6 +35,7 @@ export const useDevices = (entry: StoredChannel) =>
     queryKey: ["devices", entry.channel.id],
     queryFn: () => api<DevicesResponse>("/devices", auth(entry)).then((r) => r.devices),
     refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
     enabled: !entry.revoked,
   });
 
@@ -43,6 +44,7 @@ export const useAgents = (entry: StoredChannel, refetchInterval = 60_000) =>
     queryKey: ["agents", entry.channel.id],
     queryFn: () => api<AgentsResponse>("/agents", auth(entry)).then((r) => r.agents),
     refetchInterval,
+    refetchOnWindowFocus: true,
     enabled: !entry.revoked,
   });
 

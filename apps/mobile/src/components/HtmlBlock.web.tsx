@@ -1,28 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
-import type { BlockOf } from "@rply/schema";
+import { Text, useColorScheme, View } from "react-native";
+import { embedDocument, type BlockOf } from "@rply/schema";
 
-const bridge = `<!doctype html><meta charset="utf-8">
-<script>
-window.rply = {
-  reply: (value) => parent.postMessage({ rply: "reply", value }, "*"),
-  send: (value, label) => parent.postMessage({ rply: "send", value, label }, "*"),
-  resize: (height) => parent.postMessage({ rply: "resize", height }, "*"),
-};
-addEventListener("load", () => {
-  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
-  new ResizeObserver(report).observe(document.body);
-  report();
-});
-</script>
-<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}body{display:flow-root}</style>`;
-const autoHeight = `<style>html,body{overflow:hidden}</style>`;
 
 type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
 export function HtmlBlock({ block, onReply, onSend }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(block.height ?? 150);
+  const scheme = useColorScheme();
 
   useLayoutEffect(() => {
     const listener = (e: MessageEvent) => {
@@ -42,7 +28,7 @@ export function HtmlBlock({ block, onReply, onSend }: Props) {
           ref={frame}
           title={block.label ?? "Embedded content"}
           sandbox="allow-scripts"
-          srcDoc={bridge + (block.height ? "" : autoHeight) + block.html}
+          srcDoc={embedDocument(block, "parent", scheme === "dark" ? "dark" : "light")}
           style={{ height, width: "100%", border: 0, display: "block" }}
         />
       </View>

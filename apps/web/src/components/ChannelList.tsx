@@ -1,4 +1,4 @@
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, SettingsIcon } from "lucide-react";
 import { Link } from "wouter";
 import type { Message } from "@rply/schema";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { NotificationsButton } from "./NotificationsButton";
 import { OwnerButton } from "./OwnerButton";
 import { Bird } from "./Bird";
 
-export function ChannelList({ channels, activeId, adding }: { channels: StoredChannel[]; activeId?: string; adding?: boolean }) {
+export function ChannelList({ channels, activeId, adding, settings }: { channels: StoredChannel[]; activeId?: string; adding?: boolean; settings?: boolean }) {
   const results = useAllMessages(channels);
   const readSeqs = useReadSeqs();
   const rows = channels
@@ -68,6 +68,15 @@ export function ChannelList({ channels, activeId, adding }: { channels: StoredCh
           </Link>
         ))}
       </nav>
+      <div className="shrink-0 border-t p-2">
+        <Link
+          href="/settings"
+          className={cn("text-muted-foreground hover:bg-foreground/4 hover:text-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm", settings && "bg-foreground/6 text-foreground")}
+        >
+          <SettingsIcon className="size-4" />
+          Settings
+        </Link>
+      </div>
     </div>
   );
 }

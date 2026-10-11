@@ -1,35 +1,21 @@
 import { useState } from "react";
-import { Linking, Text, View } from "react-native";
+import { Linking, Text, useColorScheme, View } from "react-native";
 import { WebView } from "react-native-webview";
-import type { BlockOf } from "@rply/schema";
+import { embedDocument, type BlockOf } from "@rply/schema";
 
-const bridge = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<script>
-window.rply = {
-  reply: (value) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "reply", value })),
-  send: (value, label) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "send", value, label })),
-  resize: (height) => window.ReactNativeWebView.postMessage(JSON.stringify({ rply: "resize", height })),
-};
-addEventListener("load", () => {
-  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
-  new ResizeObserver(report).observe(document.body);
-  report();
-});
-</script>
-<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}body{display:flow-root}</style>`;
-const autoHeight = `<style>html,body{overflow:hidden}</style>`;
 
 type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
 export function HtmlBlock({ block, onReply, onSend }: Props) {
   const [height, setHeight] = useState(block.height ?? 150);
+  const scheme = useColorScheme();
 
   return (
     <View className="gap-1">
       <View style={{ height: height + 2 }} className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
         <WebView
           originWhitelist={["*"]}
-          source={{ html: bridge + (block.height ? "" : autoHeight) + block.html }}
+          source={{ html: embedDocument(block, "native", scheme === "dark" ? "dark" : "light") }}
           scrollEnabled={false}
           setSupportMultipleWindows={false}
           onShouldStartLoadWithRequest={(req) => {

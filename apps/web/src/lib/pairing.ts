@@ -34,7 +34,7 @@ export const createAgentCode = (entry: StoredChannel) => api<Pairing>("/pairings
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 
 export const joinCommand = (code: string, agentName = "") =>
-  `npm install --global @rply/cli\nrply join ${location.origin} ${code}${agentName.trim() ? ` --agent-name ${shellQuote(agentName.trim())}` : ""}`;
+  `npm install --global @rply/cli\nrply join ${location.origin} ${code}${agentName.trim() ? ` --agent-name ${shellQuote(agentName.trim())}` : ""}\nrply guide`;
 
 function deviceLabel() {
   const ua = navigator.userAgent;

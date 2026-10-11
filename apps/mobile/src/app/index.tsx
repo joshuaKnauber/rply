@@ -5,6 +5,7 @@ import { useChannels, useReadSeqs } from "@/lib/channels";
 import { isWaiting } from "@rply/schema";
 import { formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
+import { Bird } from "@/components/Bird";
 
 export default function Inbox() {
   const channels = useChannels();
@@ -25,6 +26,14 @@ export default function Inbox() {
     <View className="flex-1 bg-white dark:bg-neutral-950">
       <Stack.Screen
         options={{
+          headerTitle: () => (
+            <View className="flex-row items-center gap-2">
+              <View className="size-7 items-center justify-center rounded-lg bg-[#6f7ef6]">
+                <Bird size={16} color="#fff" />
+              </View>
+              <Text className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">rply</Text>
+            </View>
+          ),
           headerRight: () => (
             <View className="flex-row gap-4">
               <Link href="/owner" className="text-base text-neutral-900 dark:text-neutral-100">

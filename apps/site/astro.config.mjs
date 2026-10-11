@@ -9,6 +9,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "rply docs",
+      logo: { src: "./src/assets/logo.svg" },
       customCss: ["@fontsource-variable/inter", "./src/styles/docs.css"],
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/joshuaKnauber/rply" }],
       sidebar: [

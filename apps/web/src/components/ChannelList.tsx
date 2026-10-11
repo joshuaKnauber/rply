@@ -9,6 +9,7 @@ import { useAllMessages } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { AddChannelDialog } from "./AddChannelDialog";
 import { OwnerButton } from "./OwnerButton";
+import { Bird } from "./Bird";
 
 export function ChannelList({ channels, activeId }: { channels: StoredChannel[]; activeId?: string }) {
   const results = useAllMessages(channels);
@@ -27,7 +28,7 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
     <div className="flex h-full w-full flex-col">
       <div className="flex h-12 items-center justify-between px-4 md:pr-2">
         <span className="flex items-center gap-2 font-semibold">
-          <span className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md text-sm">r</span>
+          <Bird className="w-5" />
           rply
         </span>
         <div className="flex items-center gap-1">

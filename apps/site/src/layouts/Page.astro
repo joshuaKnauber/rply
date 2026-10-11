@@ -1,4 +1,5 @@
 ---
+import Bird from "../components/Bird.astro";
 import "@fontsource-variable/inter";
 import "../styles/global.css";
 import Button from "../components/Button.astro";
@@ -25,16 +26,16 @@ const footerLinks = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
   </head>
   <body>
     <div class="relative m-3 overflow-hidden rounded-[28px] bg-linear-to-b from-[#f7f7f5] via-[#f5f4f6] via-58% to-[#ebe9fb]">
       <header class="grid grid-cols-[1fr_auto] items-center px-7 pt-7 sm:grid-cols-[1fr_auto_1fr]">
         <a href="/" class="flex items-center gap-2.5 justify-self-start text-[21px] font-medium tracking-[-0.03em]">
-          <span
-            class="grid size-[30px] place-items-center rounded-[9px] bg-linear-to-b from-accent-400 to-accent-500 text-lead font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]"
-            >r</span
-          >
+          <span class="grid size-[30px] place-items-center rounded-[9px] bg-linear-to-b from-accent-400 to-accent-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]">
+            <Bird class="w-[58%]" />
+          </span>
           rply
         </a>
         <nav class="hidden gap-8 sm:flex">
@@ -54,10 +55,9 @@ const footerLinks = [
             <p>Pages</p>
             {footerLinks.map((link) => <a href={link.href} class="text-muted hover:text-ink">{link.label}</a>)}
           </div>
-          <span
-            class="grid size-14 place-items-center rounded-2xl bg-linear-to-b from-accent-400 to-accent-500 font-sans text-h3 font-semibold text-white normal-case"
-            >r</span
-          >
+          <span class="grid size-14 place-items-center rounded-2xl bg-linear-to-b from-accent-400 to-accent-500 text-white">
+            <Bird class="w-[58%]" />
+          </span>
         </div>
         <div class="mt-8 flex flex-wrap justify-between gap-4 border-t border-line pt-6 text-muted">
           <p><span class="text-ink">rply © 2026</span></p>

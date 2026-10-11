@@ -1,12 +1,12 @@
 ---
+import Bird from "./Bird.astro";
 import StoreBadges from "./StoreBadges.astro";
 ---
 
 <section class="flex flex-col items-center py-28 text-center">
-  <span
-    class="grid size-16 place-items-center rounded-[18px] bg-linear-to-b from-accent-400 to-accent-500 text-h2 font-semibold text-white shadow-[inset_0_1.5px_0_rgb(255_255_255/0.35)]"
-    >r</span
-  >
+  <span class="grid size-16 place-items-center rounded-[18px] bg-linear-to-b from-accent-400 to-accent-500 text-white shadow-[inset_0_1.5px_0_rgb(255_255_255/0.35)]">
+    <Bird class="w-[58%]" />
+  </span>
   <h2 class="mt-8 mb-8">Let your agents reach you.</h2>
   <StoreBadges />
   <p class="mt-4 text-small text-muted">Free and open source. Works with any agent.</p>

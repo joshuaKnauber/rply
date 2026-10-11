@@ -1,4 +1,5 @@
 ---
+import Bird from "./Bird.astro";
 const faqs = [
   {
     q: "Is this a remote control for Claude Code?",
@@ -27,10 +28,9 @@ const faqs = [
   <h2 class="mb-12 text-center">Fair questions.</h2>
   <div class="mx-auto max-w-4xl rounded-[28px] border border-line bg-white">
     <div class="flex items-center gap-2.5 border-b border-line px-6 py-4">
-      <span
-        class="grid size-7 place-items-center rounded-lg bg-linear-to-b from-accent-400 to-accent-500 text-small font-semibold text-white"
-        >r</span
-      >
+      <span class="grid size-7 place-items-center rounded-lg bg-linear-to-b from-accent-400 to-accent-500 text-white">
+        <Bird class="w-[58%]" />
+      </span>
       <span class="text-ui font-medium">rply</span>
     </div>
     <div class="flex flex-col gap-3 p-6">

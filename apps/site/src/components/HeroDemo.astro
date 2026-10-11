@@ -1,4 +1,5 @@
 ---
+import Bird from "./Bird.astro";
 const msg = "grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-450 *:min-h-0 *:overflow-hidden";
 const bubble = "mt-2 max-w-[85%] rounded-[14px] bg-neutral-100 px-2.5 py-2";
 const choice =
@@ -66,9 +67,9 @@ const choice =
       class="notif relative flex -translate-y-6 gap-2 rounded-2xl bg-white/80 p-2.5 text-neutral-900 opacity-0 backdrop-blur-md transition-[opacity,translate,scale] duration-400 ease-[cubic-bezier(0.2,0.9,0.3,1.2)] in-[.notified]:translate-y-0 in-[.notified]:opacity-100 [&.pressed]:scale-97"
     >
       <div
-        class="grid size-[30px] flex-none place-items-center rounded-lg bg-linear-to-b from-accent-400 to-accent-500 font-bold text-white"
+        class="grid size-[30px] flex-none place-items-center rounded-lg bg-linear-to-b from-accent-400 to-accent-500 text-white"
       >
-        r
+        <Bird class="w-[58%]" />
       </div>
       <div class="flex-1">
         <div class="flex justify-between"><strong>SEO bot</strong><span class="text-neutral-500">now</span></div>

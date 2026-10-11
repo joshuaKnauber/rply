@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import type { Answers, BlockOf, Message, MessageState } from "@rply/schema";
 import { AttachmentList } from "@/components/Attachments";
 import { Composer } from "@/components/Composer";
@@ -17,6 +19,7 @@ export default function ChannelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const entry = useChannels().find((c) => c.channel.id === id);
   const [tab, setTab] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   if (!entry) return <Text className="p-6 text-neutral-500">Channel not found.</Text>;
 
@@ -26,18 +29,30 @@ export default function ChannelScreen() {
       { text: "Remove", style: "destructive", onPress: () => (removeChannel(entry.channel.id), router.back()) },
     ]);
 
+  const deleteChannel = () =>
+    Alert.alert(`Delete "${entry.channel.name}"?`, "This deletes the channel with all its messages, files and apps from the server. Its agents and devices lose access. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          api(entry.server, `/admin/channels/${entry.channel.id}`, { token: entry.token, method: "DELETE" })
+            .then(() => queryClient.invalidateQueries({ queryKey: ["admin-channels"] }))
+            .then(() => router.back())
+            .catch((err: Error) => Alert.alert("Couldn't delete", err.message)),
+      },
+    ]);
+
   return (
     <KeyboardAvoidingView className="flex-1 bg-white dark:bg-neutral-950" behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={100}>
       <Stack.Screen
         options={{
           title: entry.channel.name,
-          headerRight: entry.admin
-            ? undefined
-            : () => (
-                <Pressable onPress={remove}>
-                  <Text className="text-red-600">Remove</Text>
-                </Pressable>
-              ),
+          headerRight: () => (
+            <Pressable onPress={entry.admin ? deleteChannel : remove}>
+              <Text className="text-red-600">{entry.admin ? "Delete" : "Remove"}</Text>
+            </Pressable>
+          ),
         }}
       />
       <ChannelContext.Provider value={entry}>

@@ -8,7 +8,7 @@ import { removeChannel, type StoredChannel } from "@/lib/channels";
 import { ChannelContext } from "@/lib/channel-context";
 import { cn } from "@/lib/utils";
 import { formatAgo } from "@/lib/format";
-import { useAgents, useDevices, usePins, useRemoveApp, useRevoke } from "@/lib/queries";
+import { useAgents, useDeleteChannel, useDevices, usePins, useRemoveApp, useRevoke } from "@/lib/queries";
 import { toast } from "sonner";
 import { appTitle, isApp, type Participant } from "@rply/schema";
 import { AddAgentDialog } from "./AddAgentDialog";
@@ -23,6 +23,7 @@ export function ChannelView({ entry, appKey }: { entry: StoredChannel; appKey?: 
   const { data: pins = [] } = usePins(entry);
   const app = appKey ? pins.find((m) => isApp(m) && m.pin === appKey) : undefined;
   const removeApp = useRemoveApp(entry);
+  const deleteChannel = useDeleteChannel(entry);
 
   const remove = async () => {
     const ok = await confirmDialog({
@@ -34,6 +35,17 @@ export function ChannelView({ entry, appKey }: { entry: StoredChannel; appKey?: 
     if (!ok) return;
     removeChannel(entry.channel.id);
     navigate("/");
+  };
+
+  const confirmDelete = async () => {
+    const ok = await confirmDialog({
+      title: `Delete "${entry.channel.name}"?`,
+      description: "This deletes the channel with all its messages, files and apps from the server. Its agents and paired devices lose access. This can't be undone.",
+      action: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteChannel.mutate(undefined, { onSuccess: () => navigate("/"), onError: (err) => toast.error(err.message) });
   };
 
   const confirmRemoveApp = async () => {
@@ -90,20 +102,18 @@ export function ChannelView({ entry, appKey }: { entry: StoredChannel; appKey?: 
           )}
           {!appKey && (
             <div className="-mr-2 ml-auto flex items-center gap-1">
-              {!entry.admin && (
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="Channel options">
-                      <EllipsisIcon />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-auto">
-                    <DropdownMenuItem variant="destructive" onSelect={remove}>
-                      Remove from this browser
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="Channel options">
+                    <EllipsisIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-auto">
+                  <DropdownMenuItem variant="destructive" onSelect={entry.admin ? confirmDelete : remove}>
+                    {entry.admin ? "Delete channel" : "Remove from this browser"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Sheet>
                 <SheetTrigger asChild>
                   <Button size="icon" variant="ghost" className="text-muted-foreground lg:hidden" aria-label="Channel details">

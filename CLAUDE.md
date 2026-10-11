@@ -211,6 +211,7 @@ ntfy has no accounts: the topic name is the identity and the app keeps a local l
 Pairing is per device (like ntfy without auth, where each device subscribes on its own). So that the owner sees everything on any device, the web app can **sign in with the admin token**:
 - A server token plus an `X-Rply-Channel: <id>` header authenticates as the human side of that channel (read, reply, answer; not agent actions).
 - `GET /v1/admin/channels` lists every channel. `POST /v1/sync` with a server token as bearer covers every channel.
+- `DELETE /v1/admin/channels/:id` deletes a channel for everyone: stored files are removed, then the channel row, and everything else cascades (messages, tokens, pairing codes, secrets, push subscriptions). Agents get 401 and paired devices see their token as revoked on the next sync. The apps offer it as "Delete channel" (web "…" menu, mobile header) only in owner mode; paired devices keep "Remove from this browser", because an owner's channel list comes from the server and has nothing local to remove.
 - The web app keeps the admin token in localStorage (`rply.admin`). While signed in, it lists channels from the server (refetched every 15s) instead of its paired list. It only offers sign-in when the server has an admin token.
 - This stands in for accounts until the hosted version. ntfy's equivalent is user login with synced subscriptions. On rply.sh, an account would see the channels it owns (`owner_id`).
 
@@ -278,7 +279,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/channels` (server token if required) → channel, agent token, pairing code; with `as: "human"` → channel, human token, agent code
 - `POST /v1/pairings { role? }` (either side, so the apps can link another device; `role: "agent"` is human-only) → new pairing or agent code; `POST /v1/agents/join` (agent code) → agent token; `POST /v1/pairings/claim` (code) → human token
 - `GET /v1/channel` (either token) → channel info; `GET /v1/devices` / `GET /v1/agents` (either token) → paired human / agent tokens `{ id, label, created_at, last_seen_at, current }`; `DELETE /v1/devices/:id` / `DELETE /v1/agents/:id` (human) revoke one; `PATCH /v1/agent { label }` (agent) renames itself
-- `GET /v1/admin/channels` (server token) → all channels; a server token plus `X-Rply-Channel` works on the human-side routes
+- `GET /v1/admin/channels` (server token) → all channels, `DELETE /v1/admin/channels/:id` (server token) deletes one; a server token plus `X-Rply-Channel` works on the human-side routes
 - `GET /v1/info` (no auth) → `{ server_token_required }`, used by the web app to show the right setup command
 - `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
 - `PUT|PATCH /v1/messages/:id` (agent edits), `POST /v1/messages/:id/cancel` (agent cancels a question), `POST /v1/messages/:id/state` (agent: seen|working|done on a human message)

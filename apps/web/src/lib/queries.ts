@@ -90,6 +90,14 @@ export function useUnpin(entry: StoredChannel) {
   });
 }
 
+export function useDeleteChannel(entry: StoredChannel) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api(`/admin/channels/${entry.channel.id}`, { token: entry.token, method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-channels"] }),
+  });
+}
+
 export function useRemoveApp(entry: StoredChannel) {
   const queryClient = useQueryClient();
   return useMutation({

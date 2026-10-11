@@ -287,6 +287,20 @@ test("the admin token sees and talks to every channel", async () => {
   assert.deepEqual((await waiting).json.messages.map((m: any) => m.body.text), ["for admin"]);
 });
 
+test("the owner can delete a channel, which revokes everyone in it", async () => {
+  const { db, request, pairedChannel } = await setup();
+  const { channel, agent, human } = await pairedChannel();
+  await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } });
+  await syncAdminToken(db, "secret");
+  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: human })).status, 401);
+  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: "secret" })).status, 204);
+  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: "secret" })).status, 404);
+  assert.equal((await request("GET", "/messages", { token: agent })).status, 401);
+  assert.deepEqual((await request("POST", "/sync", { body: { tokens: [human] } })).json.revoked, [human]);
+  const { count } = await db.selectFrom("messages").select((eb) => eb.fn.countAll<number>().as("count")).executeTakeFirstOrThrow();
+  assert.equal(Number(count), 0);
+});
+
 test("embeds send events that reach the agent's inbox without being answers", async () => {
   const { request, pairedChannel } = await setup();
   const { agent, human } = await pairedChannel();

@@ -22,7 +22,10 @@ export function channelRoutes(deps: Deps) {
 
   return new Hono<AppEnv>()
     .get("/info", async (c) => {
-      const info: ServerInfo = { server_token_required: await serverTokenRequired(db) };
+      const info: ServerInfo = {
+        server_token_required: await serverTokenRequired(db),
+        files: { enabled: Boolean(deps.files), max_size: deps.files?.maxSize ?? 0 },
+      };
       return c.json(info);
     })
     .post("/channels", async (c) => {

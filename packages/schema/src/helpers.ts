@@ -61,9 +61,25 @@ export function preview(message: Message) {
   if ("event" in body && body.event) return `Sent: ${eventLabel(body.event)}`;
   if ("title" in body && body.title) return body.title;
   if (body.text) return body.text;
+  if ("attachments" in body && body.attachments?.length) return `📎 ${body.attachments.map((a) => a.name).join(", ")}`;
   const secret = "blocks" in body ? body.blocks?.find((b) => b.type === "secret") : undefined;
   if (secret) return `Secret requested: ${(secret as BlockOf<"secret">).name}`;
   return message.ask ? "Question" : "Message";
 }
 
 export const eventLabel = (event: { value: unknown; label?: string }) => event.label ?? formatValue(event.value);
+
+export const fileIdsOf = (body: unknown): string[] => {
+  if (!body || typeof body !== "object") return [];
+  const b = body as { blocks?: { type?: string; file_id?: string }[]; attachments?: { file_id: string }[] };
+  return [
+    ...(b.blocks ?? []).filter((x) => (x.type === "image" || x.type === "file") && typeof x.file_id === "string").map((x) => x.file_id!),
+    ...(b.attachments ?? []).map((a) => a.file_id),
+  ];
+};
+
+export function formatBytes(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}

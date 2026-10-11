@@ -2,6 +2,7 @@ import { isKnownBlock, type Block } from "@rply/schema";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FileView, ImageView } from "./Attachments";
 import { HtmlBlock } from "./HtmlBlock";
 import { Markdown } from "./Markdown";
 import { SecretBlock } from "./SecretBlock";
@@ -74,6 +75,10 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           {block.label ?? block.url}
         </a>
       ) : null;
+    case "image":
+      return <ImageView fileId={block.file_id} name={block.name ?? block.alt} />;
+    case "file":
+      return <FileView fileId={block.file_id} name={block.name} mime={block.mime} size={block.size} />;
     case "secret":
       return <SecretBlock block={block} />;
     case "html":

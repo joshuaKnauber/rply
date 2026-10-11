@@ -85,6 +85,21 @@ const blockSchemas = {
     description: z.string().optional(),
     danger: z.boolean().optional(),
   }),
+  image: z.object({
+    type: z.literal("image"),
+    id: elementId.optional(),
+    file_id: z.string().min(1).max(64),
+    name: z.string().optional(),
+    alt: z.string().optional(),
+  }),
+  file: z.object({
+    type: z.literal("file"),
+    id: elementId.optional(),
+    file_id: z.string().min(1).max(64),
+    name: z.string(),
+    mime: z.string().optional(),
+    size: z.number().int().nonnegative().optional(),
+  }),
   secret: z.object({
     type: z.literal("secret"),
     id: elementId,
@@ -145,15 +160,28 @@ export type Answers = z.infer<typeof Answers>;
 export const MessageEvent = z.object({ block_id: elementId.nullable(), value: Json, label: z.string().max(200).optional() });
 export type MessageEvent = z.infer<typeof MessageEvent>;
 
+export const FileRef = z.object({
+  file_id: z.string().min(1).max(64),
+  name: z.string().max(255),
+  mime: z.string().max(255),
+  size: z.number().int().nonnegative(),
+});
+export type FileRef = z.infer<typeof FileRef>;
+
 export const HumanMessageBody = z
   .object({
     text: z.string().optional(),
     answers: Answers.optional(),
     event: MessageEvent.optional(),
+    attachments: z.array(FileRef).max(20).optional(),
   })
   .refine(
-    (b) => b.text !== undefined || b.event !== undefined || (b.answers && Object.keys(b.answers).length > 0),
-    "A message needs text, answers or an event",
+    (b) =>
+      b.text !== undefined ||
+      b.event !== undefined ||
+      (b.attachments?.length ?? 0) > 0 ||
+      (b.answers && Object.keys(b.answers).length > 0),
+    "A message needs text, answers, attachments or an event",
   );
 export type HumanMessageBody = z.infer<typeof HumanMessageBody>;
 
@@ -224,7 +252,11 @@ export type Message = {
 
 export type Pairing = { code: string; expires_at: number };
 
-export type ServerInfo = { server_token_required: boolean };
+export type ServerInfo = { server_token_required: boolean; files: { enabled: boolean; max_size: number } };
+
+export type FileInfo = FileRef & { created_at: number };
+
+export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
 export type ClaimPairingResponse = { channel: Channel; token: string };

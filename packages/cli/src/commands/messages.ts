@@ -5,6 +5,7 @@ import { CliError } from "../client.ts";
 import { saveCursor } from "../config.ts";
 import { connect, json } from "../context.ts";
 import { deadlineFrom, printJson, readJson } from "../io.ts";
+import { attachmentBlocks, collect } from "./files.ts";
 
 export function registerMessages(program: Command) {
   program
@@ -14,10 +15,13 @@ export function registerMessages(program: Command) {
     .argument("[text]", "message text, markdown supported")
     .option("--title <title>", "bold title above the text")
     .option("--blocks <json|file|->", "blocks as a JSON array, a file path, or - for stdin")
-    .action(async (text: string | undefined, opts: { title?: string; blocks?: string }) => {
-      const blocks = opts.blocks ? parseBlocks(readJson(opts.blocks)) : undefined;
-      if (!text && !blocks) throw new CliError("Nothing to send, pass text or --blocks");
-      const message = await post({ title: opts.title, text, blocks });
+    .option("--image <path>", "attach an image (repeatable)", collect, [])
+    .option("--file <path>", "attach a file (repeatable)", collect, [])
+    .action(async (text: string | undefined, opts: { title?: string; blocks?: string; image: string[]; file: string[] }) => {
+      const attached = await attachmentBlocks(opts);
+      const blocks = [...(opts.blocks ? parseBlocks(readJson(opts.blocks)) : []), ...attached];
+      if (!text && blocks.length === 0) throw new CliError("Nothing to send, pass text, --blocks, --image or --file");
+      const message = await post({ title: opts.title, text, blocks: blocks.length ? blocks : undefined });
       if (json()) return printJson(message);
       console.log(`Sent (id: ${message.id})`);
     });
@@ -129,6 +133,10 @@ function printMessage(message: Message) {
     const name = label ? ` "${label}"` : "";
     return console.log(`[${time}] (${message.id}) event${name} from ${block_id ?? "embed"} in message ${message.reply_to}: ${JSON.stringify(value)}`);
   }
-  const text = message.enc ? "(encrypted)" : ("text" in message.body && message.body.text) || JSON.stringify(message.body);
-  console.log(`[${time}] (${message.id}) ${text}`);
+  if (message.enc) return console.log(`[${time}] (${message.id}) (encrypted)`);
+  const body = message.body;
+  const attachments = "attachments" in body ? (body.attachments ?? []) : [];
+  const text = ("text" in body && body.text) || (attachments.length ? "" : JSON.stringify(body));
+  console.log(`[${time}] (${message.id}) ${text}`.trimEnd());
+  for (const a of attachments) console.log(`  attachment: ${a.name} (${a.mime}, ${a.size} bytes), download with: rply file get ${a.file_id}`);
 }

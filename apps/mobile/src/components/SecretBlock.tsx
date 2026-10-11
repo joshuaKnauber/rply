@@ -3,7 +3,8 @@ import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { useMutation } from "@tanstack/react-query";
 import type { BlockOf, SecretStatus } from "@rply/schema";
 import { secretStatus } from "@rply/schema/helpers";
-import { declineSecret, KeyChangedError, provideSecret, useChannelEntry } from "@/lib/secrets";
+import { useChannelEntry } from "@/lib/channel-context";
+import { declineSecret, KeyChangedError, provideSecret } from "@/lib/secrets";
 import { Button } from "./Button";
 
 const text = "text-neutral-900 dark:text-neutral-100";

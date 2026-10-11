@@ -3,9 +3,10 @@ import type { Message } from "@rply/schema";
 import { CliError } from "../client.ts";
 import { connect, json } from "../context.ts";
 import { printJson, readJson } from "../io.ts";
+import { attachmentBlocks, collect } from "./files.ts";
 import { parseBlocks } from "./messages.ts";
 
-type BodyOptions = { title?: string; blocks?: string };
+type BodyOptions = { title?: string; blocks?: string; image?: string[]; file?: string[] };
 
 export function registerPins(program: Command) {
   const pin = program
@@ -20,6 +21,8 @@ export function registerPins(program: Command) {
     .argument("[text]", "text, markdown supported")
     .option("--title <title>", "bold title")
     .option("--blocks <json|file|->", "blocks as a JSON array, a file path, or - for stdin")
+    .option("--image <path>", "attach an image (repeatable)", collect, [])
+    .option("--file <path>", "attach a file (repeatable)", collect, [])
     .action((key: string, text: string | undefined, opts: BodyOptions) => setPin(key, text, opts));
 
   pin
@@ -78,9 +81,11 @@ export function registerPins(program: Command) {
 }
 
 async function setPin(key: string, text: string | undefined, opts: BodyOptions) {
-  const blocks = opts.blocks ? parseBlocks(readJson(opts.blocks)) : undefined;
-  if (!text && !blocks && !opts.title) throw new CliError("Nothing to pin, pass text, --title or --blocks");
-  const { message } = await connect().client.request<{ message: Message }>("PUT", `/pins/${key}`, { body: { title: opts.title, text, blocks } });
+  const blocks = [...(opts.blocks ? parseBlocks(readJson(opts.blocks)) : []), ...(await attachmentBlocks(opts))];
+  if (!text && blocks.length === 0 && !opts.title) throw new CliError("Nothing to pin, pass text, --title, --blocks, --image or --file");
+  const { message } = await connect().client.request<{ message: Message }>("PUT", `/pins/${key}`, {
+    body: { title: opts.title, text, blocks: blocks.length ? blocks : undefined },
+  });
   report(message);
 }
 

@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { removeChannel, type StoredChannel } from "@/lib/channels";
-import { ChannelContext } from "@/lib/secrets";
+import { ChannelContext } from "@/lib/channel-context";
 import { PinnedMessages } from "./PinnedMessages";
 import { Thread } from "./Thread";
 

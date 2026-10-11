@@ -145,6 +145,16 @@ Documented limitations: the agent can still read the written file (it has a shel
 
 The remote MCP endpoint **cannot** deliver secrets to files (the server can't write on the agent's machine, and returning the value would put it into context), so `request_secret` is either missing there or clearly marked as delivering into context.
 
+## 7b. Files and images (built)
+
+Attachments both ways: agents attach images and files to messages and pins, the human attaches files in the apps, and the agent downloads them with the CLI.
+- **Storage is optional and pluggable** (`packages/server/src/files/`): a directory (default: `files/` next to the SQLite file, i.e. `/data/files` in Docker) or any S3-compatible bucket (AWS, R2, MinIO, Railway buckets) via `aws4fetch`. Env: `RPLY_FILES=off`, `RPLY_FILES_DIR`, `RPLY_S3_BUCKET` + `RPLY_S3_ENDPOINT` + `RPLY_S3_ACCESS_KEY_ID` + `RPLY_S3_SECRET_ACCESS_KEY` (+ `RPLY_S3_REGION`, default `auto`), `RPLY_FILES_MAX_SIZE` (default 25MB), `RPLY_FILES_TOTAL_LIMIT` (default 5GB, uploads beyond it get 507), `RPLY_FILES_RETENTION` (e.g. `30d`, off by default). `/v1/info` reports `files: { enabled, max_size }` so clients hide the attach button when files are off.
+- **Upload first, then reference**: `POST /v1/files?name=` with the raw bytes and `content-type` returns `{ file_id, name, mime, size }`. Messages reference files with `image` (`{ file_id, name?, alt? }`) and `file` (`{ file_id, name, mime?, size? }`) blocks, or `attachments: FileRef[]` in a human message body. The server rejects references to unknown files or files from another channel, and links each file to the first message that references it. Deleting that message (or the pin) deletes the file; uploads never referenced are swept after 24h; the optional retention sweeps by age (hourly).
+- **Downloads need the channel token** (`GET /v1/files/:id`), so images can't be plain `<img src>`: the web app fetches them as blobs, mobile passes the auth header to `Image` and downloads with `expo-file-system` + the share sheet. S3 answers an authenticated request with a 302 to a 5-minute presigned URL.
+- **Security**: only `image/png|jpeg|gif|webp` are served inline; everything else (SVG, HTML, ...) as `application/octet-stream` with `Content-Disposition: attachment`, `nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`, because uploads share the origin with the web app and its tokens.
+- Files are opaque bytes with the description (name, type) kept in the message, so E2E can later encrypt files client-side before upload.
+- Not built: thumbnails/resizing, virus scanning.
+
 ## 8. Channels, auth and E2E (decided)
 
 ### Channels, modelled on ntfy
@@ -223,6 +233,8 @@ rply pin set overview "text" [--title ..] [--blocks file.json]   # pinned to the
 rply pin patch overview --patch '{"id":"pages","value":42}' | pin remove overview | pin list
 rply status set|patch|get                # shortcut for the pin "status"
 rply delete <message-id>
+rply send "Weekly report" --image chart.png --file data.csv      # --image/--file repeatable, also on pin set
+rply file upload <path> | file get <file-id> [--to path] [--force]
 rply secret request NAME --to .env [--file] [--reason ".."] [--expires 1h] [--wait] | secret fetch <id> | secret cancel <id>
 rply e2e enable
 ```
@@ -241,6 +253,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `GET /v1/pins`, `PUT|PATCH|DELETE /v1/pins/:key` (agent; keys are 1-32 of `a-z0-9_-`), `POST /v1/messages/:id/unpin` (either side, moves it into the thread), `DELETE /v1/messages/:id` (agent, soft delete)
 - `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
 - `PUT /v1/channel/key` (agent: upload the X25519 public key), `POST /v1/secrets` (agent: create a request + secret message), `GET /v1/secrets/:id?wait=` (agent: long-poll; returns the ciphertext once provided), `POST /v1/secrets/:id/delivered|cancel` (agent), `POST /v1/secrets/:id/fulfil|decline` (human)
+- `POST /v1/files?name=` (either side, raw body), `GET /v1/files/:id` (either side of the file's channel)
 - later: `POST /v1/devices` (push), `/mcp`
 
 ### Data model
@@ -256,12 +269,13 @@ asks            message_id, channel_id, status (open|answered|expired|cancelled)
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),
                 ciphertext (only while provided), expires_at, created_at, closed_at
+files           id, channel_id, message_id (first referencing message), uploader, name, mime, size, created_at, deleted_at
 -- later:
 devices         human_token_id, push_token, platform, created_at
 ```
 
 ### Messages, blocks and questions (decided)
-- **Blocks** are an open list of `{ type, id?, ...fields }`. Display blocks: `markdown`, `heading`, `code`, `link`, `progress`, `keyvalue`, `table`, `html`. Input blocks (need an `id`): `choice` (options with `description`/`danger`, `multi`, `other`, `default`), `text_input`, `number_input`, `toggle`, `confirm`, and `html` with `"question": true`. The server validates known types and **accepts unknown types**; apps render unknown types as an "update the app" placeholder, so new block types don't need a coordinated release.
+- **Blocks** are an open list of `{ type, id?, ...fields }`. Display blocks: `markdown`, `heading`, `code`, `link`, `progress`, `keyvalue`, `table`, `html`, `image`, `file` (section 7b). Input blocks (need an `id`): `choice` (options with `description`/`danger`, `multi`, `other`, `default`), `text_input`, `number_input`, `toggle`, `confirm`, and `html` with `"question": true`. The server validates known types and **accepts unknown types**; apps render unknown types as an "update the app" placeholder, so new block types don't need a coordinated release.
 - **Questions**: an agent message containing input blocks is an ask (detected from plaintext, or declared with `ask: { expires_at }` for E2E). One message can hold several questions. The human answers **once per message** with `{ reply_to, body: { answers: { <block id>: value } } }`; the first answer wins (later ones get 409), expired and cancelled questions also refuse answers. `default` values live in the blocks and are applied by the CLI on expiry. Apps auto-submit when a message has exactly one simple input (single choice, confirm, html), otherwise they show one "Send answers" button.
 - **Embed events vs answers**: inside an `html` block, `rply.send(value, label?)` sends an **event** any number of times: a human message `{ reply_to, body: { event: { block_id, value, label } } }` that is not an answer. It reaches the agent through `inbox`/`listen` (printed as `event "label" from <block> in message <id>: <json>`), and the apps show it as a compact "Sent: label" line. `rply.reply(value)` answers a question and only applies when the block is marked `"question": true` (which requires an `id`). An `id` alone doesn't make an html block a question. Events can only point at agent messages, and replying with an event to an open question doesn't answer it.
 - The embed bridge (prepended to the agent's HTML in all three clients) starts with `<!doctype html><meta charset="utf-8">` so embeds don't render in quirks mode, and reports `document.body`'s height through a `ResizeObserver` (`rply.resize` is automatic). On web the parent listens with `useLayoutEffect` so the first measurement isn't missed.
@@ -287,7 +301,7 @@ devices         human_token_id, push_token, platform, created_at
 - Deploy: the root `Dockerfile`. Railway is defined in `.railway/railway.ts` (Railway IaC, applied with `railway config plan` / `railway config apply`; `railway.json` is deprecated). It declares the service, the Dockerfile build, the healthcheck and a volume at `/data`. `RPLY_ADMIN_TOKEN` is `preserve()`d, so set it in the Railway dashboard. Generate the public domain in the dashboard, since IaC doesn't manage generated domains. Run one replica only (SQLite).
 - CLI (`packages/cli`, commander): run locally with `npm run rply -- <command>`. Config lives in `~/.config/rply/config.json` (mode 0600; override the path with `RPLY_CONFIG`) as `{ default, channels: { <key>: { server, token, channel, inbox_cursor } } }`. One machine can hold several channels. `init` saves each under `--channel <key>` or a slug of `--name`, and the first becomes the default. Other commands pick a channel with `--channel` / `RPLY_CHANNEL`, otherwise the default. `rply channels` lists them, and `rply channels use|remove` change the default or forget one. Old single-channel config files are migrated when read. `RPLY_SERVER` + `RPLY_TOKEN` override it (for CI), and `RPLY_SERVER_TOKEN` feeds `init --server-token`. Long waits poll in 55s chunks and retry through network errors and 5xx, so they survive server restarts. Exit code 2 means timeout. The QR code only prints when stdout is a TTY, so it doesn't fill an agent's context.
 - `inbox` and `listen` skip answers to questions (messages with `reply_to`); those come through `ask --wait` or `rply wait <id>`. `ask` without `--choices`/`--confirm`/input blocks adds a `text_input` (id `answer`). With `--wait`, one question prints its value, several print a JSON object; exit 2 = expired without default or timed out, 3 = cancelled. `--timeout` also sets the question's expiry unless `--expires` is given.
-- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once. Since then they're additive again: `0002_secrets` adds `secret_requests`.
+- Migrations were reset to a single `0001_init` on 2026-10-11 (no data to keep). Any database created before that must be deleted once. Since then they're additive again: `0002_secrets` adds `secret_requests`, `0003_files` adds `files`.
 - `@rply/schema` has three entry points: `.` (zod schemas and types), `./helpers` (UI-free logic, imports only types) and `./crypto` (sealed box, keypairs, fingerprints; `@noble/*`). The CLI must import runtime values only from `./helpers` and `./crypto`, never from `.`, or zod ends up in its bundle (~170 KB without, ~630 KB with).
 - Mobile polyfills `crypto.getRandomValues` from `expo-crypto` (`src/lib/polyfills.ts`, imported first in `_layout.tsx`) because the `@noble` libraries need it. Both apps render secret cards through `SecretBlock`, which gets the channel from `ChannelContext` (provided around the thread and pins).
 - Publishing the CLI: `npm run build -w @rply/cli` bundles everything with esbuild into `packages/cli/dist/rply.js` (Node won't strip types inside `node_modules`). All runtime libraries are devDependencies because they're inlined, so the published package has no dependencies. `prepublishOnly` runs the build. To release, bump `version` in `packages/cli/package.json`, then `npm publish -w @rply/cli`. The npm package is `@rply/cli` (npm blocked the unscoped name `rply` as too similar to existing packages), but the command it installs is still `rply`.

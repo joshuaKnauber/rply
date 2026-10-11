@@ -1,36 +1,109 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
-import { SendIcon } from "lucide-react";
+import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { Loader2Icon, PaperclipIcon, SendIcon, XIcon } from "lucide-react";
+import { toast } from "sonner";
+import type { FileRef } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useChannelEntry } from "@/lib/channel-context";
+import { uploadFile } from "@/lib/files";
+import { useServerInfo } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
-export function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabled?: boolean }) {
+type Pending = { key: string; name: string; file?: FileRef };
+
+export function Composer({ onSend, disabled }: { onSend: (text: string, attachments: FileRef[]) => void; disabled?: boolean }) {
+  const entry = useChannelEntry();
+  const filesEnabled = useServerInfo()?.files.enabled ?? false;
   const [text, setText] = useState("");
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  const uploading = pending.some((p) => !p.file);
+  const ready = pending.flatMap((p) => (p.file ? [p.file] : []));
+  const canSend = !disabled && !uploading && (text.trim() || ready.length > 0);
+
+  const add = (files: FileList | File[]) => {
+    if (!entry || !filesEnabled) return;
+    for (const file of Array.from(files)) {
+      const key = crypto.randomUUID();
+      setPending((p) => [...p, { key, name: file.name }]);
+      uploadFile(entry, file)
+        .then((info) => setPending((p) => p.map((x) => (x.key === key ? { ...x, file: info } : x))))
+        .catch((err) => {
+          toast.error(`${file.name}: ${err.message}`);
+          setPending((p) => p.filter((x) => x.key !== key));
+        });
+    }
+  };
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!text.trim()) return;
-    onSend(text.trim());
+    if (!canSend) return;
+    onSend(text.trim(), ready);
     setText("");
+    setPending([]);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) submit(e);
   };
+  const onPaste = (e: ClipboardEvent) => {
+    if (e.clipboardData.files.length) {
+      e.preventDefault();
+      add(e.clipboardData.files);
+    }
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    add(e.dataTransfer.files);
+  };
 
   return (
-    <form onSubmit={submit} className="p-3">
-      <div className="mx-auto flex max-w-3xl items-end gap-2">
-        <Textarea
-          rows={1}
-          placeholder="Message the agent…"
-          className="max-h-40 min-h-10 resize-none"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <Button type="submit" size="icon" disabled={disabled || !text.trim()} aria-label="Send">
-          <SendIcon />
-        </Button>
+    <form
+      onSubmit={submit}
+      onDragOver={(e) => filesEnabled && (e.preventDefault(), setDragging(true))}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+      className="p-3"
+    >
+      <div className={cn("mx-auto flex max-w-3xl flex-col gap-2 rounded-lg", dragging && "ring-primary/40 ring-2")}>
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pending.map((p) => (
+              <span key={p.key} className="bg-muted flex items-center gap-1.5 rounded-md py-1 pr-1 pl-2 text-sm">
+                {!p.file && <Loader2Icon className="size-3.5 animate-spin" />}
+                <span className="max-w-48 truncate">{p.name}</span>
+                <button type="button" className="hover:bg-background rounded p-0.5" onClick={() => setPending((x) => x.filter((y) => y.key !== p.key))} aria-label={`Remove ${p.name}`}>
+                  <XIcon className="size-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          {filesEnabled && (
+            <>
+              <input ref={input} type="file" multiple hidden onChange={(e) => (e.target.files && add(e.target.files), (e.target.value = ""))} />
+              <Button type="button" size="icon" variant="ghost" onClick={() => input.current?.click()} aria-label="Attach files">
+                <PaperclipIcon />
+              </Button>
+            </>
+          )}
+          <Textarea
+            rows={1}
+            placeholder="Message the agent…"
+            className="max-h-40 min-h-10 resize-none"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+          />
+          <Button type="submit" size="icon" disabled={!canSend} aria-label="Send">
+            <SendIcon />
+          </Button>
+        </div>
       </div>
     </form>
   );

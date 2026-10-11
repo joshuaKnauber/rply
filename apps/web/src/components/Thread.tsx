@@ -9,6 +9,7 @@ import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, useSendMessage } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { Markdown } from "./blocks/Markdown";
+import { AttachmentList } from "./blocks/Attachments";
 import { MessageBlocks } from "./blocks/MessageBlocks";
 import { Composer } from "./Composer";
 
@@ -67,7 +68,17 @@ export function Thread({ entry }: { entry: StoredChannel }) {
           </Button>
         </div>
       )}
-      {!entry.revoked && <Composer disabled={send.isPending} onSend={(text) => send.mutate({ body: { text } })} />}
+      {!entry.revoked && (
+        <Composer
+          disabled={send.isPending}
+          onSend={(text, attachments) =>
+            send.mutate(
+              { body: { ...(text && { text }), ...(attachments.length && { attachments }) } },
+              { onError: (err) => toast.error(err.message) },
+            )
+          }
+        />
+      )}
     </div>
   );
 }
@@ -104,6 +115,7 @@ function MessageView({
       <div className="flex flex-col gap-3">
         {"title" in body && body.title && <p className="font-semibold">{body.title}</p>}
         {body.text && (fromAgent ? <Markdown text={body.text} /> : <p className="whitespace-pre-wrap">{body.text}</p>)}
+        {"attachments" in body && body.attachments?.length ? <AttachmentList attachments={body.attachments} /> : null}
         {"blocks" in body && body.blocks?.length ? (
           <MessageBlocks blocks={body.blocks} status={askStatus(message.ask)} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} />
         ) : null}

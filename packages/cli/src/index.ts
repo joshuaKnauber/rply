@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { CliError } from "./client.ts";
 import { registerAsks } from "./commands/asks.ts";
+import { registerFiles } from "./commands/files.ts";
 import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
 import { registerPins } from "./commands/pins.ts";
@@ -22,6 +23,7 @@ const program = new Command()
 registerSetup(program);
 registerMessages(program);
 registerAsks(program);
+registerFiles(program);
 registerPins(program);
 registerSecrets(program);
 registerUpdate(program);

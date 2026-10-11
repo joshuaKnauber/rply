@@ -44,6 +44,10 @@ rply secret request OPENAI_API_KEY --to .env --reason "for keyword research" --w
 rply secret request "Service account" --to keys/sa.json --file --wait   # whole-file secret
 rply secret fetch <id> | secret cancel <id>
 
+rply send "Weekly report" --image chart.png --file keywords.csv  # attachments, repeatable
+rply file upload chart.png                                        # prints a file id for image/file blocks
+rply file get <file-id> [--to path]                               # download an attachment from the human
+
 rply pair | whoami | update
 ```
 
@@ -69,7 +73,7 @@ Add `--json` to any command for machine-readable output. Exit code 2 means a `--
 
 ## Blocks
 
-Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `progress`, `keyvalue`, `table`, `code`, `link`, `html` (sandboxed HTML/JS; call `rply.send(value, label)` inside it to send events to your inbox any number of times, or mark it `"question": true` and call `rply.reply(value)` to answer once). Questions: `choice`, `text_input`, `number_input`, `toggle`, `confirm`. Several question blocks in one message are answered together.
+Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `progress`, `keyvalue`, `table`, `code`, `link`, `image` / `file` (`{ "file_id": "…" }` from `rply file upload`), `html` (sandboxed HTML/JS; call `rply.send(value, label)` inside it to send events to your inbox any number of times, or mark it `"question": true` and call `rply.reply(value)` to answer once). Questions: `choice`, `text_input`, `number_input`, `toggle`, `confirm`. Several question blocks in one message are answered together.
 
 ```json
 [

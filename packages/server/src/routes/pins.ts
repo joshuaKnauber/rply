@@ -4,6 +4,7 @@ import { PatchMessageRequest, PIN_KEY, PinnedBody, PutPinRequest } from "@rply/s
 import { requireAuth } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { applyPatch } from "../patch.ts";
 import { rejectSecretBlocks } from "./messages.ts";
 import { now, randomId } from "../tokens.ts";
@@ -23,6 +24,7 @@ export function pinRoutes(deps: Deps) {
   const save = async (channelId: string, key: string, enc: boolean, body: string) => {
     const existing = await findPinned(channelId, key);
     const id = existing?.id ?? randomId();
+    const fileIds = enc ? [] : await checkFiles(deps, channelId, JSON.parse(body));
     if (existing) {
       await db.updateTable("messages").set({ enc: enc ? 1 : 0, body, updated_at: now() }).where("id", "=", id).execute();
     } else {
@@ -31,6 +33,7 @@ export function pinRoutes(deps: Deps) {
         .values({ id, channel_id: channelId, sender: "agent", enc: enc ? 1 : 0, body, reply_to: null, pin: key, state: null, created_at: now(), updated_at: null, deleted_at: null })
         .execute();
     }
+    await linkFiles(deps, fileIds, id);
     await recordChanges(deps, channelId, [id]);
     return toMessage(await loadMessage(db, channelId, id));
   };
@@ -68,6 +71,7 @@ export function pinRoutes(deps: Deps) {
       const current = await findPinned(channel.id, pinKey(c.req.param("key")));
       if (!current) throw new HTTPException(404, { message: "Nothing pinned under that key" });
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", current.id).execute();
+      await deleteFilesOf(deps, current.id);
       await recordChanges(deps, channel.id, [current.id]);
       return c.body(null, 204);
     });

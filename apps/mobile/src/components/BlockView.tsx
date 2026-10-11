@@ -1,5 +1,6 @@
 import { Linking, Pressable, Text, View } from "react-native";
 import { isKnownBlock, type Block } from "@rply/schema";
+import { FileView, ImageView } from "./Attachments";
 import { HtmlBlock } from "./HtmlBlock";
 import { Markdown } from "./Markdown";
 import { SecretBlock } from "./SecretBlock";
@@ -70,6 +71,10 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           <Text className={`font-medium underline ${text}`}>{block.label ?? block.url}</Text>
         </Pressable>
       ) : null;
+    case "image":
+      return <ImageView fileId={block.file_id} name={block.name ?? block.alt} />;
+    case "file":
+      return <FileView fileId={block.file_id} name={block.name} mime={block.mime} size={block.size} />;
     case "secret":
       return <SecretBlock block={block} />;
     case "html":

@@ -16,6 +16,7 @@ import {
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { longPoll } from "../notifier.ts";
 import { applyPatch } from "../patch.ts";
 import { now, randomId } from "../tokens.ts";
@@ -41,9 +42,10 @@ export function messageRoutes(deps: Deps) {
       const req = parse(PostMessageRequest, await c.req.json());
       const body = req.enc ? undefined : parse(sender === "agent" ? AgentMessageBody : HumanMessageBody, req.body);
       if (body && "blocks" in body) rejectSecretBlocks(body.blocks);
+      const id = randomId();
+      const fileIds = await checkFiles(deps, channel.id, body);
       if (sender === "human" && req.ask) throw new HTTPException(400, { message: "Only the agent can ask" });
 
-      const id = randomId();
       const ask = sender === "agent" && (req.ask ?? (body && "blocks" in body && body.blocks?.some(isInput) ? {} : undefined));
       const changed = [id];
 
@@ -93,6 +95,7 @@ export function messageRoutes(deps: Deps) {
         }
       });
 
+      await linkFiles(deps, fileIds, id);
       await recordChanges(deps, channel.id, changed);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, id)) }, 201);
     })
@@ -144,6 +147,7 @@ export function messageRoutes(deps: Deps) {
       rejectSecretBlocks(JSON.parse(target.enc ? "{}" : target.body).blocks);
       const parsed = req.enc ? undefined : parse(AgentMessageBody, req.body);
       rejectSecretBlocks(parsed?.blocks);
+      await linkFiles(deps, await checkFiles(deps, channel.id, parsed), target.id);
       const body = req.enc ? req.body : JSON.stringify(parsed);
       await db.updateTable("messages").set({ enc: req.enc ? 1 : 0, body, updated_at: now() }).where("id", "=", target.id).execute();
       await recordChanges(deps, channel.id, [target.id]);
@@ -157,6 +161,7 @@ export function messageRoutes(deps: Deps) {
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(AgentMessageBody, applyPatch(target.body, patch)));
       rejectSecretBlocks(JSON.parse(body).blocks);
+      await linkFiles(deps, await checkFiles(deps, channel.id, JSON.parse(body)), target.id);
       await db.updateTable("messages").set({ body, updated_at: now() }).where("id", "=", target.id).execute();
       await recordChanges(deps, channel.id, [target.id]);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
@@ -165,6 +170,7 @@ export function messageRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", target.id).execute();
+      await deleteFilesOf(deps, target.id);
       await db.updateTable("asks").set({ status: "cancelled", closed_at: now() }).where("message_id", "=", target.id).where("status", "=", "open").execute();
       await db
         .updateTable("secret_requests")

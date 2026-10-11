@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { declineSecret, fetchPublicKey, KeyChangedError, provideSecret, useChannelEntry } from "@/lib/secrets";
+import { useChannelEntry } from "@/lib/channel-context";
+import { declineSecret, fetchPublicKey, KeyChangedError, provideSecret } from "@/lib/secrets";
 
 const statusLabel: Record<Exclude<SecretStatus, "open">, string> = {
   provided: "Provided, waiting for the agent to write it",

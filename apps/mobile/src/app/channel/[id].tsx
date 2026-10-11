@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import type { Answers, Message, MessageState } from "@rply/schema";
+import { AttachmentList } from "@/components/Attachments";
+import { Composer } from "@/components/Composer";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
-import { ChannelContext } from "@/lib/secrets";
+import { ChannelContext } from "@/lib/channel-context";
 import { eventLabel, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
@@ -102,7 +104,6 @@ function Pinned({ entry }: { entry: StoredChannel }) {
 function Thread({ entry }: { entry: StoredChannel }) {
   const { data: messages = [], isPending, error } = useMessages(entry);
   const send = useSendMessage(entry);
-  const [text, setText] = useState("");
   const list = useRef<FlatList<Message>>(null);
 
   const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
@@ -118,12 +119,6 @@ function Thread({ entry }: { entry: StoredChannel }) {
     send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
   const sendEvent = (message: Message) => (blockId: string | null, value: unknown, label?: string) =>
     send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
-
-  const submit = () => {
-    if (!text.trim()) return;
-    send.mutate({ body: { text: text.trim() } });
-    setText("");
-  };
 
   return (
     <View className="flex-1">
@@ -160,18 +155,16 @@ function Thread({ entry }: { entry: StoredChannel }) {
         </Pressable>
       )}
       {!entry.revoked && (
-        <View className="flex-row items-end gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
-          <TextInput
-            className="max-h-32 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 dark:border-neutral-700 dark:text-neutral-100"
-            multiline
-            placeholder="Message the agent…"
-            value={text}
-            onChangeText={setText}
-          />
-          <Pressable onPress={submit} disabled={!text.trim() || send.isPending} className={`rounded-lg bg-neutral-900 px-4 py-2.5 dark:bg-neutral-100 ${!text.trim() ? "opacity-40" : ""}`}>
-            <Text className="font-medium text-white dark:text-neutral-900">Send</Text>
-          </Pressable>
-        </View>
+        <Composer
+          entry={entry}
+          disabled={send.isPending}
+          onSend={(text, attachments) =>
+            send.mutate(
+              { body: { ...(text ? { text } : {}), ...(attachments.length ? { attachments } : {}) } },
+              { onError: (err) => Alert.alert("Couldn't send", err.message) },
+            )
+          }
+        />
       )}
     </View>
   );
@@ -205,6 +198,7 @@ function MessageView({
       <View className="gap-3">
         {"title" in body && body.title && <Text className={`font-semibold ${textColor}`}>{body.title}</Text>}
         {body.text && (fromAgent ? <Markdown text={body.text} /> : <Text className={`text-[15px] leading-6 ${textColor}`}>{body.text}</Text>)}
+        {"attachments" in body && body.attachments?.length ? <AttachmentList attachments={body.attachments} /> : null}
         {"blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} onEvent={onEvent} /> : null}
       </View>
     );

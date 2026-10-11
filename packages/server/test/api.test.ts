@@ -340,3 +340,67 @@ test("secret requests can be declined, cancelled, expire, and can't be faked", a
   assert.equal((await request("PUT", "/pins/x", { token: agent, body: { body: { blocks: [fake] } } })).status, 400);
   assert.equal((await request("PATCH", `/messages/${declined.message.id}`, { token: agent, body: { text: "edit" } })).status, 400);
 });
+
+test("files: upload, attach, download with auth and safe headers, delete with the message", async () => {
+  const { mkdtemp, readdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createDirectoryStore } = await import("../src/files/store.ts");
+  const dir = await mkdtemp(join(tmpdir(), "rply-files-"));
+  const files = { store: createDirectoryStore(dir), maxSize: 1024, totalLimit: 2500, retentionMs: null };
+  const { request, pairedChannel, upload, download, deps } = await setup({ files });
+  const a = await pairedChannel("a");
+  const b = await pairedChannel("b");
+
+  assert.deepEqual((await request("GET", "/info")).json.files, { enabled: true, max_size: 1024 });
+  const png = await upload(a.agent, "chart.png", new Uint8Array([137, 80, 78, 71]), "image/png");
+  assert.equal(png.status, 201);
+  const svg = await upload(a.agent, "evil.svg", "<svg onload=alert(1)>", "image/svg+xml");
+  assert.equal((await upload(a.agent, "big.bin", new Uint8Array(2000))).status, 413);
+
+  const msg = await request("POST", "/messages", {
+    token: a.agent,
+    body: { body: { text: "Report", blocks: [{ type: "image", file_id: png.json.file.file_id }, { type: "file", file_id: svg.json.file.file_id, name: "evil.svg" }] } },
+  });
+  assert.equal(msg.status, 201);
+  assert.equal((await request("POST", "/messages", { token: a.agent, body: { body: { blocks: [{ type: "image", file_id: "nope" }] } } })).status, 400);
+  const foreign = await upload(b.agent, "b.txt", "b");
+  assert.equal((await request("POST", "/messages", { token: a.agent, body: { body: { blocks: [{ type: "file", file_id: foreign.json.file.file_id, name: "b" }] } } })).status, 400);
+
+  const image = await download(a.human, png.json.file.file_id);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get("content-type"), "image/png");
+  assert.match(image.headers.get("content-disposition")!, /^inline/);
+  assert.deepEqual([...new Uint8Array(await image.arrayBuffer())], [137, 80, 78, 71]);
+  const unsafe = await download(a.human, svg.json.file.file_id);
+  assert.equal(unsafe.headers.get("content-type"), "application/octet-stream");
+  assert.match(unsafe.headers.get("content-disposition")!, /^attachment/);
+  assert.equal(unsafe.headers.get("x-content-type-options"), "nosniff");
+  assert.equal((await download(b.human, png.json.file.file_id)).status, 404);
+  assert.equal((await download("rply_h_nope", png.json.file.file_id)).status, 401);
+
+  const fromHuman = await upload(a.human, "brief.pdf", "%PDF", "application/pdf");
+  const attachment = { file_id: fromHuman.json.file.file_id, name: "brief.pdf", mime: "application/pdf", size: 4 };
+  assert.equal((await request("POST", "/messages", { token: a.human, body: { body: { attachments: [attachment] } } })).status, 201);
+  assert.equal((await download(a.agent, attachment.file_id)).status, 200);
+
+  await upload(a.agent, "x", new Uint8Array(1000));
+  await upload(a.agent, "y", new Uint8Array(1000));
+  assert.equal((await upload(a.agent, "z", new Uint8Array(1000))).status, 507);
+
+  assert.equal((await request("DELETE", `/messages/${msg.json.message.id}`, { token: a.agent })).status, 204);
+  assert.equal((await download(a.human, png.json.file.file_id)).status, 410);
+  assert.equal((await readdir(dir)).includes(png.json.file.file_id), false);
+
+  const { sweepFiles } = await import("../src/files/manage.ts");
+  await deps.db.updateTable("files").set({ created_at: 0 }).where("message_id", "is", null).execute();
+  assert.ok((await sweepFiles(deps))! >= 2);
+});
+
+test("files are refused when the server has them turned off", async () => {
+  const { request, pairedChannel, upload } = await setup();
+  const { agent } = await pairedChannel();
+  assert.deepEqual((await request("GET", "/info")).json.files, { enabled: false, max_size: 0 });
+  assert.equal((await upload(agent, "a.txt", "a")).status, 404);
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [{ type: "image", file_id: "x" }] } } })).status, 400);
+});

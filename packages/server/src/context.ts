@@ -3,9 +3,10 @@ import type { z } from "zod";
 import type { Sender } from "@rply/schema";
 import type { DB } from "./db/index.ts";
 import type { ChannelRow } from "./db/schema.ts";
+import type { FilesConfig } from "./files/config.ts";
 import type { Notifier } from "./notifier.ts";
 
-export type Deps = { db: DB; notifier: Notifier };
+export type Deps = { db: DB; notifier: Notifier; files?: FilesConfig | null };
 
 export type Auth = { channel: ChannelRow; sender: Sender };
 

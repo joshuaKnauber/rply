@@ -1,4 +1,3 @@
-import { createContext, useContext } from "react";
 import type { Channel } from "@rply/schema";
 import { keyFingerprint, seal } from "@rply/schema/crypto";
 import { api } from "./api";
@@ -8,8 +7,6 @@ import { createStore } from "./store";
 const trusted = createStore<Record<string, string>>("rply.keys", {});
 export const loadTrustedKeys = trusted.load;
 
-export const ChannelContext = createContext<StoredChannel | null>(null);
-export const useChannelEntry = () => useContext(ChannelContext);
 
 export class KeyChangedError extends Error {
   previous: string;

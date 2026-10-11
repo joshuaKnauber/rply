@@ -32,7 +32,7 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     <iframe
       ref={frame}
       title={block.label ?? "Embedded content"}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       srcDoc={srcDoc}
       style={{ height: fill ? "100%" : height, width: "100%", border: 0, display: "block" }}
     />

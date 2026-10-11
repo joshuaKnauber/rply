@@ -113,6 +113,14 @@ const embedPost = {
 
 const scriptJson = (value: unknown) => JSON.stringify(value).replaceAll("<", "\\u003c");
 
+const openLinksInNewTabs = `addEventListener("click", (e) => {
+  const link = e.target instanceof Element && e.target.closest("a[href]");
+  if (link && /^https?:/.test(link.href)) {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  }
+}, true);`;
+
 export type EmbedOptions = { storage?: Record<string, unknown>; fill?: boolean };
 
 export function embedDocument(block: { html: string; height?: number }, transport: keyof typeof embedPost, theme: EmbedTheme, opts: EmbedOptions = {}) {
@@ -153,6 +161,7 @@ window.__rplyReceive = (m) => {
   }
 };
 addEventListener("message", (e) => __rplyReceive(e.data));
+${transport === "parent" ? openLinksInNewTabs : ""}
 addEventListener("load", () => {
   const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
   new ResizeObserver(report).observe(document.body);

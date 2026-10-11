@@ -9,6 +9,7 @@ import type { Serve, Serves } from "../serves.ts";
 import { now, randomId } from "../tokens.ts";
 
 const SCRIPT_TIMEOUT = 35_000;
+const MAX_STORED_RESULT = 256 * 1024;
 
 type Waiting = { channelId: string; resolve: (res: CallResponse) => void };
 
@@ -131,6 +132,9 @@ export function callRoutes(deps: Deps, serves: Serves) {
       }
 
       const { row, call } = await loadCall(channel.id, id);
+      if (JSON.stringify(outcome).length > MAX_STORED_RESULT) {
+        throw new HTTPException(413, { message: "Results of rply.agent calls are stored as messages and limited to 256 KB. Use a command script for large data" });
+      }
       if (callResponse(id, call).status !== "pending") throw new HTTPException(409, { message: "This call was already answered" });
       await db
         .updateTable("messages")

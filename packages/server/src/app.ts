@@ -16,11 +16,16 @@ import { secretRoutes } from "./routes/secrets.ts";
 import { syncRoutes } from "./routes/sync.ts";
 import { createServes } from "./serves.ts";
 
+const CALL_RESULT = /^\/v1\/calls\/[^/]+\/result$/;
+
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
   const serves = createServes();
   const api = new Hono<AppEnv>()
     .use(cors({ origin: "*", allowHeaders: ["authorization", "content-type", "x-rply-channel"] }))
-    .use((c, next) => (c.req.method === "POST" && c.req.path === "/v1/files" ? next() : bodyLimit({ maxSize: 256 * 1024 })(c, next)))
+    .use((c, next) => {
+      if (c.req.method === "POST" && c.req.path === "/v1/files") return next();
+      return bodyLimit({ maxSize: CALL_RESULT.test(c.req.path) ? 5 * 1024 * 1024 : 256 * 1024 })(c, next);
+    })
     .route("/", adminRoutes(deps))
     .route("/", channelRoutes(deps, serves))
     .route("/", syncRoutes(deps))

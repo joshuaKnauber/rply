@@ -65,7 +65,7 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     <iframe
       ref={frame}
       title={block.label ?? "Embedded content"}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       srcDoc={srcDoc}
       style={fill ? { colorScheme: theme } : { height, colorScheme: theme }}
       className={fill ? "block size-full border-0 bg-transparent" : "block w-full border-0 bg-transparent"}

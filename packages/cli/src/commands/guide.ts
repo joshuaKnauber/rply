@@ -107,7 +107,8 @@ Styling
     var(--rply-fg)  var(--rply-muted)  var(--rply-border)  var(--rply-surface)  var(--rply-accent)
   Don't hard-code white or black backgrounds. The background is transparent.
 
-The frame can run scripts but can't read the app, its storage or the human's tokens. Links don't navigate the app.`,
+The frame can run scripts but can't read the app, its storage or the human's tokens.
+http(s) links open in a new tab (on the phone: in the browser), never inside the frame.`,
 
   pins: `Pinned messages sit at the top of the channel and update in place. Use them for a live overview.
 
@@ -135,7 +136,8 @@ Commands are executables you write, one file per command name:
   rply app commands          shows the folder, e.g. ~/.config/rply/commands/<channel>/
   rply serve --install       runs them when the app calls, as a background service (see rply guide setup)
 A command gets the args as JSON on stdin (env RPLY_CALL_NAME, RPLY_CALL_ID) and prints its result
-to stdout (JSON, or plain text). A non-zero exit fails the call with the last line of stderr. 30s limit.
+to stdout (JSON, or plain text). A non-zero exit fails the call with the last line of stderr.
+Limits: 30s and 4 MB of output per call. rply.agent results are stored as messages, so keep them under 256 KB.
 Example, saved as <folder>/stats and made executable (chmod +x):
   #!/bin/sh
   printf '{"disk":"%s"}' "$(df -h / | awk 'NR==2{print $5}')"

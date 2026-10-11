@@ -12,7 +12,7 @@ import { commandsDir, isExecutable, listCommands, parseOutput } from "./apps.ts"
 
 const SCRIPT_TIMEOUT = 30_000;
 const WAKE_TIMEOUT = 60 * 60_000;
-const MAX_OUTPUT = 200 * 1024;
+const MAX_OUTPUT = 4 * 1024 * 1024;
 
 type ServeOptions = { dir?: string; onMessage?: string; install?: boolean; uninstall?: boolean };
 
@@ -146,7 +146,9 @@ function runScript(path: string, call: PendingCall) {
     });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stdout.on("data", (chunk) => {
+      if (stdout.length <= MAX_OUTPUT) stdout += chunk;
+    });
     child.stderr.on("data", (chunk) => (stderr = (stderr + chunk).slice(-4096)));
     child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify(call.args ?? null));
@@ -154,7 +156,7 @@ function runScript(path: string, call: PendingCall) {
     child.on("close", (code, signal) => {
       if (signal) return done({ error: signal === "SIGTERM" ? "timed out" : `killed by ${signal}` });
       if (code !== 0) return done({ error: stderr.trim().split("\n").at(-1) || `exited with code ${code}` });
-      if (stdout.length > MAX_OUTPUT) return done({ error: "output too large" });
+      if (stdout.length > MAX_OUTPUT) return done({ error: "output over 4 MB" });
       done({ result: parseOutput(stdout) });
     });
   });

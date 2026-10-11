@@ -112,3 +112,18 @@ test("agents show which of them run serve and wake on messages", async () => {
   await request("GET", "/calls?wait=0&commands=stats&wakes=1", { token: agent });
   assert.deepEqual((await request("GET", "/agents", { token: human })).json.agents[0].serve, { commands: ["stats"], wakes: true });
 });
+
+test("script results can be large, stored agent results can't", async () => {
+  const { request, agent, human, messageId } = await withApp();
+  const big = "x".repeat(1024 * 1024);
+
+  const poll = request("GET", "/calls?wait=5&commands=pages", { token: agent });
+  await delay(20);
+  const call = request("POST", "/calls", { token: human, body: { message_id: messageId, name: "pages" } });
+  const { json } = await poll;
+  assert.equal((await request("POST", `/calls/${json.calls[0].id}/result`, { token: agent, body: { result: big } })).status, 204);
+  assert.equal((await call).json.result.length, big.length);
+
+  const posted = await request("POST", "/calls", { token: human, body: { message_id: messageId, name: "plan", agent: true } });
+  assert.equal((await request("POST", `/calls/${posted.json.id}/result`, { token: agent, body: { result: big } })).status, 413);
+});

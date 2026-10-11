@@ -16,11 +16,16 @@
     "build": "npm run build -w @rply/web",
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "rply": "node packages/cli/src/index.ts"
+    "rply": "node packages/cli/src/index.ts",
+    "dev:mobile": "npm run start -w @rply/mobile"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "railway": "^3.13.1",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   }
 }

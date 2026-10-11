@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv, Deps } from "./context.ts";
 import { adminRoutes } from "./routes/admin.ts";
@@ -12,6 +13,7 @@ import { syncRoutes } from "./routes/sync.ts";
 
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
   const api = new Hono<AppEnv>()
+    .use(cors({ origin: "*", allowHeaders: ["authorization", "content-type", "x-rply-channel"] }))
     .use(bodyLimit({ maxSize: 256 * 1024 }))
     .route("/", adminRoutes(deps))
     .route("/", channelRoutes(deps))

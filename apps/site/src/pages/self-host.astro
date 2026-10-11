@@ -1,0 +1,28 @@
+---
+import Page from "../layouts/Page.astro";
+import Section from "../components/Section.astro";
+---
+
+<Page title="Self-host · rply">
+  <h1>[Run rply on your own server]</h1>
+
+  <Section title="Why self-host" note="Your data, your box, free. Short.">
+    <p>[2-3 points]</p>
+  </Section>
+
+  <Section title="One command" note="Docker run snippet, then link to platform guides.">
+    <pre>[docker run -p 8080:8080 -v rply:/data &lt;image TBD&gt;]</pre>
+  </Section>
+
+  <Section title="Pick a platform" note="Cards linking to the docs guides.">
+    <ul>
+      <li><a href="/docs/self-hosting/railway/">[Railway]</a></li>
+      <li><a href="/docs/self-hosting/vps/">[Any VPS (Hetzner etc.)]</a></li>
+      <li><a href="/docs/self-hosting/exe-dev/">[exe.dev]</a></li>
+    </ul>
+  </Section>
+
+  <Section title="Push still works" note="Explain the relay in one paragraph: content-free wake ping, no Apple/Google keys needed.">
+    <p>[relay explainer]</p>
+  </Section>
+</Page>

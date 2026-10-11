@@ -23,9 +23,12 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
     .sort((a, b) => (b.last?.created_at ?? b.entry.channel.created_at) - (a.last?.created_at ?? a.entry.channel.created_at));
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <span className="font-semibold">rply</span>
+    <div className="flex h-full w-full flex-col">
+      <div className="flex h-12 items-center justify-between px-4 md:pr-2">
+        <span className="flex items-center gap-2 font-semibold">
+          <span className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md text-sm">r</span>
+          rply
+        </span>
         <div className="flex items-center gap-1">
           <OwnerButton />
           <AddChannelDialog
@@ -37,19 +40,23 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
           />
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
+        <span className="text-muted-foreground px-2 pt-3 pb-1 text-xs font-medium">Channels</span>
         {rows.map(({ entry, last, unread, waiting }) => (
           <Link
             key={entry.channel.id}
             href={`/c/${entry.channel.id}`}
-            className={cn("hover:bg-muted flex flex-col gap-0.5 border-b px-4 py-3", activeId === entry.channel.id && "bg-muted")}
+            className={cn(
+              "hover:bg-foreground/5 flex flex-col rounded-md px-2 py-1.5",
+              activeId === entry.channel.id && "bg-foreground/7 hover:bg-foreground/7",
+            )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate font-medium">{entry.channel.name}</span>
+              <span className="truncate text-sm font-medium">{entry.channel.name}</span>
               {last && <span className="text-muted-foreground shrink-0 text-xs">{formatTime(last.created_at)}</span>}
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground truncate text-sm">
+              <span className="text-muted-foreground truncate text-xs">
                 {entry.revoked ? "Access revoked" : last ? preview(last) : "No messages yet"}
               </span>
               {waiting && <span className="text-primary shrink-0 text-xs font-medium">Needs reply</span>}

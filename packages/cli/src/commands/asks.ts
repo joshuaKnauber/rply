@@ -8,6 +8,7 @@ import { parseBlocks, post } from "./messages.ts";
 const ANSWER_ID = "answer";
 
 type AskOptions = {
+  title?: string;
   choices?: string;
   buttons?: string;
   multi?: boolean;
@@ -28,6 +29,7 @@ export function registerAsks(program: Command) {
     .allowUnknownOption()
     .description("ask the human something; without --choices, --confirm or input blocks they get a text field")
     .argument("<question>", "the question, markdown supported")
+    .option("--title <title>", "bold title above the question")
     .option("--choices <list>", 'comma-separated choices, e.g. "Publish,Skip"')
     .option("--buttons <list>", "same as --choices")
     .option("--multi", "allow picking several choices")
@@ -51,7 +53,7 @@ Exit codes: 2 if the question expired without a default or --timeout ran out, 3 
       const blocks = [...(opts.blocks ? parseBlocks(readJson(opts.blocks)) : []), ...questionBlocks(opts)];
       if (!blocks.some(isInput)) blocks.push(withDefault({ type: "text_input", id: ANSWER_ID, multiline: true, required: true }, opts));
       const expires = parseDuration(opts.expires ?? (opts.wait ? opts.timeout : undefined));
-      const message = await post({ text: question, blocks }, { ask: { expires_at: expires === undefined ? undefined : Date.now() + expires } });
+      const message = await post({ title: opts.title, text: question, blocks }, { ask: { expires_at: expires === undefined ? undefined : Date.now() + expires } });
 
       if (!opts.wait) {
         if (json()) return printJson(message);

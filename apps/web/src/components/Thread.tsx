@@ -116,7 +116,7 @@ function MessageView({
       <div
         className={cn(
           "max-w-[85%] rounded-xl px-4 py-3",
-          fromAgent ? "bg-card border" : "bg-primary text-primary-foreground",
+          fromAgent ? "bg-muted" : "bg-primary text-primary-foreground",
           askStatus(message.ask) === "open" && "ring-primary/30 ring-2",
         )}
       >

@@ -250,3 +250,25 @@ test("embeds send events that reach the agent's inbox without being answers", as
   assert.equal((await request("GET", `/asks/${ask.json.message.id}`, { token: agent })).json.message.ask.status, "open");
   assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [{ type: "html", question: true, html: "x" }] } } })).status, 400);
 });
+
+test("the human can unpin a message, which moves it into the thread", async () => {
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  const pinned = await request("PUT", "/pins/status", { token: agent, body: { body: { text: "Overview" } } });
+  const id = pinned.json.message.id;
+
+  const initial = await request("POST", "/sync", { body: { tokens: [human] } });
+  const unpinned = await request("POST", `/messages/${id}/unpin`, { token: human });
+  assert.equal(unpinned.json.message.pin, null);
+  assert.equal((await request("POST", `/messages/${id}/unpin`, { token: human })).status, 400);
+
+  assert.equal((await request("GET", "/pins", { token: human })).json.messages.length, 0);
+  assert.deepEqual((await request("GET", "/messages", { token: human })).json.messages.map((m: any) => m.body.text), ["Overview"]);
+  const synced = await request("POST", "/sync", { body: { tokens: [human], cursor: initial.json.cursor } });
+  assert.equal(synced.json.messages[0].pin, null);
+
+  const patch = await request("PATCH", "/pins/status", { token: agent, body: { text: "x" } });
+  assert.equal(patch.status, 404);
+  assert.match(patch.json.error, /unpinned/);
+  assert.notEqual((await request("PUT", "/pins/status", { token: agent, body: { body: { text: "New" } } })).json.message.id, id);
+});

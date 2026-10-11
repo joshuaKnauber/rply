@@ -24,12 +24,15 @@ function Inbox() {
 
   return (
     <div className="flex h-full">
-      <aside className={cn("w-full border-r md:flex md:w-80 md:shrink-0", active ? "hidden" : "flex")}>
-        <div className="w-full">
-          <ChannelList channels={channels} activeId={active?.channel.id} />
-        </div>
+      <aside className={cn("bg-sidebar w-full md:flex md:w-72 md:shrink-0 md:border-r", active ? "hidden" : "flex")}>
+        <ChannelList channels={channels} activeId={active?.channel.id} />
       </aside>
-      <main className={cn("min-w-0 flex-1 flex-col", active ? "flex" : "hidden md:flex")}>
+      <main
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          active ? "flex" : "hidden md:flex",
+        )}
+      >
         {active ? (
           <ChannelView key={active.channel.id} entry={active} />
         ) : (

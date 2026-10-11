@@ -1,0 +1,39 @@
+---
+import Button from "./Button.astro";
+const chip = "flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-small";
+---
+
+<section class="py-12">
+  <div class="mx-auto max-w-4xl rounded-[28px] border border-line bg-white/60 px-6 py-16 text-center">
+    <span
+      class="mx-auto grid size-14 place-items-center rounded-2xl bg-linear-to-b from-accent-400 to-accent-500 text-h3 font-semibold text-white shadow-[inset_0_1.5px_0_rgb(255_255_255/0.35)]"
+      >r</span
+    >
+    <h2 class="mt-6">What makes rply different.</h2>
+    <p class="mt-4 text-lead text-muted">Not a dashboard. Not a remote control.</p>
+
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <span class={chip}>rply</span>
+      <span class="font-mono text-caption tracking-[0.1em] text-muted uppercase">versus</span>
+      <span class={chip}>ntfy</span>
+      <span class={chip}>Slack bots</span>
+      <span class={chip}>Remote control apps</span>
+    </div>
+
+    <p class="mt-10 text-h3">
+      A <span class="underline decoration-accent-500 decoration-wavy decoration-2 underline-offset-[6px]">two-way</span> channel
+      for any agent.
+    </p>
+    <div class="mx-auto mt-4 flex max-w-xl flex-col gap-4 text-muted">
+      <p>
+        ntfy is great for alerts. rply adds the way back: questions your agent waits on, a status that updates in place,
+        and new work from you whenever you think of it.
+      </p>
+      <p>
+        Remote control apps mirror one coding agent's session. rply doesn't care which agent you use. It just gives it a
+        way to reach you.
+      </p>
+    </div>
+    <Button href="/compare/" variant="secondary" class="mt-8">See the full comparison →</Button>
+  </div>
+</section>

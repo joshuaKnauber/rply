@@ -1,0 +1,44 @@
+---
+import SectionHeading from "./SectionHeading.astro";
+import Button from "./Button.astro";
+
+const plans = [
+  {
+    name: "Self-hosted",
+    price: "Free",
+    note: "forever",
+    text: "One Docker container and a SQLite file. Your server, your data, every feature included.",
+    cta: { label: "Self-hosting guide", href: "/docs/self-hosting/overview/" },
+  },
+  {
+    name: "Hosted",
+    price: "Soon",
+    note: "on rply.sh",
+    text: "Nothing to run. Sign in, pair your phone and point your agents at rply.sh.",
+    cta: { label: "Read the docs", href: "/docs/start/introduction/" },
+  },
+];
+---
+
+<section id="pricing" class="scroll-mt-8 py-24">
+  <SectionHeading>
+    <Fragment slot="title">Free to self-host.</Fragment>
+    A hosted version is on the way for anyone who'd rather not run a server.
+  </SectionHeading>
+  <div class="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
+    {
+      plans.map((plan) => (
+        <div class="flex flex-col rounded-3xl border border-line bg-white p-8">
+          <p class="font-mono text-caption tracking-[0.06em] text-muted uppercase">{plan.name}</p>
+          <p class="mt-4 text-h2">
+            {plan.price} <span class="text-lead text-muted">{plan.note}</span>
+          </p>
+          <p class="mt-4 mb-8 text-secondary">{plan.text}</p>
+          <Button href={plan.cta.href} variant="secondary" class="mt-auto self-start">
+            {plan.cta.label}
+          </Button>
+        </div>
+      ))
+    }
+  </div>
+</section>

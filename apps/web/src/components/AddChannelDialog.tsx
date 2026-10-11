@@ -44,7 +44,7 @@ export function AddChannelDialog({ trigger }: { trigger: React.ReactNode }) {
             </Button>
           </DialogFooter>
         </form>
-        <div className="flex min-w-0 flex-col gap-3 border-t pt-4">
+        <div className="flex min-w-0 flex-col gap-3 pt-2">
           <p className="text-sm font-medium">New agent?</p>
           <SetupCommand />
         </div>

@@ -7,7 +7,7 @@ import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
 import { eventLabel } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
-import { useMessages, usePins, useSendMessage } from "@/lib/queries";
+import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
 export default function ChannelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,6 +44,7 @@ export default function ChannelScreen() {
 function Pinned({ entry }: { entry: StoredChannel }) {
   const { data: pins = [] } = usePins(entry);
   const send = useSendMessage(entry);
+  const unpin = useUnpin(entry);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [contentHeight, setContentHeight] = useState(0);
   if (pins.length === 0) return null;
@@ -64,6 +65,15 @@ function Pinned({ entry }: { entry: StoredChannel }) {
               </Text>
               <Text className="text-xs text-neutral-500">{formatTime(message.updated_at ?? message.created_at)}</Text>
               <Text className="text-neutral-500">{expanded ? "▾" : "▸"}</Text>
+              {!entry.revoked && (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => unpin.mutate(message.id, { onError: (err) => Alert.alert("Couldn't unpin", err.message) })}
+                  className="ml-1 rounded-md px-1.5 py-0.5"
+                >
+                  <Text className="text-xs font-medium text-neutral-500">Unpin</Text>
+                </Pressable>
+              )}
             </Pressable>
             {expanded && (
               <View className="gap-3 px-3 pb-3">

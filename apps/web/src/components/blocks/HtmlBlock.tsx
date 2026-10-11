@@ -14,7 +14,8 @@ addEventListener("load", () => {
   report();
 });
 </script>
-<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}</style>`;
+<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}body{display:flow-root}</style>`;
+const autoHeight = `<style>html,body{overflow:hidden}</style>`;
 
 type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
@@ -35,14 +36,16 @@ export function HtmlBlock({ block, onReply, onSend }: Props) {
 
   return (
     <div className="flex flex-col gap-1">
-      <iframe
-        ref={frame}
-        title={block.label ?? "Embedded content"}
-        sandbox="allow-scripts"
-        srcDoc={bridge + block.html}
-        style={{ height }}
-        className="w-full rounded-md border bg-white"
-      />
+      <div className="overflow-hidden rounded-md border bg-white">
+        <iframe
+          ref={frame}
+          title={block.label ?? "Embedded content"}
+          sandbox="allow-scripts"
+          srcDoc={bridge + (block.height ? "" : autoHeight) + block.html}
+          style={{ height }}
+          className="block w-full border-0"
+        />
+      </div>
       <span className="text-muted-foreground text-xs">{block.label ?? "Embedded content from the agent"}</span>
     </div>
   );

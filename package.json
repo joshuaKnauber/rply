@@ -17,7 +17,9 @@
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "rply": "node packages/cli/src/index.ts",
-    "dev:mobile": "npm run start -w @rply/mobile"
+    "dev:mobile": "npm run start -w @rply/mobile",
+    "dev:site": "npm run dev -w @rply/site",
+    "build:site": "npm run build -w @rply/site"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

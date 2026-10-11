@@ -17,13 +17,13 @@ export function ChannelView({ entry }: { entry: StoredChannel }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center gap-2 border-b px-4 py-2">
+      <header className="flex h-12 shrink-0 items-center gap-2 px-4">
         <Button asChild size="icon" variant="ghost" className="md:hidden" aria-label="Back">
           <Link href="/">
             <ArrowLeftIcon />
           </Link>
         </Button>
-        <h2 className="truncate font-semibold">{entry.channel.name}</h2>
+        <h2 className="truncate text-sm font-medium">{entry.channel.name}</h2>
         {entry.revoked && <Badge variant="destructive">Revoked</Badge>}
         <div className="ml-auto" />
         {!entry.admin && (

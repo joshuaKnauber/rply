@@ -53,7 +53,7 @@ export function pinRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const key = pinKey(c.req.param("key"));
       const current = await findPinned(channel.id, key);
-      if (!current) throw new HTTPException(404, { message: `Nothing pinned as "${key}" yet, use PUT first` });
+      if (!current) throw new HTTPException(404, { message: `Nothing pinned as "${key}". It was never set or the human unpinned it; use pin set to pin a new one` });
       if (current.enc) throw new HTTPException(400, { message: "Encrypted pins can't be patched, use PUT" });
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(PinnedBody, applyPatch(current.body, patch)));

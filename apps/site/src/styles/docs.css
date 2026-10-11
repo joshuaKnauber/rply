@@ -1,0 +1,21 @@
+@layer base, starlight, theme, components, utilities;
+
+@import "@astrojs/starlight-tailwind";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./theme.css";
+
+:root {
+  --sl-text-h1: var(--text-h2);
+  --sl-text-h2: var(--text-h3);
+  --sl-text-h3: var(--text-lead);
+  --sl-text-h4: var(--text-body);
+  --sl-text-h5: var(--text-body);
+  --sl-text-body: var(--text-body);
+  --sl-text-sm: var(--text-small);
+}
+
+:is(h1, h2, h3, h4, h5) {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}

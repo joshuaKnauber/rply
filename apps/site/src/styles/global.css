@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "./theme.css";
+
+@layer base {
+  body {
+    @apply bg-paper font-sans text-body text-ink;
+  }
+  h1 {
+    @apply text-[2.5rem] md:text-display;
+  }
+  h2 {
+    @apply text-h2;
+  }
+  h3 {
+    @apply text-h3;
+  }
+}

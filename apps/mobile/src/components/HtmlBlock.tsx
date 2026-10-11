@@ -16,7 +16,8 @@ addEventListener("load", () => {
   report();
 });
 </script>
-<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}</style>`;
+<style>html,body{margin:0;font-family:system-ui,sans-serif;color-scheme:light dark}body{display:flow-root}</style>`;
+const autoHeight = `<style>html,body{overflow:hidden}</style>`;
 
 type Props = { block: BlockOf<"html">; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
@@ -25,10 +26,10 @@ export function HtmlBlock({ block, onReply, onSend }: Props) {
 
   return (
     <View className="gap-1">
-      <View style={{ height }} className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <View style={{ height: height + 2 }} className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
         <WebView
           originWhitelist={["*"]}
-          source={{ html: bridge + block.html }}
+          source={{ html: bridge + (block.height ? "" : autoHeight) + block.html }}
           scrollEnabled={false}
           setSupportMultipleWindows={false}
           onShouldStartLoadWithRequest={(req) => {

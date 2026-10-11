@@ -1,0 +1,38 @@
+---
+import SectionHeading from "./SectionHeading.astro";
+import Mark from "./Mark.astro";
+
+const items = [
+  "Claude Code",
+  "Codex",
+  "OpenClaw",
+  "Cursor",
+  "Gemini CLI",
+  "exe.dev",
+  "Hetzner",
+  "Railway",
+  "Fly.io",
+  "Docker",
+  "cron",
+  "GitHub Actions",
+  "git hooks",
+  "Your laptop",
+];
+---
+
+<section id="works-with" class="py-24">
+  <SectionHeading>
+    <Fragment slot="title">Works with whatever<br />you already run.</Fragment>
+    If it can run a shell command, <Mark>it can reach you</Mark>. No SDK, no MCP setup, no new runtime.
+  </SectionHeading>
+  <div class="mx-auto flex max-w-3xl flex-wrap justify-center gap-3">
+    {
+      items.map((item) => (
+        <span class="flex items-center gap-2 rounded-full border border-line bg-white py-1.5 pr-4 pl-1.5 text-ui">
+          <span class="grid size-7 place-items-center rounded-full bg-neutral-100 text-caption text-muted">{item[0]}</span>
+          {item}
+        </span>
+      ))
+    }
+  </div>
+</section>

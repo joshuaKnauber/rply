@@ -18,7 +18,7 @@ export function Composer({ onSend, disabled }: { onSend: (text: string) => void;
   };
 
   return (
-    <form onSubmit={submit} className="border-t p-3">
+    <form onSubmit={submit} className="p-3">
       <div className="mx-auto flex max-w-3xl items-end gap-2">
         <Textarea
           rows={1}

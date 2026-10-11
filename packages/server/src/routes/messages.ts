@@ -158,6 +158,14 @@ export function messageRoutes(deps: Deps) {
       await recordChanges(deps, channel.id, [target.id]);
       return c.body(null, 204);
     })
+    .post("/messages/:id/unpin", auth, async (c) => {
+      const { channel } = c.var.auth;
+      const target = await loadMessage(db, channel.id, c.req.param("id"));
+      if (target.pin === null) throw new HTTPException(400, { message: "This message isn't pinned" });
+      await db.updateTable("messages").set({ pin: null }).where("id", "=", target.id).execute();
+      await recordChanges(deps, channel.id, [target.id]);
+      return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
+    })
     .post("/messages/:id/cancel", agent, async (c) => {
       const { channel } = c.var.auth;
       const target = await loadAgentMessage(channel.id, c.req.param("id"));

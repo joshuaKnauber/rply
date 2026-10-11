@@ -28,15 +28,15 @@ export const usePins = (entry: StoredChannel) =>
     enabled: !entry.revoked,
   });
 
-export function mergeMessages(queryClient: QueryClient, channelId: string, incoming: Message[], key = messagesKey(channelId)) {
+function upsert(queryClient: QueryClient, key: string[], incoming: Message[], belongs: (m: Message) => boolean) {
   if (!queryClient.getQueryData(key)) {
-    queryClient.invalidateQueries({ queryKey: key });
+    if (incoming.some(belongs)) queryClient.invalidateQueries({ queryKey: key });
     return;
   }
   queryClient.setQueryData<Message[]>(key, (current = []) => {
     const byId = new Map(current.map((m) => [m.id, m]));
     for (const m of incoming) {
-      if (m.deleted_at) byId.delete(m.id);
+      if (m.deleted_at || !belongs(m)) byId.delete(m.id);
       else byId.set(m.id, m);
     }
     return [...byId.values()].sort((a, b) => a.seq - b.seq);
@@ -44,14 +44,19 @@ export function mergeMessages(queryClient: QueryClient, channelId: string, incom
 }
 
 export function applySynced(queryClient: QueryClient, messages: Message[]) {
-  const channels = new Set(messages.map((m) => m.channel_id));
-  for (const channelId of channels) {
+  for (const channelId of new Set(messages.map((m) => m.channel_id))) {
     const group = messages.filter((m) => m.channel_id === channelId);
-    const pinned = group.filter((m) => m.pin !== null);
-    const thread = group.filter((m) => m.pin === null);
-    if (pinned.length) mergeMessages(queryClient, channelId, pinned, pinsKey(channelId));
-    if (thread.length) mergeMessages(queryClient, channelId, thread);
+    upsert(queryClient, pinsKey(channelId), group, (m) => m.pin !== null);
+    upsert(queryClient, messagesKey(channelId), group, (m) => m.pin === null);
   }
+}
+
+export function useUnpin(entry: StoredChannel) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<{ message: Message }>(entry.server, `/messages/${id}/unpin`, { ...auth(entry), method: "POST" }).then((r) => r.message),
+    onSuccess: (message) => applySynced(queryClient, [message]),
+  });
 }
 
 export function useSendMessage(entry: StoredChannel) {
@@ -59,6 +64,6 @@ export function useSendMessage(entry: StoredChannel) {
   return useMutation({
     mutationFn: (req: { body: HumanMessageBody; reply_to?: string }) =>
       api<{ message: Message }>(entry.server, "/messages", { ...auth(entry), body: req }).then((r) => r.message),
-    onSuccess: (message) => mergeMessages(queryClient, entry.channel.id, [message]),
+    onSuccess: (message) => applySynced(queryClient, [message]),
   });
 }

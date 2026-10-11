@@ -7,14 +7,12 @@ import { isAnswer } from "@rply/schema/helpers";
 import { CliError, type Client } from "../client.ts";
 import { updateChannel, type Selected } from "../config.ts";
 import { connect } from "../context.ts";
+import { parseDuration } from "../io.ts";
 import { installService, logPath, serviceRunning, uninstallService } from "../service.ts";
-import { commandsDir, isExecutable, listCommands, parseOutput } from "./apps.ts";
+import { childEnv, commandsDir, listCommands, runScript } from "../scripts.ts";
 
-const SCRIPT_TIMEOUT = 30_000;
-const WAKE_TIMEOUT = 60 * 60_000;
-const MAX_OUTPUT = 4 * 1024 * 1024;
 
-type ServeOptions = { dir?: string; onMessage?: string; install?: boolean; uninstall?: boolean };
+type ServeOptions = { dir?: string; onMessage?: string; onMessageTimeout: string; install?: boolean; uninstall?: boolean };
 
 export function registerServe(program: Command) {
   program
@@ -22,13 +20,15 @@ export function registerServe(program: Command) {
     .description("run command scripts for apps and wake the agent on new messages (install it as a service with --install)")
     .option("--dir <path>", "folder with command scripts (default: see rply app commands)")
     .option("--on-message <command>", "shell command that wakes the agent when the human writes, e.g. a headless agent run")
+    .option("--on-message-timeout <duration>", "stop a wake run after this long, 0 for never", "1h")
     .option("--install", "install as a background service (systemd or launchd) that restarts on crash and reboot")
     .option("--uninstall", "stop and remove the background service")
     .addHelpText(
       "after",
       `
 --on-message runs at most once at a time, in the current directory, with the new messages as JSON on stdin
-and RPLY_CHANNEL set. Messages that arrive during a run trigger one more run afterwards. Runs are stopped after 1h.
+and RPLY_CHANNEL set. Messages that arrive during a run trigger one more run afterwards. Don't start the agent
+in the background from the hook (runs would overlap); raise --on-message-timeout for long runs instead.
 --install remembers the current directory, PATH and options. Run it from the agent's project directory.`,
     )
     .action(async (opts: ServeOptions) => {
@@ -50,7 +50,8 @@ and RPLY_CHANNEL set. Messages that arrive during a run trigger one more run aft
       if (opts.onMessage) {
         await warnAboutOtherWakers(client);
         log(`Waking the agent on new messages with: ${opts.onMessage}`);
-        watchInbox(client, selected, opts.onMessage).catch((err) => {
+        const timeout = parseDuration(opts.onMessageTimeout) || undefined;
+        watchInbox(client, selected, opts.onMessage, timeout).catch((err) => {
           console.error(`rply: ${err.message}`);
           process.exit(1);
         });
@@ -59,7 +60,7 @@ and RPLY_CHANNEL set. Messages that arrive during a run trigger one more run aft
         const names = listCommands(dir);
         const wakes = opts.onMessage ? "&wakes=1" : "";
         const { calls } = await client.once<CallsResponse>("GET", `/calls?wait=${waitSeconds}&commands=${names.join(",")}${wakes}`);
-        for (const call of calls) void handle(client, dir, call);
+        for (const call of calls) void handle(client, dir, call, key);
         return undefined;
       });
     });
@@ -68,7 +69,10 @@ and RPLY_CHANNEL set. Messages that arrive during a run trigger one more run aft
 async function install(client: Client, selected: Selected, opts: ServeOptions) {
   if (!selected.key) throw new CliError("Services need a saved channel (rply init or rply join), not RPLY_SERVER/RPLY_TOKEN");
   if (opts.onMessage) await warnAboutOtherWakers(client);
-  const args = [...(opts.dir ? ["--dir", resolve(opts.dir)] : []), ...(opts.onMessage ? ["--on-message", opts.onMessage] : [])];
+  const args = [
+    ...(opts.dir ? ["--dir", resolve(opts.dir)] : []),
+    ...(opts.onMessage ? ["--on-message", opts.onMessage, "--on-message-timeout", opts.onMessageTimeout] : []),
+  ];
   const service = installService({ key: selected.key, args, cwd: process.cwd() });
   console.log(`Installed and started ${service.name} (${service.file})`);
   console.log(`Working directory: ${process.cwd()}`);
@@ -86,7 +90,7 @@ async function warnAboutOtherWakers(client: Client) {
 
 const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
 
-async function watchInbox(client: Client, selected: Selected, command: string) {
+async function watchInbox(client: Client, selected: Selected, command: string, timeout: number | undefined) {
   let cursor = selected.config.wake_cursor ?? (await client.request<MessagesResponse>("GET", "/messages?sender=human&limit=1&peek=1")).cursor;
   let running = false;
   let pending: Message[] = [];
@@ -95,7 +99,7 @@ async function watchInbox(client: Client, selected: Selected, command: string) {
     running = true;
     const started = Date.now();
     log(`Waking the agent for ${messages.length} message${messages.length === 1 ? "" : "s"}`);
-    const code = await runWake(command, messages, selected.key);
+    const code = await runWake(command, messages, selected.key, timeout);
     log(`Agent run ${code === 0 ? "finished" : `failed (${code})`} after ${Math.round((Date.now() - started) / 1000)}s`);
     running = false;
     if (pending.length) void wake(pending.splice(0));
@@ -114,13 +118,12 @@ async function watchInbox(client: Client, selected: Selected, command: string) {
   });
 }
 
-function runWake(command: string, messages: Message[], key: string | undefined) {
+function runWake(command: string, messages: Message[], key: string | undefined, timeout: number | undefined) {
   return new Promise<number | string>((done) => {
-    const { RPLY_SERVICE: _, ...env } = process.env;
     const child = spawn("sh", ["-c", command], {
-      env: { ...env, ...(key && { RPLY_CHANNEL: key }) },
+      env: childEnv(key),
       stdio: ["pipe", "inherit", "inherit"],
-      timeout: WAKE_TIMEOUT,
+      timeout,
     });
     child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify(messages));
@@ -129,35 +132,11 @@ function runWake(command: string, messages: Message[], key: string | undefined) 
   });
 }
 
-async function handle(client: Client, dir: string, call: PendingCall) {
+async function handle(client: Client, dir: string, call: PendingCall, key: string | undefined) {
   const started = Date.now();
-  const outcome = await runScript(join(dir, call.name), call);
+  const outcome = await runScript(dir, call, key);
   const status = "error" in outcome ? `failed: ${outcome.error}` : "ok";
   log(`${call.name} ${status} (${Date.now() - started}ms)`);
   await client.request("POST", `/calls/${call.id}/result`, outcome).catch((err) => console.error(`rply: ${err.message}`));
 }
 
-function runScript(path: string, call: PendingCall) {
-  return new Promise<{ result: unknown } | { error: string }>((done) => {
-    if (!isExecutable(path)) return done({ error: `No command "${call.name}"` });
-    const child = spawn(path, [], {
-      env: { ...process.env, RPLY_CALL_NAME: call.name, RPLY_CALL_ID: call.id },
-      timeout: SCRIPT_TIMEOUT,
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      if (stdout.length <= MAX_OUTPUT) stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => (stderr = (stderr + chunk).slice(-4096)));
-    child.stdin.on("error", () => {});
-    child.stdin.end(JSON.stringify(call.args ?? null));
-    child.on("error", (err) => done({ error: err.message }));
-    child.on("close", (code, signal) => {
-      if (signal) return done({ error: signal === "SIGTERM" ? "timed out" : `killed by ${signal}` });
-      if (code !== 0) return done({ error: stderr.trim().split("\n").at(-1) || `exited with code ${code}` });
-      if (stdout.length > MAX_OUTPUT) return done({ error: "output over 4 MB" });
-      done({ result: parseOutput(stdout) });
-    });
-  });
-}

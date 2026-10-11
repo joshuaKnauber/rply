@@ -23,7 +23,7 @@ import type { DB } from "../db/index.ts";
 import { toChannel } from "../serialize.ts";
 import { createPairingCode, createToken, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
-const PAIRING_TTL_MS = 10 * 60 * 1000;
+const PAIRING_TTL_MS = 60 * 60 * 1000;
 
 export function channelRoutes(deps: Deps, serves: Serves) {
   const { db } = deps;

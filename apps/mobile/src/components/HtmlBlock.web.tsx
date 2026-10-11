@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Text, useColorScheme, View } from "react-native";
 import { embedDocument, type BlockOf } from "@rply/schema";
 import { useEmbedBridge } from "@/lib/embed";
+import { EmbedError } from "./EmbedError";
 
 type Props = { block: BlockOf<"html">; fill?: boolean; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
 
@@ -38,10 +39,26 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     />
   );
 
-  if (fill) return <View className="flex-1">{iframe}</View>;
+  const banner = bridge.error && (
+    <EmbedError
+      message={bridge.error}
+      onSend={onSend && (() => (onSend({ error: bridge.error }, `App error: ${bridge.error!.slice(0, 120)}`), bridge.clearError()))}
+      onDismiss={bridge.clearError}
+    />
+  );
+
+  if (fill) {
+    return (
+      <View className="flex-1">
+        {banner}
+        <View className="flex-1">{iframe}</View>
+      </View>
+    );
+  }
 
   return (
     <View className="gap-1">
+      {banner}
       <View className="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800">{iframe}</View>
       <Text className="text-xs text-neutral-500">{block.label ?? "Embedded content from the agent"}</Text>
     </View>

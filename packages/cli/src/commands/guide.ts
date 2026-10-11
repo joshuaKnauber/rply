@@ -27,6 +27,8 @@ const topics: Record<string, string> = {
    It restarts on crash and reboot, runs your command once at a time when the human writes (the new
    messages are also on stdin), and runs command scripts for apps. Logs: see the install output.
    Only one agent per channel should use --on-message; others install without it.
+   Runs are stopped after an hour. Don't start yourself in the background from the hook (runs would
+   overlap); for longer work add --on-message-timeout 4h, or 0 for no limit.
    Never also run \`rply serve\` by hand for the same channel.
 6. If you'll build apps, see \`rply guide apps\` and put command scripts in the folder from \`rply app commands\`.
 7. Verify: rply send "Setup done. Reply to this message to check I get woken up."
@@ -52,6 +54,16 @@ Good habits
 - Keep a live overview with \`rply status set\` instead of sending a message for every step.
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
+
+Reading messages as data
+  rply inbox --json prints one message per line: { id, seq, sender, created_at, reply_to, state, enc, body }
+  body is one of
+    { text, attachments? }                   a message; attachments: [{ file_id, name, mime, size }]
+    { event: { block_id, value, label } }    a click etc. in an embed or app; reply_to is that message
+    { call: { name, block_id, args } }       an rply.agent call from an app; answer with rply respond <id>
+  enc: true means the body is end-to-end encrypted, which this CLI can't read yet.
+  Answers to your questions don't show up here; they come through ask --wait or rply wait.
+rply's own notices (updates, hints) go to stderr, never stdout.
 
 Setting up a new machine: rply guide setup
 More: rply guide ask | blocks | html | pins | apps | secrets | files | all`,
@@ -94,21 +106,31 @@ Update a block later by its id: rply edit <message-id> --patch '{"id":"pages","v
 
   rply send "Traffic this week" --blocks '[{"type":"html","label":"Traffic","html":"<div>...</div>"}]'
 
+The html can be a fragment or a full document (the outer <!doctype> and <html> tags are dropped).
+
 Inside the embed
   rply.send(value, label)   send an event to your inbox (any number of times), e.g. a clicked bar
   rply.reply(value)         answer the question, only with "question": true and an "id" on the block
   rply.call(name, args)     run a command script on your machine (see rply guide apps)
   rply.agent(name, args)    ask you instead and wait for your rply respond
+  rply.storage.get(key) / rply.storage.set(key, value)   small per-device state.
+                            localStorage and cookies aren't available in the frame.
+  rply.theme                "light" or "dark"
   The frame grows to fit the content. Set "height" to fix it instead.
 
 Styling
   Buttons, inputs, links and tables get default styles that match the app.
   Use these CSS variables so the embed works in light and dark mode:
-    var(--rply-fg)  var(--rply-muted)  var(--rply-border)  var(--rply-surface)  var(--rply-accent)
-  Don't hard-code white or black backgrounds. The background is transparent.
+    --rply-fg  --rply-muted  --rply-border  --rply-surface  --rply-accent
+    --rply-bg (the app's background, for sticky headers)  --rply-success  --rply-warning  --rply-danger
+  Don't hard-code white or black. The page background is transparent.
+  The theme is data-theme="light|dark" on <html>, set by the app, not prefers-color-scheme. It can change
+  while the page is open: the window gets a "rply:theme" event, so redraw charts that read colors once.
 
 The frame can run scripts but can't read the app, its storage or the human's tokens.
-http(s) links open in a new tab (on the phone: in the browser), never inside the frame.`,
+http(s) links open in a new tab (on the phone: in the browser), never inside the frame.
+Script errors and rejected promises show the human a banner. They can send it to you: it arrives as an
+event with value { error }.`,
 
   pins: `Pinned messages sit at the top of the channel and update in place. Use them for a live overview.
 
@@ -124,6 +146,7 @@ http(s) links open in a new tab (on the phone: in the browser), never inside the
 
   rply app set dashboard dashboard.html --title "Dashboard"   create or replace (one self-contained HTML file)
   rply app list | app remove <key>
+app set refuses pages whose inline scripts don't parse. Styling, theme and storage: rply guide html.
 
 Inside the app, besides rply.send (see rply guide html):
   await rply.call("stats", { range: "7d" })   run a command script on your machine and get its result
@@ -135,13 +158,14 @@ Fetch data with rply.call when the page loads instead of baking it into the HTML
 Commands are executables you write, one file per command name:
   rply app commands          shows the folder, e.g. ~/.config/rply/commands/<channel>/
   rply serve --install       runs them when the app calls, as a background service (see rply guide setup)
-A command gets the args as JSON on stdin (env RPLY_CALL_NAME, RPLY_CALL_ID) and prints its result
+A command gets the args as JSON on stdin (env RPLY_CHANNEL, RPLY_CALL_NAME, RPLY_CALL_ID) and prints its result
 to stdout (JSON, or plain text). A non-zero exit fails the call with the last line of stderr.
 Limits: 30s and 4 MB of output per call. rply.agent results are stored as messages, so keep them under 256 KB.
 Example, saved as <folder>/stats and made executable (chmod +x):
   #!/bin/sh
   printf '{"disk":"%s"}' "$(df -h / | awk 'NR==2{print $5}')"
 Treat args as untrusted input: validate them and never pass them to a shell unchecked.
+Test a command exactly as serve runs it: rply app call stats '{"range":"7d"}'
 
 rply.agent calls show up in \`rply inbox\` and in the chat:
   call "plan" from app in message <id>: {...}

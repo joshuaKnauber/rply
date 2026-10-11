@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BlockOf } from "@rply/schema";
 import { callCommand, loadAppStorage, saveAppStorage } from "./apps";
 import { useChannelEntry, useMessage } from "./channel-context";
 
-type Incoming = { rply?: string; id?: unknown; name?: unknown; args?: unknown; agent?: unknown; key?: unknown; value?: unknown };
+type Incoming = { rply?: string; id?: unknown; name?: unknown; args?: unknown; agent?: unknown; key?: unknown; value?: unknown; message?: unknown };
 
 export function useEmbedBridge(block: BlockOf<"html">, post: (data: unknown) => void) {
   const entry = useChannelEntry();
@@ -12,6 +12,7 @@ export function useEmbedBridge(block: BlockOf<"html">, post: (data: unknown) => 
   const storageKey = message?.pin ?? message?.id;
   const storage = useRef<Record<string, unknown>>({});
   const unmounted = useRef(new AbortController());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -21,7 +22,10 @@ export function useEmbedBridge(block: BlockOf<"html">, post: (data: unknown) => 
 
   const loadStorage = () => (storage.current = channelId && storageKey ? loadAppStorage(channelId, storageKey) : {});
 
+  useEffect(() => setError(null), [block.html]);
+
   const handle = (data: Incoming) => {
+    if (data.rply === "error") setError(String(data.message).slice(0, 500));
     if (data.rply === "storage" && channelId && storageKey && typeof data.key === "string") {
       if (data.value === undefined) delete storage.current[data.key];
       else storage.current[data.key] = data.value;
@@ -37,5 +41,5 @@ export function useEmbedBridge(block: BlockOf<"html">, post: (data: unknown) => 
     }
   };
 
-  return { loadStorage, handle };
+  return { loadStorage, handle, error, clearError: () => setError(null) };
 }

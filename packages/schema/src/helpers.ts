@@ -96,8 +96,8 @@ export function formatBytes(size: number) {
 
 export type EmbedTheme = "light" | "dark";
 
-const embedCss = `:root{color-scheme:light;--rply-fg:#2b2a28;--rply-muted:#76736f;--rply-border:#e6e4e1;--rply-surface:#f4f3f1;--rply-accent:#6f7ef6}
-:root[data-theme=dark]{color-scheme:dark;--rply-fg:#f4f3f1;--rply-muted:#a29f9a;--rply-border:rgb(255 255 255/.1);--rply-surface:#2b2a28}
+const embedCss = `:root{color-scheme:light;--rply-fg:#2b2a28;--rply-muted:#76736f;--rply-border:#e6e4e1;--rply-surface:#f4f3f1;--rply-bg:#ffffff;--rply-accent:#6f7ef6;--rply-success:#16a34a;--rply-warning:#d97706;--rply-danger:#dc2626}
+:root[data-theme=dark]{color-scheme:dark;--rply-fg:#f4f3f1;--rply-muted:#a29f9a;--rply-border:rgb(255 255 255/.1);--rply-surface:#2b2a28;--rply-bg:#1b1a19;--rply-success:#4ade80;--rply-warning:#fbbf24;--rply-danger:#f87171}
 html,body{margin:0;background:transparent;color:var(--rply-fg);font:14px/1.5 system-ui,-apple-system,sans-serif}
 body{display:flow-root}
 :where(button){font:inherit;color:inherit;background:var(--rply-surface);border:1px solid var(--rply-border);border-radius:6px;padding:4px 10px;cursor:pointer}
@@ -114,59 +114,71 @@ const embedPost = {
 const scriptJson = (value: unknown) => JSON.stringify(value).replaceAll("<", "\\u003c");
 
 const openLinksInNewTabs = `addEventListener("click", (e) => {
-  const link = e.target instanceof Element && e.target.closest("a[href]");
-  if (link && /^https?:/.test(link.href)) {
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-  }
-}, true);`;
+    const link = e.target instanceof Element && e.target.closest("a[href]");
+    if (link && /^https?:/.test(link.href)) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+  }, true);`;
+
+export const stripDocumentTags = (html: string) => html.replace(/^\s*<!doctype[^>]*>/i, "").replace(/<\/?html(\s[^>]*)?>/gi, "");
 
 export type EmbedOptions = { storage?: Record<string, unknown>; fill?: boolean };
 
 export function embedDocument(block: { html: string; height?: number }, transport: keyof typeof embedPost, theme: EmbedTheme, opts: EmbedOptions = {}) {
   return `<!doctype html><html data-theme="${theme === "dark" ? "dark" : "light"}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <script>
-const post = (m) => ${embedPost[transport]};
-const calls = new Map();
-const store = ${scriptJson(opts.storage ?? {})};
-let callId = 0;
-const call = (name, args, agent) => new Promise((resolve, reject) => {
-  const id = ++callId;
-  calls.set(id, { resolve, reject });
-  post({ rply: "call", id, name, args, agent });
-});
-window.rply = {
-  reply: (value) => post({ rply: "reply", value }),
-  send: (value, label) => post({ rply: "send", value, label }),
-  resize: (height) => post({ rply: "resize", height }),
-  call: (name, args) => call(name, args, false),
-  agent: (name, args) => call(name, args, true),
-  storage: {
-    get: (key) => store[key],
-    set: (key, value) => {
-      if (value === undefined) delete store[key];
-      else store[key] = value;
-      post({ rply: "storage", key, value });
+(() => {
+  const post = (m) => ${embedPost[transport]};
+  const calls = new Map();
+  const store = ${scriptJson(opts.storage ?? {})};
+  let nextId = 0;
+  const request = (name, args, agent) => new Promise((resolve, reject) => {
+    const id = ++nextId;
+    calls.set(id, { resolve, reject });
+    post({ rply: "call", id, name, args, agent });
+  });
+  window.rply = {
+    reply: (value) => post({ rply: "reply", value }),
+    send: (value, label) => post({ rply: "send", value, label }),
+    resize: (height) => post({ rply: "resize", height }),
+    call: (name, args) => request(name, args, false),
+    agent: (name, args) => request(name, args, true),
+    get theme() { return document.documentElement.dataset.theme; },
+    storage: {
+      get: (key) => store[key],
+      set: (key, value) => {
+        if (value === undefined) delete store[key];
+        else store[key] = value;
+        post({ rply: "storage", key, value });
+      },
     },
-  },
-};
-window.__rplyReceive = (m) => {
-  if (!m || typeof m !== "object") return;
-  if (m.rply === "theme") document.documentElement.dataset.theme = m.theme === "dark" ? "dark" : "light";
-  if (m.rply === "result" && calls.has(m.id)) {
-    const call = calls.get(m.id);
-    calls.delete(m.id);
-    if (m.error === undefined) call.resolve(m.result);
-    else call.reject(new Error(m.error));
-  }
-};
-addEventListener("message", (e) => __rplyReceive(e.data));
-${transport === "parent" ? openLinksInNewTabs : ""}
-addEventListener("load", () => {
-  const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
-  new ResizeObserver(report).observe(document.body);
-  report();
-});
+  };
+  window.__rplyReceive = (m) => {
+    if (!m || typeof m !== "object") return;
+    if (m.rply === "theme") {
+      const theme = m.theme === "dark" ? "dark" : "light";
+      if (document.documentElement.dataset.theme === theme) return;
+      document.documentElement.dataset.theme = theme;
+      dispatchEvent(new CustomEvent("rply:theme", { detail: theme }));
+    }
+    if (m.rply === "result" && calls.has(m.id)) {
+      const pending = calls.get(m.id);
+      calls.delete(m.id);
+      if (m.error === undefined) pending.resolve(m.result);
+      else pending.reject(new Error(m.error));
+    }
+  };
+  addEventListener("message", (e) => __rplyReceive(e.data));
+  addEventListener("error", (e) => post({ rply: "error", message: String(e.message || e.error || "Unknown error") }));
+  addEventListener("unhandledrejection", (e) => post({ rply: "error", message: String((e.reason && e.reason.message) || e.reason) }));
+  ${transport === "parent" ? openLinksInNewTabs : ""}
+  addEventListener("load", () => {
+    const report = () => rply.resize(Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height)));
+    new ResizeObserver(report).observe(document.body);
+    report();
+  });
+})();
 </script>
-<style>${embedCss}</style>${block.height || opts.fill ? "" : "<style>html,body{overflow:hidden}</style>"}${block.html}`;
+<style>${embedCss}</style>${block.height || opts.fill ? "" : "<style>html,body{overflow:hidden}</style>"}${stripDocumentTags(block.html)}`;
 }

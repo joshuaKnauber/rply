@@ -58,6 +58,7 @@ interface MessagesTable {
   state: MessageState | null;
   created_at: number;
   updated_at: number | null;
+  deleted_at: number | null;
 }
 
 interface AsksTable {

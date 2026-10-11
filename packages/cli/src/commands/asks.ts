@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { isInput, type AskResponse, type Block, type BlockOf, type Message } from "@rply/schema";
+import { inputDefaults, inputsOf, isInput, messageBlocks, type AskResponse, type Block, type Message } from "@rply/schema";
 import { CliError } from "../client.ts";
 import { connect, json } from "../context.ts";
 import { deadlineFrom, parseDuration, printJson, readJson } from "../io.ts";
@@ -25,6 +25,7 @@ type AskOptions = {
 export function registerAsks(program: Command) {
   program
     .command("ask")
+    .allowUnknownOption()
     .description("ask the human something; without --choices, --confirm or input blocks they get a text field")
     .argument("<question>", "the question, markdown supported")
     .option("--choices <list>", 'comma-separated choices, e.g. "Publish,Skip"')
@@ -142,13 +143,13 @@ async function waitForAnswer(id: string, timeout: string | undefined) {
 
   const { message, answer } = res;
   if (message.enc || answer?.enc) throw new CliError("This question is encrypted, which this CLI version can't read yet");
-  const inputs = ("blocks" in message.body ? (message.body.blocks ?? []) : []).filter(isInput);
+  const inputs = inputsOf(messageBlocks(message));
   const status = message.ask!.status;
 
   let answers: Record<string, unknown> | undefined;
   if (status === "answered") answers = answer && "answers" in answer.body ? answer.body.answers : {};
   if (status === "expired") {
-    const defaults = Object.fromEntries(inputs.filter((b) => "default" in b && b.default !== undefined).map((b) => [b.id, (b as BlockOf<"choice">).default]));
+    const defaults = inputDefaults(inputs);
     answers = Object.keys(defaults).length ? defaults : undefined;
   }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isInput } from "./helpers.ts";
 
 const elementId = z.string().min(1).max(64);
 const Json = z.json();
@@ -90,12 +91,7 @@ export type BlockOf<T extends BlockType> = z.infer<BlockSchemas[T]>;
 export type UnknownBlock = { type: string; id?: string; [key: string]: unknown };
 export type Block = KnownBlock | UnknownBlock;
 
-export const INPUT_TYPES = ["choice", "text_input", "number_input", "toggle", "confirm"] as const;
-
 export const isKnownBlock = (block: Block): block is KnownBlock => block.type in blockSchemas;
-
-export const isInput = (block: Block) =>
-  (INPUT_TYPES as readonly string[]).includes(block.type) || (block.type === "html" && block.id !== undefined);
 
 export const Block = z
   .looseObject({ type: z.string().min(1), id: elementId.optional() })
@@ -121,8 +117,14 @@ export const AgentMessageBody = z
   .refine((b) => uniqueInputIds(b.blocks), "Input ids must be unique within a message");
 export type AgentMessageBody = z.infer<typeof AgentMessageBody>;
 
-export const StatusBody = z.object({ blocks: z.array(Block) });
-export type StatusBody = z.infer<typeof StatusBody>;
+export const PinnedBody = z.object({
+  title: z.string().max(200).optional(),
+  text: z.string().optional(),
+  blocks: z.array(Block).optional(),
+});
+export type PinnedBody = z.infer<typeof PinnedBody>;
+
+export const PIN_KEY = /^[a-z0-9_-]{1,32}$/;
 
 export const Answers = z.record(elementId, Json);
 export type Answers = z.infer<typeof Answers>;
@@ -151,14 +153,13 @@ export const PostMessageRequest = z.intersection(
   }),
 );
 export const ReplaceMessageRequest = Payload;
-export const PutStatusRequest = Payload;
+export const PutPinRequest = Payload;
 export const PatchMessageRequest = z.object({
   title: z.string().max(200).optional(),
   text: z.string().optional(),
   blocks: z.array(Block).optional(),
   block_patches: z.array(BlockPatch).optional(),
 });
-export const PatchStatusRequest = z.object({ blocks: z.array(BlockPatch).min(1) });
 export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
 export const SyncRequest = z.object({
   tokens: z.array(z.string()).max(200),
@@ -185,6 +186,7 @@ export type Message = {
   state: MessageState | null;
   created_at: number;
   updated_at: number | null;
+  deleted_at: number | null;
 } & ({ enc: false; body: AgentMessageBody | HumanMessageBody } | { enc: true; body: string });
 
 export type Pairing = { code: string; expires_at: number };
@@ -196,3 +198,4 @@ export type ClaimPairingResponse = { channel: Channel; token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };
 export type AskResponse = { message: Message; answer: Message | null };
 export type SyncResponse = { cursor: string; messages: Message[]; revoked: string[] };
+export * from "./helpers.ts";

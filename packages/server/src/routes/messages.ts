@@ -14,7 +14,7 @@ import {
 } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { loadMessage, recordChanges, selectMessages, toMessage } from "../messages.ts";
+import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
 import { applyPatch } from "../patch.ts";
 import { now, randomId } from "../tokens.ts";
@@ -73,6 +73,7 @@ export function messageRoutes(deps: Deps) {
             state: null,
             created_at: now(),
             updated_at: null,
+            deleted_at: null,
           })
           .execute();
         if (ask) {
@@ -90,13 +91,12 @@ export function messageRoutes(deps: Deps) {
       const { channel, sender: reader } = c.var.auth;
       const since = c.req.query("since") === undefined ? undefined : Number(c.req.query("since"));
       const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
-      const pinned = c.req.query("pinned") === "1";
       const sender = c.req.query("sender") as Sender | undefined;
       if (sender && sender !== "agent" && sender !== "human") throw new HTTPException(400, { message: "sender must be agent or human" });
 
       const query = () => {
-        let q = selectMessages(db).where("messages.channel_id", "=", channel.id).limit(limit);
-        q = pinned ? q.where("messages.pin", "is not", null) : q.where("messages.pin", "is", null);
+        let q = selectLiveMessages(db).where("messages.channel_id", "=", channel.id).limit(limit);
+        q = q.where("messages.pin", "is", null);
         if (sender) q = q.where("messages.sender", "=", sender);
         return since === undefined
           ? q.orderBy("messages.seq", "desc").execute().then((rows) => rows.reverse())
@@ -147,6 +147,14 @@ export function messageRoutes(deps: Deps) {
       await recordChanges(deps, channel.id, [target.id]);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
     })
+    .delete("/messages/:id", agent, async (c) => {
+      const { channel } = c.var.auth;
+      const target = await loadAgentMessage(channel.id, c.req.param("id"));
+      await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", target.id).execute();
+      await db.updateTable("asks").set({ status: "cancelled", closed_at: now() }).where("message_id", "=", target.id).where("status", "=", "open").execute();
+      await recordChanges(deps, channel.id, [target.id]);
+      return c.body(null, 204);
+    })
     .post("/messages/:id/cancel", agent, async (c) => {
       const { channel } = c.var.auth;
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
@@ -172,7 +180,7 @@ export function messageRoutes(deps: Deps) {
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
     })
     .get("/asks", agent, async (c) => {
-      const rows = await selectMessages(db)
+      const rows = await selectLiveMessages(db)
         .where("messages.channel_id", "=", c.var.auth.channel.id)
         .where("asks.status", "=", "open")
         .orderBy("messages.seq", "asc")

@@ -1,5 +1,17 @@
 import { useId, useState } from "react";
-import { isInput, isKnownBlock, type Answers, type AskStatus, type Block } from "@rply/schema";
+import {
+  answeredCount,
+  collectAnswers,
+  inputDefaults,
+  inputsOf,
+  isInput,
+  isKnownBlock,
+  missingInputs,
+  submitsOnTap,
+  type Answers,
+  type AskStatus,
+  type Block,
+} from "@rply/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatValue } from "@/lib/format";
@@ -14,27 +26,16 @@ type Props = {
   onSubmit?: (answers: Answers) => void;
 };
 
-const isSimple = (block: Block) => (block.type === "choice" && !block.multi) || block.type === "confirm" || block.type === "html";
-
-const defaultOf = (block: Block): unknown => ("default" in block ? block.default : undefined);
-
 export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
-  const inputs = blocks.filter(isInput);
+  const inputs = inputsOf(blocks);
   const uid = useId();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const open = status === "open" && Boolean(onSubmit);
-  const autoSubmit = inputs.length === 1 && isSimple(inputs[0]!);
-  const defaults = status === "expired" ? Object.fromEntries(inputs.map((b) => [b.id!, defaultOf(b)]).filter(([, v]) => v !== undefined)) : {};
+  const autoSubmit = submitsOnTap(inputs);
+  const defaults = status === "expired" ? inputDefaults(inputs) : {};
   const shown: Record<string, unknown> = submitted ?? (open ? values : defaults);
 
-  const answersToSend = () =>
-    Object.fromEntries(
-      inputs
-        .map((b) => [b.id!, values[b.id!] ?? (b.type === "toggle" ? (b.default ?? false) : undefined)] as const)
-        .filter(([, v]) => v !== undefined && v !== ""),
-    ) as Answers;
-  const missing = inputs.filter((b) => "required" in b && b.required && (values[b.id!] === undefined || values[b.id!] === ""));
-  const answeredCount = inputs.filter((b) => values[b.id!] !== undefined && values[b.id!] !== "").length;
+  const missing = missingInputs(inputs, values);
 
   const change = (id: string, value: unknown) => {
     if (!open) return;
@@ -62,12 +63,12 @@ export function MessageBlocks({ blocks, status, submitted, onSubmit }: Props) {
 
       {open && !autoSubmit && (
         <div className="flex items-center gap-3">
-          <Button disabled={missing.length > 0} onClick={() => onSubmit!(answersToSend())}>
+          <Button disabled={missing.length > 0} onClick={() => onSubmit!(collectAnswers(inputs, values))}>
             {inputs.length > 1 ? "Send answers" : "Send"}
           </Button>
           {inputs.length > 1 && (
             <span className="text-muted-foreground text-xs">
-              {answeredCount} of {inputs.length} answered
+              {answeredCount(inputs, values)} of {inputs.length} answered
             </span>
           )}
         </div>

@@ -25,7 +25,7 @@ export function createClient(server: string, token?: string) {
     } catch (err) {
       throw new TransientError(`Can't reach ${server}: ${(err as Error).cause ?? (err as Error).message}`);
     }
-    const json = await res.json().catch(() => ({}));
+    const json = res.status === 204 ? {} : await res.json().catch(() => ({}));
     if (res.status >= 500) throw new TransientError(json.error ?? `Server error (${res.status})`);
     if (!res.ok) throw new CliError(json.error ?? `Request failed (${res.status})`);
     return json as T;

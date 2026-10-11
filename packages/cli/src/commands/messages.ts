@@ -8,6 +8,7 @@ import { deadlineFrom, printJson, readJson } from "../io.ts";
 export function registerMessages(program: Command) {
   program
     .command("send")
+    .allowUnknownOption()
     .description("send a message to the human")
     .argument("[text]", "message text, markdown supported")
     .option("--title <title>", "bold title above the text")
@@ -22,6 +23,7 @@ export function registerMessages(program: Command) {
 
   program
     .command("edit")
+    .allowUnknownOption()
     .description("change a message you sent, e.g. to update progress")
     .argument("<message-id>")
     .argument("[text]", "new text")
@@ -40,6 +42,15 @@ export function registerMessages(program: Command) {
       const { message } = await connect().client.request<{ message: Message }>("PATCH", `/messages/${id}`, body);
       if (json()) return printJson(message);
       console.log(`Updated (id: ${message.id})`);
+    });
+
+  program
+    .command("delete")
+    .description("delete a message you sent (an unanswered question is withdrawn)")
+    .argument("<message-id>")
+    .action(async (id: string) => {
+      await connect().client.request("DELETE", `/messages/${id}`);
+      if (!json()) console.log("Deleted");
     });
 
   program

@@ -137,23 +137,46 @@ test("agents edit their messages and edits reach sync", async () => {
   assert.equal((await request("PATCH", `/messages/${id}`, { token: agent, body: { block_patches: [{ id: "nope" }] } })).status, 400);
 });
 
-test("the status page is a pinned message kept out of the thread", async () => {
+test("pinned messages are managed by key, kept out of the thread and removable", async () => {
   const { request, pairedChannel } = await setup();
   const { agent, human } = await pairedChannel();
 
-  await request("PUT", "/status", {
+  await request("PUT", "/pins/status", {
     token: agent,
-    body: { body: { blocks: [{ type: "heading", text: "SEO" }, { type: "progress", id: "pages", value: 10 }] } },
+    body: { body: { title: "SEO", blocks: [{ type: "progress", id: "pages", value: 10 }] } },
   });
-  assert.equal((await request("PATCH", "/status", { token: agent, body: { blocks: [{ id: "pages", value: 42 }] } })).status, 200);
-  assert.equal((await request("PATCH", "/status", { token: agent, body: { blocks: [{ id: "pages", value: "lots" }] } })).status, 400);
+  await request("PUT", "/pins/todo", { token: agent, body: { body: { text: "- ship v2" } } });
+  assert.equal((await request("PATCH", "/pins/status", { token: agent, body: { block_patches: [{ id: "pages", value: 42 }] } })).status, 200);
+  assert.equal((await request("PATCH", "/pins/status", { token: agent, body: { block_patches: [{ id: "pages", value: "lots" }] } })).status, 400);
+  assert.equal((await request("PUT", "/pins/Bad Key", { token: agent, body: { body: { text: "x" } } })).status, 400);
+  assert.equal((await request("PUT", "/pins/status", { token: human, body: { body: { text: "x" } } })).status, 403);
 
-  const { json } = await request("GET", "/status", { token: human });
-  assert.equal(json.status.pin, "status");
-  assert.equal(json.status.body.blocks[1].value, 42);
+  const pins = (await request("GET", "/pins", { token: human })).json.messages;
+  assert.deepEqual(pins.map((m: any) => m.pin), ["status", "todo"]);
+  assert.equal(pins[0].body.blocks[0].value, 42);
   assert.equal((await request("GET", "/messages", { token: human })).json.messages.length, 0);
-  assert.equal((await request("GET", "/messages?pinned=1", { token: human })).json.messages.length, 1);
-  assert.equal((await request("PUT", "/status", { token: human, body: { body: { blocks: [] } } })).status, 403);
+
+  const initial = await request("POST", "/sync", { body: { tokens: [human] } });
+  assert.equal((await request("DELETE", "/pins/todo", { token: agent })).status, 204);
+  const synced = await request("POST", "/sync", { body: { tokens: [human], cursor: initial.json.cursor } });
+  assert.equal(synced.json.messages[0].pin, "todo");
+  assert.ok(synced.json.messages[0].deleted_at);
+  assert.deepEqual((await request("GET", "/pins", { token: human })).json.messages.map((m: any) => m.pin), ["status"]);
+});
+
+test("agents delete their own messages, which also withdraws questions", async () => {
+  const { request, pairedChannel } = await setup();
+  const { agent, human } = await pairedChannel();
+  const ask = await request("POST", "/messages", { token: agent, body: { body: { text: "Oops", blocks: [choice()] } } });
+  const id = ask.json.message.id;
+  const mine = await request("POST", "/messages", { token: human, body: { body: { text: "hi" } } });
+
+  assert.equal((await request("DELETE", `/messages/${mine.json.message.id}`, { token: agent })).status, 400);
+  assert.equal((await request("DELETE", `/messages/${id}`, { token: human })).status, 403);
+  assert.equal((await request("DELETE", `/messages/${id}`, { token: agent })).status, 204);
+  assert.deepEqual((await request("GET", "/messages", { token: human })).json.messages.map((m: any) => m.body.text), ["hi"]);
+  assert.equal((await request("POST", "/messages", { token: human, body: { reply_to: id, body: { answers: { choice: "Yes" } } } })).status, 404);
+  assert.equal((await request("GET", "/asks", { token: agent })).json.messages.length, 0);
 });
 
 test("sync covers several channels and reports revoked tokens", async () => {
@@ -194,7 +217,7 @@ test("the admin token sees and talks to every channel", async () => {
   await request("POST", "/messages", { token: b.agent, body: { body: { text: "from b" } } });
   assert.deepEqual((await asAdmin("GET", "/messages", b.channel.id)).json.messages.map((m: any) => m.body.text), ["from b"]);
   assert.equal((await asAdmin("POST", "/messages", a.channel.id, { body: { text: "hi a" } })).json.message.sender, "human");
-  assert.equal((await asAdmin("PUT", "/status", a.channel.id, { body: { blocks: [] } })).status, 403);
+  assert.equal((await asAdmin("PUT", "/pins/status", a.channel.id, { body: { blocks: [] } })).status, 403);
 
   const initial = await request("POST", "/sync", { token: "secret", body: { tokens: [] } });
   const waiting = request("POST", "/sync", { token: "secret", body: { tokens: [], cursor: initial.json.cursor, wait: 5 } });

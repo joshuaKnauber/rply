@@ -4,7 +4,7 @@ import { CliError } from "./client.ts";
 import { registerAsks } from "./commands/asks.ts";
 import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
-import { registerStatus } from "./commands/status.ts";
+import { registerPins } from "./commands/pins.ts";
 import { setGlobalOptions } from "./context.ts";
 import { checkForUpdate, registerUpdate, updateNotice, VERSION } from "./update.ts";
 
@@ -21,7 +21,7 @@ const program = new Command()
 registerSetup(program);
 registerMessages(program);
 registerAsks(program);
-registerStatus(program);
+registerPins(program);
 registerUpdate(program);
 
 const update = checkForUpdate().catch(() => undefined);

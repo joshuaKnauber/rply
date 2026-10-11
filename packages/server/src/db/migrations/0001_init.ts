@@ -53,6 +53,7 @@ export async function up(db: Kysely<any>) {
     .addColumn("state", "text")
     .addColumn("created_at", "bigint", (c) => c.notNull())
     .addColumn("updated_at", "bigint")
+    .addColumn("deleted_at", "bigint")
     .execute();
   await db.schema.createIndex("messages_channel_seq").on("messages").columns(["channel_id", "seq"]).execute();
   await db.schema.createIndex("messages_reply_to").on("messages").column("reply_to").execute();

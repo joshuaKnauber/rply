@@ -2,7 +2,7 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { Link, Stack, router } from "expo-router";
 import type { Message } from "@rply/schema";
 import { useChannels, useReadSeqs } from "@/lib/channels";
-import { formatTime, preview } from "@/lib/format";
+import { askStatus, formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
 
 export default function Inbox() {
@@ -13,9 +13,10 @@ export default function Inbox() {
   const rows = channels
     .map((entry, i) => {
       const messages: Message[] = results[i]?.data ?? [];
-      const last = messages.at(-1);
+      const last = messages.filter((m) => !isAnswer(m)).at(-1);
       const unread = messages.filter((m) => m.sender === "agent" && m.seq > (readSeqs[entry.channel.id] ?? 0)).length;
-      return { entry, last, unread };
+      const waiting = messages.some((m) => askStatus(m.ask) === "open");
+      return { entry, last, unread, waiting };
     })
     .sort((a, b) => (b.last?.created_at ?? b.entry.channel.created_at) - (a.last?.created_at ?? a.entry.channel.created_at));
 
@@ -47,7 +48,7 @@ export default function Inbox() {
             </Text>
           </View>
         }
-        renderItem={({ item: { entry, last, unread } }) => (
+        renderItem={({ item: { entry, last, unread, waiting } }) => (
           <Pressable
             onPress={() => router.push(`/channel/${entry.channel.id}`)}
             className="gap-0.5 border-b border-neutral-200 px-4 py-3 active:bg-neutral-100 dark:border-neutral-800 dark:active:bg-neutral-900"
@@ -62,6 +63,7 @@ export default function Inbox() {
               <Text numberOfLines={1} className="flex-1 text-neutral-500 dark:text-neutral-400">
                 {entry.revoked ? "Access revoked" : last ? preview(last) : "No messages yet"}
               </Text>
+              {waiting && <Text className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">Needs reply</Text>}
               {unread > 0 && (
                 <View className="rounded-full bg-neutral-900 px-1.5 dark:bg-neutral-100">
                   <Text className="text-xs font-medium text-white dark:text-neutral-900">{unread}</Text>

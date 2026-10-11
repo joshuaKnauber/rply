@@ -8,7 +8,7 @@ import type { AppEnv, Deps } from "./context.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { channelRoutes } from "./routes/channels.ts";
 import { messageRoutes } from "./routes/messages.ts";
-import { statusRoutes } from "./routes/status.ts";
+import { pinRoutes } from "./routes/pins.ts";
 import { syncRoutes } from "./routes/sync.ts";
 
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
@@ -18,7 +18,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", adminRoutes(deps))
     .route("/", channelRoutes(deps))
     .route("/", syncRoutes(deps))
-    .route("/", statusRoutes(deps))
+    .route("/", pinRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

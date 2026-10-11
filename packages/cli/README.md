@@ -1,6 +1,6 @@
 # rply
 
-Talk to the human behind your agent. Send updates, ask questions and wait for answers, and keep a live status page, all from a shell. The human reads and replies in the rply web app (and soon the mobile app).
+Talk to the human behind your agent. Send updates, ask questions and wait for answers, and pin live-updating messages to the top of the chat, all from a shell. The human reads and replies in the rply web or mobile app.
 
 rply is self-hosted: you run the server (one Docker image with SQLite), and agents talk to it through this CLI.
 
@@ -19,18 +19,31 @@ Or run it without installing: `npx @rply/cli <command>`.
 
 ```sh
 rply send "Deployed **3** pages" [--title Update] [--blocks blocks.json]
-rply ask "Publish these drafts?" --buttons Yes,No --wait      # prints: Yes
-rply ask "Which domain should I add?" --wait                  # free-text answer
-rply ask "New project" --form fields.json --wait              # prints the answers as JSON
-rply ask "Deploy tonight?" --buttons Yes,No                   # returns at once, prints an id
-rply wait <id> [--timeout 1h]                                 # answer to an earlier ask
-rply inbox [--wait] [--timeout 10m]                           # new messages from the human
-rply listen                                                   # stream messages as they arrive
-rply status set status.json                                   # replace the status page
-rply status patch '{"id":"pages","value":42}'                 # update one block by id
-rply status get
+rply edit <id> "Deploying…" --patch '{"id":"progress","value":7}'   # update a message in place
+rply delete <id>
+
+rply ask "Publish these drafts?" --choices Publish,Skip --wait     # prints: Publish
+rply ask "Which sections?" --choices Hero,Pricing,FAQ --multi --wait
+rply ask "Delete 40 pages?" --confirm Delete --danger --wait
+rply ask "Which domain should I add?" --wait                      # free-text answer
+rply ask "New page" --blocks questions.json --wait                # several questions, prints JSON keyed by block id
+rply ask "Deploy tonight?" --choices Yes,No --default No --timeout 2h --wait
+rply ask "Later?" --choices a,b                                   # returns at once, prints an id
+rply wait <id> | asks | cancel <id>
+
+rply inbox [--wait] [--timeout 10m]                               # new messages from the human, marked as seen
+rply ack <id> working|done                                        # show the human you're on it
+rply listen
+
+rply pin set overview "Weekly numbers" --blocks overview.json     # pinned to the top of the chat
+rply pin patch overview --patch '{"id":"pages","value":42}'
+rply pin remove overview | pin list
+rply status set|patch|get                                         # shortcut for the pin "status"
+
 rply pair | whoami | update
 ```
+
+Exit codes: 2 when a question expired without a default or `--timeout` ran out, 3 when it was cancelled.
 
 ## Several channels
 
@@ -48,7 +61,7 @@ Add `--json` to any command for machine-readable output. Exit code 2 means a `--
 
 ## Blocks
 
-Messages and status pages are lists of typed blocks: `markdown`, `heading`, `buttons`, `form`, `progress`, `keyvalue`, `table`, `code`, `link`.
+Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `progress`, `keyvalue`, `table`, `code`, `link`, `html` (sandboxed; call `rply.reply(value)` inside it to answer). Questions: `choice`, `text_input`, `number_input`, `toggle`, `confirm`. Several question blocks in one message are answered together.
 
 ```json
 [

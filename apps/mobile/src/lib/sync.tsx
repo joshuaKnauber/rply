@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Message, SyncResponse } from "@rply/schema";
+import type { SyncResponse } from "@rply/schema";
 import { api } from "./api";
 import { markRevoked, useOwners, type StoredChannel } from "./channels";
-import { mergeMessages, statusKey } from "./queries";
+import { applySynced } from "./queries";
 
 export function SyncAll({ channels }: { channels: StoredChannel[] }) {
   const owners = useOwners();
@@ -36,10 +36,7 @@ function SyncServer({ server, tokens, adminToken }: { server: string; tokens: st
             signal: controller.signal,
           });
           cursor = res.cursor;
-          for (const [channelId, messages] of groupBy(res.messages, (m) => m.channel_id)) {
-            mergeMessages(queryClient, channelId, messages);
-          }
-          for (const status of res.statuses) queryClient.setQueryData(statusKey(status.channel_id), status);
+          applySynced(queryClient, res.messages);
           if (res.revoked.length) markRevoked(res.revoked);
         } catch {
           if (controller.signal.aborted) return;
@@ -52,10 +49,4 @@ function SyncServer({ server, tokens, adminToken }: { server: string; tokens: st
   }, [server, tokensKey, adminToken, queryClient]);
 
   return null;
-}
-
-function groupBy(messages: Message[], key: (m: Message) => string) {
-  const groups = new Map<string, Message[]>();
-  for (const m of messages) groups.set(key(m), [...(groups.get(key(m)) ?? []), m]);
-  return groups;
 }

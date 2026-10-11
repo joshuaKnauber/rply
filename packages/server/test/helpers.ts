@@ -17,7 +17,8 @@ export async function setup() {
       },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
-    return { status: res.status, json: (await res.json()) as any };
+    const text = await res.text();
+    return { status: res.status, json: (text ? JSON.parse(text) : null) as any };
   };
 
   const pairedChannel = async (name = "test") => {

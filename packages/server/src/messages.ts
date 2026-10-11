@@ -25,6 +25,7 @@ export function toMessage(row: JoinedRow): Message {
     state: row.state,
     created_at: Number(row.created_at),
     updated_at: row.updated_at === null ? null : Number(row.updated_at),
+    deleted_at: row.deleted_at === null ? null : Number(row.deleted_at),
     ask: row.ask_status
       ? {
           status: expired ? "expired" : row.ask_status,
@@ -32,12 +33,18 @@ export function toMessage(row: JoinedRow): Message {
           answer_id: row.ask_answer_id,
         }
       : null,
-    ...(row.enc ? { enc: true as const, body: row.body } : { enc: false as const, body: JSON.parse(row.body) }),
+    ...(row.deleted_at !== null
+      ? { enc: false as const, body: {} }
+      : row.enc
+        ? { enc: true as const, body: row.body }
+        : { enc: false as const, body: JSON.parse(row.body) }),
   };
 }
 
+export const selectLiveMessages = (db: DB) => selectMessages(db).where("messages.deleted_at", "is", null);
+
 export async function loadMessage(db: DB, channelId: string, id: string) {
-  const row = await selectMessages(db).where("messages.id", "=", id).where("messages.channel_id", "=", channelId).executeTakeFirst();
+  const row = await selectLiveMessages(db).where("messages.id", "=", id).where("messages.channel_id", "=", channelId).executeTakeFirst();
   if (!row) throw new HTTPException(404, { message: "Message not found" });
   return row;
 }

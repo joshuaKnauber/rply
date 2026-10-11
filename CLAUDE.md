@@ -54,7 +54,7 @@ No existing tool combines all of: (1) one self-hosted server deployable anywhere
 4. **Mobile app** (React Native / Expo): the same features plus push notifications. Built after the web app.
 5. **Messages**: agent sends text or markdown plus components; human replies with free text or by interacting with components.
 6. **Ask and wait**: agent asks a question and blocks or waits until answered, with a non-blocking "check inbox later" path as well.
-7. **Status page per channel**: agent publishes or updates a live page made of the same components (replaces the custom exe.dev website).
+7. **Pinned messages per channel**: agent pins live-updating messages made of the same components to the top of the chat (replaces the custom exe.dev website).
 8. **Human → agent messages**: human can message the agent at any time (e.g. "add project X"); the agent receives them through the CLI (`listen`, `inbox`, or a long-poll).
 9. **Secret requests**: see section 7. A core differentiator.
 
@@ -232,11 +232,12 @@ rply edit <message-id> [text] [--patch '{"id":"p","value":7}']
 rply ack <message-id> working|done
 rply whoami
 rply channels [use|remove <name>]    # several channels per machine, --channel <name> on any command
-rply status get
 rply inbox [--wait] [--since <cursor>]  # read human → agent messages
 rply listen                             # stream incoming messages (JSONL)
-rply status set status.json             # replace the status page
-rply status patch '{"id":"pages","value":42}'
+rply pin set overview "text" [--title ..] [--blocks file.json]   # pinned to the top of the chat
+rply pin patch overview --patch '{"id":"pages","value":42}' | pin remove overview | pin list
+rply status set|patch|get                # shortcut for the pin "status"
+rply delete <message-id>
 rply secret request NAME --to .env [--reason ".."] [--wait]
 rply e2e enable
 ```
@@ -252,7 +253,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
 - `PUT|PATCH /v1/messages/:id` (agent edits), `POST /v1/messages/:id/cancel` (agent cancels a question), `POST /v1/messages/:id/state` (agent: seen|working|done on a human message)
 - `GET /v1/asks` (agent: open questions), `GET /v1/asks/:id?wait=60` (agent: long-poll until answered, expired or cancelled → `{ message, answer }`)
-- `PUT /v1/status`, `PATCH /v1/status`, `GET /v1/status` (the pinned `status` message)
+- `GET /v1/pins`, `PUT|PATCH|DELETE /v1/pins/:key` (agent; keys are 1-32 of `a-z0-9_-`), `DELETE /v1/messages/:id` (agent, soft delete)
 - `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
 - later: `POST /v1/secrets/requests`, `POST /v1/secrets/:id/fulfil`, `GET /v1/secrets/:id?wait=`, `POST /v1/devices`, `/mcp`
 
@@ -263,8 +264,8 @@ human_tokens    id, channel_id, token_hash, label, created_at, last_seen_at, rev
 pairing_codes   code_hash, channel_id, expires_at, used_at
 api_keys        id, token_hash, owner_id (null), label, created_at
 messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), enc,
-                body (JSON text or ciphertext), reply_to, pin (null | 'status' | ...), state (human msgs: seen|working|done),
-                created_at, updated_at
+                body (JSON text or ciphertext), reply_to, pin (null | key), state (human msgs: seen|working|done),
+                created_at, updated_at, deleted_at
 asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 -- later:
@@ -276,7 +277,7 @@ secret_requests id, channel_id, name, target, reason, ciphertext, status, expire
 - **Blocks** are an open list of `{ type, id?, ...fields }`. Display blocks: `markdown`, `heading`, `code`, `link`, `progress`, `keyvalue`, `table`, `html`. Input blocks (need an `id`): `choice` (options with `description`/`danger`, `multi`, `other`, `default`), `text_input`, `number_input`, `toggle`, `confirm`, and `html` when it has an `id`. The server validates known types and **accepts unknown types**; apps render unknown types as an "update the app" placeholder, so new block types don't need a coordinated release.
 - **Questions**: an agent message containing input blocks is an ask (detected from plaintext, or declared with `ask: { expires_at }` for E2E). One message can hold several questions. The human answers **once per message** with `{ reply_to, body: { answers: { <block id>: value } } }`; the first answer wins (later ones get 409), expired and cancelled questions also refuse answers. `default` values live in the blocks and are applied by the CLI on expiry. Apps auto-submit when a message has exactly one simple input (single choice, confirm, html), otherwise they show one "Send answers" button.
 - **Editable messages**: agents can `PATCH` (title/text/blocks, or `block_patches` merged by id) or `PUT` (full replace, for E2E) their own messages. Every change writes a `changes` row, and `/v1/sync` returns the current state of changed messages, so edits, ask status and acknowledgements reach all clients live.
-- **Status page = pinned message** with `pin = 'status'`, kept out of the thread. More pages later are more pin keys.
+- **Pinned messages instead of a status page**: an agent pins messages by key (`PUT /pins/:key`). They float at the top of the chat in both apps (collapsible) and are kept out of the thread. `status` is just a conventional key. Unpinning soft-deletes the message (`deleted_at`); agents can also delete any message they sent, which withdraws an open question. Sync delivers deletions as messages with `deleted_at` set, and clients drop them.
 - **Acknowledgements**: reading the inbox (without `peek`) marks human messages `seen`; the agent sets `working` / `done` with `rply ack`.
 
 ## 12. Development
@@ -287,6 +288,9 @@ secret_requests id, channel_id, name, target, reason, ciphertext, status, expire
 - Server env: `PORT` (8080), `RPLY_DB` (path to the SQLite file), `RPLY_ADMIN_TOKEN` (optional), `RPLY_WEB_DIR` (defaults to `apps/web/dist`).
 - Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`) + TanStack Query + wouter. Paired channels, read positions and the optional admin token live in localStorage (`src/lib/channels.ts`, built on `src/lib/store.ts`). Requests use `auth(entry)`, which adds `X-Rply-Channel` for admin entries. One `/v1/sync` long-poll loop (`src/lib/sync.ts`) upserts changed messages into the query cache (`applySynced`; the pinned `status` message goes to the status query). Blocks render through `components/blocks/MessageBlocks.tsx` (question state, auto-submit vs "Send answers", answered/expired/cancelled), `Inputs.tsx` and `HtmlBlock.tsx` (sandboxed `iframe` with `sandbox="allow-scripts"` and `srcdoc`, plus a bridge exposing `rply.reply(value)` and `rply.resize(height)` through `postMessage`). Answer messages are hidden in the thread and shown inside their question.
 - Server tests use `app.request()` against an in-memory database (`packages/server/test`).
+- Shared client logic lives in `packages/schema/src/helpers.ts` (ask status incl. client-side expiry, defaults, collecting answers, required checks, the submit-on-tap rule, previews). Web, mobile and CLI import it from `@rply/schema`; keep UI-free logic there instead of duplicating it per app. `helpers.ts` imports only types from `index.ts` to avoid a require cycle.
+- Mobile renders markdown with `react-native-marked` and `html` blocks in a `react-native-webview` WebView (same `rply.reply` / `rply.resize` bridge via `ReactNativeWebView.postMessage`; navigation away is blocked and http(s) links open externally). `HtmlBlock.web.tsx` uses a sandboxed iframe for the Expo web build. If changes don't show up in Expo, restart with `npx expo start --clear` (stale Metro cache).
+- CLI commands whose main argument is free text (`send`, `ask`, `edit`, `pin set/patch`) use `allowUnknownOption()` so text starting with `-` (markdown lists) isn't parsed as an option.
 - Mobile app (`apps/mobile`, Expo SDK 57): Expo Router (routes in `src/app`), Uniwind for Tailwind v4 classes (`metro.config.js`, `src/global.css`, generated `src/uniwind-types.d.ts`), TanStack Query, expo-secure-store. Run with `npm run dev:mobile` and open in Expo Go, or press `w` for web (storage falls back to localStorage there). Add native packages with `npx expo install` inside `apps/mobile`. `apps/mobile/AGENTS.md` has Expo's own guidance: check the SDK 57 docs instead of relying on memory.
 - Unlike the web app, the mobile app talks to several servers. Each stored channel carries its `server`, owner sessions are per server, and `src/lib/sync.tsx` runs one sync loop per server.
 - The whole repo uses one React version, pinned by root `overrides` to what Expo requires (19.2.3). Two copies of React in the mobile bundle break hooks, so bump it together with the Expo SDK.

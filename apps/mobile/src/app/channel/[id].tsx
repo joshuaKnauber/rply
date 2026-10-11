@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import type { Message } from "@rply/schema";
-import { BlockView } from "@/components/BlockView";
+import type { Answers, Message, MessageState } from "@rply/schema";
+import { Markdown } from "@/components/Markdown";
+import { MessageBlocks } from "@/components/MessageBlocks";
 import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
-import { formatTime, formatValue } from "@/lib/format";
-import { useMessages, useSendMessage, useStatus } from "@/lib/queries";
+import { askStatus, formatTime, isAnswer } from "@/lib/format";
+import { useMessages, usePins, useSendMessage } from "@/lib/queries";
 
 export default function ChannelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const entry = useChannels().find((c) => c.channel.id === id);
-  const [tab, setTab] = useState<"chat" | "status">("chat");
 
   if (!entry) return <Text className="p-6 text-neutral-500">Channel not found.</Text>;
 
@@ -34,15 +34,47 @@ export default function ChannelScreen() {
               ),
         }}
       />
-      <View className="flex-row gap-1 border-b border-neutral-200 p-2 dark:border-neutral-800">
-        {(["chat", "status"] as const).map((t) => (
-          <Pressable key={t} onPress={() => setTab(t)} className={`flex-1 items-center rounded-md py-1.5 ${tab === t ? "bg-neutral-100 dark:bg-neutral-800" : ""}`}>
-            <Text className={`font-medium capitalize ${tab === t ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500"}`}>{t}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {tab === "chat" ? <Thread entry={entry} /> : <StatusView entry={entry} />}
+      <Pinned entry={entry} />
+      <Thread entry={entry} />
     </KeyboardAvoidingView>
+  );
+}
+
+function Pinned({ entry }: { entry: StoredChannel }) {
+  const { data: pins = [] } = usePins(entry);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [contentHeight, setContentHeight] = useState(0);
+  if (pins.length === 0) return null;
+
+  return (
+    <View className="border-b border-neutral-200 dark:border-neutral-800">
+      <ScrollView style={{ height: Math.min(contentHeight, 320) }} onContentSizeChange={(_, h) => setContentHeight(h)} contentContainerClassName="gap-2 p-2">
+      {pins.map((message) => {
+        const body = message.enc ? null : message.body;
+        const title = (body && "title" in body && body.title) || (message.pin === "status" ? "Status" : message.pin);
+        const expanded = open[message.id] ?? true;
+        return (
+          <View key={message.id} className="rounded-xl border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
+            <Pressable onPress={() => setOpen((o) => ({ ...o, [message.id]: !expanded }))} className="flex-row items-center gap-2 px-3 py-2">
+              <Text className="text-neutral-500">📌</Text>
+              <Text numberOfLines={1} className="flex-1 font-medium text-neutral-900 dark:text-neutral-100">
+                {title}
+              </Text>
+              <Text className="text-xs text-neutral-500">{formatTime(message.updated_at ?? message.created_at)}</Text>
+              <Text className="text-neutral-500">{expanded ? "▾" : "▸"}</Text>
+            </Pressable>
+            {expanded && (
+              <View className="gap-3 px-3 pb-3">
+                {!body && <Text className="italic text-neutral-500">Encrypted</Text>}
+                {body?.text && <Markdown text={body.text} />}
+                {body && "blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={null} /> : null}
+              </View>
+            )}
+          </View>
+        );
+      })}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -52,20 +84,17 @@ function Thread({ entry }: { entry: StoredChannel }) {
   const [text, setText] = useState("");
   const list = useRef<FlatList<Message>>(null);
 
-  const answers = useMemo(() => {
-    const map = new Map<string, unknown>();
-    for (const m of messages) {
-      if (m.enc || m.sender !== "human" || !m.reply_to || !("action" in m.body) || !m.body.action) continue;
-      const key = `${m.reply_to}:${m.body.action.element_id}`;
-      if (!map.has(key)) map.set(key, m.body.action.value);
-    }
-    return map;
-  }, [messages]);
+  const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
+  const visible = messages.filter((m) => !isAnswer(m));
+  const waiting = visible.filter((m) => askStatus(m.ask) === "open");
 
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
     if (lastSeq) markRead(entry.channel.id, lastSeq);
   }, [lastSeq, entry.channel.id]);
+
+  const answer = (message: Message) => (answers: Answers) =>
+    send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
 
   const submit = () => {
     if (!text.trim()) return;
@@ -77,7 +106,7 @@ function Thread({ entry }: { entry: StoredChannel }) {
     <View className="flex-1">
       <FlatList
         ref={list}
-        data={messages}
+        data={visible}
         keyExtractor={(m) => m.id}
         contentContainerClassName="gap-3 p-4"
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
@@ -85,11 +114,21 @@ function Thread({ entry }: { entry: StoredChannel }) {
         renderItem={({ item }) => (
           <MessageView
             message={item}
-            answers={answers}
-            onAction={entry.revoked ? undefined : (elementId, value) => send.mutate({ reply_to: item.id, body: { action: { element_id: elementId, value: value as never } } })}
+            submitted={item.ask?.answer_id ? answersById.get(item.ask.answer_id) : undefined}
+            onAnswer={entry.revoked ? undefined : answer(item)}
           />
         )}
       />
+      {waiting.length > 0 && (
+        <Pressable
+          onPress={() => list.current?.scrollToIndex({ index: visible.indexOf(waiting[0]!), viewPosition: 0.3 })}
+          className="mx-3 mb-1 self-start rounded-full bg-neutral-100 px-3 py-1.5 dark:bg-neutral-800"
+        >
+          <Text className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {waiting.length === 1 ? "A question is waiting for you" : `${waiting.length} questions are waiting for you`}
+          </Text>
+        </Pressable>
+      )}
       {!entry.revoked && (
         <View className="flex-row items-end gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
           <TextInput
@@ -108,22 +147,25 @@ function Thread({ entry }: { entry: StoredChannel }) {
   );
 }
 
-function MessageView({ message, answers, onAction }: { message: Message; answers: Map<string, unknown>; onAction?: (elementId: string, value: unknown) => void }) {
+const stateLabels: Record<MessageState, { label: string; className: string }> = {
+  seen: { label: "Seen", className: "text-neutral-500" },
+  working: { label: "Working on it", className: "text-amber-600 dark:text-amber-400" },
+  done: { label: "Done ✓", className: "text-emerald-600 dark:text-emerald-400" },
+};
+
+function MessageView({ message, submitted, onAnswer }: { message: Message; submitted?: Answers; onAnswer?: (answers: Answers) => void }) {
   const fromAgent = message.sender === "agent";
   const textColor = fromAgent ? "text-neutral-900 dark:text-neutral-100" : "text-white dark:text-neutral-900";
+  const status = askStatus(message.ask);
 
   const content = (() => {
     if (message.enc) return <Text className="italic text-neutral-500">Encrypted message</Text>;
     const body = message.body;
-    if ("action" in body && body.action) return <Text className={textColor}>↳ {formatValue(body.action.value)}</Text>;
     return (
       <View className="gap-3">
         {"title" in body && body.title && <Text className={`font-semibold ${textColor}`}>{body.title}</Text>}
-        {body.text && <Text className={`text-[15px] leading-6 ${textColor}`}>{body.text}</Text>}
-        {"blocks" in body &&
-          body.blocks?.map((block, i) => (
-            <BlockView key={block.id ?? i} block={block} answer={block.id ? answers.get(`${message.id}:${block.id}`) : undefined} onAction={onAction} />
-          ))}
+        {body.text && (fromAgent ? <Markdown text={body.text} /> : <Text className={`text-[15px] leading-6 ${textColor}`}>{body.text}</Text>)}
+        {"blocks" in body && body.blocks?.length ? <MessageBlocks blocks={body.blocks} status={status} submitted={submitted} onSubmit={onAnswer} /> : null}
       </View>
     );
   })();
@@ -131,30 +173,17 @@ function MessageView({ message, answers, onAction }: { message: Message; answers
   return (
     <View className={`gap-1 ${fromAgent ? "items-start" : "items-end"}`}>
       <View
-        className={`max-w-[85%] rounded-2xl px-4 py-3 ${fromAgent ? "border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900" : "bg-neutral-900 dark:bg-neutral-100"}`}
+        className={`rounded-2xl px-4 py-3 ${status === "open" || message.ask ? "w-[90%]" : "max-w-[85%]"} ${
+          fromAgent ? "border bg-white dark:bg-neutral-900" : "bg-neutral-900 dark:bg-neutral-100"
+        } ${status === "open" ? "border-neutral-400 dark:border-neutral-500" : "border-neutral-200 dark:border-neutral-800"}`}
       >
         {content}
       </View>
-      <Text className="px-1 text-xs text-neutral-500">{formatTime(message.created_at)}</Text>
+      <Text className="px-1 text-xs text-neutral-500">
+        {formatTime(message.created_at)}
+        {message.updated_at ? " · edited" : ""}
+        {message.state && <Text className={stateLabels[message.state].className}> · {stateLabels[message.state].label}</Text>}
+      </Text>
     </View>
-  );
-}
-
-function StatusView({ entry }: { entry: StoredChannel }) {
-  const { data: status, isPending } = useStatus(entry);
-  return (
-    <ScrollView contentContainerClassName="gap-4 p-4">
-      {isPending && <Text className="text-neutral-500">Loading…</Text>}
-      {!isPending && !status && <Text className="text-neutral-500">This agent hasn't published a status page yet.</Text>}
-      {status?.enc && <Text className="italic text-neutral-500">Encrypted status page</Text>}
-      {status && !status.enc && (
-        <>
-          {status.body.blocks.map((block, i) => (
-            <BlockView key={block.id ?? i} block={block} />
-          ))}
-          <Text className="text-xs text-neutral-500">Updated {formatTime(status.updated_at)}</Text>
-        </>
-      )}
-    </ScrollView>
   );
 }

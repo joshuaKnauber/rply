@@ -1,9 +1,11 @@
-import { Route, Switch, useRoute } from "wouter";
+import { useEffect } from "react";
+import { Route, Switch, useLocation, useRoute } from "wouter";
 import { ChannelList } from "@/components/ChannelList";
 import { ChannelView } from "@/components/ChannelView";
 import { PairPage } from "@/components/PairPage";
 import { SetupCommand } from "@/components/SetupCommand";
 import { useChannels } from "@/lib/channels";
+import { registerServiceWorker, usePushSync } from "@/lib/push";
 import { useSync } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +22,19 @@ function Inbox() {
   const channels = useChannels();
   const [, params] = useRoute("/c/:id");
   const active = channels.find((c) => c.channel.id === params?.id);
-  useSync(channels);
+  const [, navigate] = useLocation();
+  useSync(channels, active?.channel.id);
+  usePushSync(channels);
+
+  useEffect(() => {
+    registerServiceWorker();
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "rply:open") navigate(new URL(e.data.url).pathname);
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [navigate]);
 
   return (
     <div className="flex h-full">

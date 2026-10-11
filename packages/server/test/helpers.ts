@@ -2,11 +2,13 @@ import { createApp } from "../src/app.ts";
 import { openDatabase } from "../src/db/index.ts";
 import { createNotifier } from "../src/notifier.ts";
 import type { FilesConfig } from "../src/files/config.ts";
+import { createPush, type PushSender } from "../src/push/index.ts";
 import type { ClaimPairingResponse, CreateChannelResponse } from "@rply/schema";
 
-export async function setup(opts: { files?: FilesConfig } = {}) {
+export async function setup(opts: { files?: FilesConfig; pushSend?: PushSender } = {}) {
   const db = await openDatabase(":memory:");
-  const deps = { db, notifier: createNotifier(), files: opts.files ?? null };
+  const push = opts.pushSend ? await createPush(db, { send: opts.pushSend }) : null;
+  const deps = { db, notifier: createNotifier(), files: opts.files ?? null, push };
   const app = createApp(deps);
 
   const request = async (method: string, path: string, opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {}) => {

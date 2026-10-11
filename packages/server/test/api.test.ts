@@ -404,3 +404,51 @@ test("files are refused when the server has them turned off", async () => {
   assert.equal((await upload(agent, "a.txt", "a")).status, 404);
   assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [{ type: "image", file_id: "x" }] } } })).status, 400);
 });
+
+test("web push: agent messages notify subscribed browsers, with suppression and cleanup", async () => {
+  const sent: { endpoint: string; payload: any }[] = [];
+  let failWith: number | null = null;
+  const pushSend = async (target: { endpoint: string }, payload: string) => {
+    if (failWith) throw Object.assign(new Error("gone"), { statusCode: failWith });
+    sent.push({ endpoint: target.endpoint, payload: JSON.parse(payload) });
+  };
+  const { db, request, pairedChannel } = await setup({ pushSend });
+  const a = await pairedChannel("SEO bot");
+  const b = await pairedChannel("Shop agent");
+  const sub = (endpoint: string) => ({ endpoint, keys: { p256dh: "BKey", auth: "auth" } });
+  const flush = () => delay(20);
+
+  assert.ok((await request("GET", "/info")).json.push.public_key);
+  assert.equal((await request("PUT", "/push/subscription", { body: { subscription: sub("https://push.example/none"), tokens: ["rply_h_bad"] } })).status, 400);
+  assert.equal((await request("PUT", "/push/subscription", { body: { subscription: sub("https://push.example/1"), tokens: [a.human] } })).status, 200);
+
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "Publish?", blocks: [choice()] } } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "quiet" }, silent: true } });
+  await request("POST", "/messages", { token: a.human, body: { body: { text: "from me" } } });
+  await request("POST", "/messages", { token: b.agent, body: { body: { text: "other channel" } } });
+  await flush();
+  assert.deepEqual(sent.map((s) => s.payload), [{ title: "SEO bot", body: "❓ Publish?", url: `/c/${a.channel.id}`, tag: a.channel.id }]);
+
+  sent.length = 0;
+  await request("POST", "/sync", { body: { tokens: [a.human], viewing: a.channel.id, push_endpoint: "https://push.example/1" } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "while viewing" } } });
+  await flush();
+  assert.equal(sent.length, 0);
+  await request("POST", "/sync", { body: { tokens: [a.human], viewing: null, push_endpoint: "https://push.example/1" } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "tab hidden" } } });
+  await flush();
+  assert.equal(sent[0]?.payload.body, "tab hidden");
+
+  await syncAdminToken(db, "secret");
+  await request("PUT", "/push/subscription", { token: "secret", body: { subscription: sub("https://push.example/owner"), tokens: [] } });
+  await syncAdminToken(db, "secret");
+  sent.length = 0;
+  await request("POST", "/messages", { token: b.agent, body: { body: { text: "for the owner" } } });
+  await flush();
+  assert.deepEqual(sent.map((s) => s.endpoint), ["https://push.example/owner"]);
+
+  failWith = 410;
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "gone" } } });
+  await flush();
+  assert.equal((await db.selectFrom("push_subscriptions").select("endpoint").execute()).length, 0);
+});

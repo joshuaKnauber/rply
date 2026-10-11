@@ -25,6 +25,7 @@ export function channelRoutes(deps: Deps) {
       const info: ServerInfo = {
         server_token_required: await serverTokenRequired(db),
         files: { enabled: Boolean(deps.files), max_size: deps.files?.maxSize ?? 0 },
+        push: deps.push ? { public_key: deps.push.publicKey } : null,
       };
       return c.json(info);
     })

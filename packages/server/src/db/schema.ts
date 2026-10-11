@@ -11,6 +11,8 @@ export interface Database {
   changes: ChangesTable;
   secret_requests: SecretRequestsTable;
   files: FilesTable;
+  settings: SettingsTable;
+  push_subscriptions: PushSubscriptionsTable;
 }
 
 interface ChannelsTable {
@@ -103,6 +105,21 @@ interface FilesTable {
   size: number;
   created_at: number;
   deleted_at: number | null;
+}
+
+interface SettingsTable {
+  key: string;
+  value: string;
+}
+
+interface PushSubscriptionsTable {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  human_token_id: string | null;
+  api_key_id: string | null;
+  created_at: number;
 }
 
 export type ChannelRow = Selectable<ChannelsTable>;

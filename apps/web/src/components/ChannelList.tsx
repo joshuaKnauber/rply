@@ -8,6 +8,7 @@ import { formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllMessages } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { AddChannelDialog } from "./AddChannelDialog";
+import { NotificationsButton } from "./NotificationsButton";
 import { OwnerButton } from "./OwnerButton";
 import { Bird } from "./Bird";
 
@@ -32,6 +33,7 @@ export function ChannelList({ channels, activeId }: { channels: StoredChannel[];
           rply
         </span>
         <div className="flex items-center gap-1">
+          <NotificationsButton channels={channels} />
           <OwnerButton />
           <AddChannelDialog
             trigger={

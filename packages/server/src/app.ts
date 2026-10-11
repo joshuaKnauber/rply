@@ -10,6 +10,7 @@ import { channelRoutes } from "./routes/channels.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { pinRoutes } from "./routes/pins.ts";
+import { pushRoutes } from "./routes/push.ts";
 import { secretRoutes } from "./routes/secrets.ts";
 import { syncRoutes } from "./routes/sync.ts";
 
@@ -23,6 +24,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", pinRoutes(deps))
     .route("/", secretRoutes(deps))
     .route("/", fileRoutes(deps))
+    .route("/", pushRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

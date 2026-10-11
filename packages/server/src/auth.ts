@@ -71,10 +71,10 @@ export async function requireServerToken(db: DB, header: string | undefined) {
 }
 
 export async function syncAdminToken(db: DB, token: string | undefined) {
-  await db.deleteFrom("api_keys").where("label", "=", "env:RPLY_ADMIN_TOKEN").execute();
+  const label = "env:RPLY_ADMIN_TOKEN";
+  const existing = await db.selectFrom("api_keys").select(["id", "token_hash"]).where("label", "=", label).executeTakeFirst();
+  if (token && existing?.token_hash === hashToken(token)) return;
+  await db.deleteFrom("api_keys").where("label", "=", label).execute();
   if (!token) return;
-  await db
-    .insertInto("api_keys")
-    .values({ id: randomId(), token_hash: hashToken(token), owner_id: null, label: "env:RPLY_ADMIN_TOKEN", created_at: now() })
-    .execute();
+  await db.insertInto("api_keys").values({ id: randomId(), token_hash: hashToken(token), owner_id: null, label, created_at: now() }).execute();
 }

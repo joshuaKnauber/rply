@@ -97,6 +97,7 @@ Clients wait for new things by holding a plain HTTP request open (`?wait=60`). T
 - The relay never sees message content, and self-hosters need no Apple or Google keys.
 - With Expo, the relay can forward to the Expo push API.
 - Self-hosters who build their own app can point at their own push credentials instead.
+- **Web Push needs none of this** (built): browsers accept pushes signed with the server's own VAPID key, so each self-hosted server pushes to its web app directly. See section 7c.
 
 ### Stack (decided)
 - **Language**: TypeScript everywhere.
@@ -154,6 +155,16 @@ Attachments both ways: agents attach images and files to messages and pins, the 
 - **Security**: only `image/png|jpeg|gif|webp` are served inline; everything else (SVG, HTML, ...) as `application/octet-stream` with `Content-Disposition: attachment`, `nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`, because uploads share the origin with the web app and its tokens.
 - Files are opaque bytes with the description (name, type) kept in the message, so E2E can later encrypt files client-side before upload.
 - Not built: thumbnails/resizing, virus scanning.
+
+## 7c. Web push notifications (built)
+
+The web app can notify about agent messages while the tab is closed (desktop browsers; on iPhone only once added to the Home Screen).
+- **VAPID**: the server generates a keypair on first start and keeps it in the `settings` table, or takes `RPLY_VAPID_PUBLIC_KEY` + `RPLY_VAPID_PRIVATE_KEY`. `RPLY_VAPID_SUBJECT` defaults to `https://rply.sh`. `RPLY_PUSH=off` disables it. `/v1/info` returns `push: { public_key } | null`. Sending uses the `web-push` library (`packages/server/src/push/`). Push services need HTTPS, except on `localhost`.
+- **Subscriptions are per browser, not per channel**: the bell in the sidebar subscribes once and `PUT /v1/push/subscription { subscription, tokens }` (plus the admin token as bearer when signed in) stores one row per credential. The web app re-sends it whenever its paired channels or admin sign-in change. Revoking a human token or rotating the admin token cascades to its rows; push services answering 404/410 delete the row.
+- **What notifies**: agent messages (`rply send --silent` / `silent: true` opts out) and secret requests. Title = channel name, body = preview (questions prefixed with ❓), click opens `/c/<id>`, `tag` = channel, so one notification per channel replaces the last. Content goes through the push service end-to-end encrypted (RFC 8291) but the server reads it; E2E channels will need a generic text.
+- **Presence**: `/v1/sync` sends `viewing` (the open channel while the tab is visible) and `push_endpoint`. The server skips that endpoint for that channel until the long-poll plus 15s runs out, so the channel you're looking at doesn't ping you.
+- **Web app**: `public/sw.js` (shows the notification, focuses an open tab via a `rply:open` message or opens one), `public/manifest.webmanifest` + icons (installable PWA, required for iOS push), `src/lib/push.ts`, `components/NotificationsButton.tsx`. The endpoint is stored as `rply.push` in localStorage.
+- Mobile push (relay, section 5) is separate and not built yet.
 
 ## 8. Channels, auth and E2E (decided)
 
@@ -217,7 +228,7 @@ rply.sh hosting is not part of v1, but the design leaves room for it:
 ```
 rply init <server-url> [--name ..] [--server-token ..] [--e2e]   # creates channel, prints QR + link
 rply pair                               # new pairing code for another device
-rply send "Deployed 3 new pages" [--title ..] [--priority high] [--blocks file.json]
+rply send "Deployed 3 new pages" [--title ..] [--blocks file.json] [--silent]
 rply ask "Publish these 5 pages?" --choices yes,no [--multi] [--other] [--default no] [--expires 2h] [--wait] [--timeout 1h]
 rply ask "Delete 40 pages?" --confirm Delete --danger --wait
 rply ask "New page" --blocks questions.json --wait   # several questions, prints JSON keyed by block id
@@ -254,7 +265,8 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/sync` (human tokens and/or admin token + cursor over the `changes` log, long-polls; returns changed messages)
 - `PUT /v1/channel/key` (agent: upload the X25519 public key), `POST /v1/secrets` (agent: create a request + secret message), `GET /v1/secrets/:id?wait=` (agent: long-poll; returns the ciphertext once provided), `POST /v1/secrets/:id/delivered|cancel` (agent), `POST /v1/secrets/:id/fulfil|decline` (human)
 - `POST /v1/files?name=` (either side, raw body), `GET /v1/files/:id` (either side of the file's channel)
-- later: `POST /v1/devices` (push), `/mcp`
+- `PUT /v1/push/subscription` (human tokens in the body and/or admin bearer), `DELETE /v1/push/subscription { endpoint }`
+- later: `POST /v1/devices` (mobile push), `/mcp`
 
 ### Data model
 ```
@@ -270,8 +282,10 @@ changes         seq, channel_id, message_id, created_at     -- one row per inser
 secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),
                 ciphertext (only while provided), expires_at, created_at, closed_at
 files           id, channel_id, message_id (first referencing message), uploader, name, mime, size, created_at, deleted_at
+settings        key, value                                   -- e.g. the VAPID keypair
+push_subscriptions id, endpoint, p256dh, auth, human_token_id | api_key_id (cascade), created_at
 -- later:
-devices         human_token_id, push_token, platform, created_at
+devices         human_token_id, push_token, platform, created_at   -- mobile push
 ```
 
 ### Messages, blocks and questions (decided)
@@ -288,7 +302,7 @@ devices         human_token_id, push_token, platform, created_at
 - Node 24+ runs the TypeScript directly (type stripping), so there is no build step for the server. Use `.ts` extensions in relative imports and only erasable syntax (no enums, no parameter properties).
 - `npm run dev:server` (watch mode, `rply.db` in the cwd) plus `npm run dev:web` (Vite on 5173, proxies `/v1` to 8080). `npm run build` builds the web app into `apps/web/dist`, which the server serves at `/` with an SPA fallback.
 - `npm test`, `npm run typecheck`.
-- Server env: `PORT` (8080), `RPLY_DB` (path to the SQLite file), `RPLY_ADMIN_TOKEN` (optional), `RPLY_WEB_DIR` (defaults to `apps/web/dist`).
+- Server env: `PORT` (8080), `RPLY_DB` (path to the SQLite file), `RPLY_ADMIN_TOKEN` (optional), `RPLY_WEB_DIR` (defaults to `apps/web/dist`), plus the files (7b) and push (7c) variables.
 - Web app: React + Vite + Tailwind v4 + shadcn (radix, nova preset, components in `src/components/ui`). Inter is the font everywhere. `src/index.css` defines the design tokens: a warm `gray-50…950` scale, semantic colors mapped onto it (plus `sidebar`), and an app-sized typescale (`text-sm` 13px, `text-base` 14px). Use these instead of raw colors or `text-[..]` sizes. Layout: a darker sidebar separated from the content by a single border. Prefer background tints (`bg-muted`) over borders; keep borders for form controls and table rows + TanStack Query + wouter. Paired channels, read positions and the optional admin token live in localStorage (`src/lib/channels.ts`, built on `src/lib/store.ts`). Requests use `auth(entry)`, which adds `X-Rply-Channel` for admin entries. One `/v1/sync` long-poll loop (`src/lib/sync.ts`) upserts changed messages into the query cache (`applySynced`; the pinned `status` message goes to the status query). Blocks render through `components/blocks/MessageBlocks.tsx` (question state, auto-submit vs "Send answers", answered/expired/cancelled), `Inputs.tsx` and `HtmlBlock.tsx` (sandboxed `iframe` with `sandbox="allow-scripts"` and `srcdoc`, plus a bridge exposing `rply.reply(value)` and `rply.resize(height)` through `postMessage`). Answer messages are hidden in the thread and shown inside their question.
 - Server tests use `app.request()` against an in-memory database (`packages/server/test`).
 - Shared client logic lives in `packages/schema/src/helpers.ts` (ask status incl. client-side expiry, defaults, collecting answers, required checks, the submit-on-tap rule, previews). Web, mobile and CLI import it from `@rply/schema`; keep UI-free logic there instead of duplicating it per app. `helpers.ts` imports only types from `index.ts` to avoid a require cycle.
@@ -320,7 +334,7 @@ devices         human_token_id, push_token, platform, created_at
 3. **Web app**: pairing via link or pasted code, channel list, thread, buttons/form rendering, replies, status page, live updates via `/v1/sync`. Served by the server. Deploy to Railway.
 4. **E2E**: channel key, `--e2e`, `e2e enable`, lock icon, downgrade warning.
 5. **Mobile app**: Expo app with the same features, QR scanning.
-6. **Push**: relay service plus wake-and-fetch, Expo notifications.
+6. **Push**: web push done; relay service plus wake-and-fetch, Expo notifications.
 7. **Secrets**: keypair on init, sealed-box encryption in the apps, `.env` writer, expiry.
 8. **Packaging**: one-line install, exe.dev / Hetzner / Railway guides, agent skill snippet.
 9. **Later**: hosted rply.sh with accounts and Postgres, remote MCP, `run --with-secrets`, MCP Apps.

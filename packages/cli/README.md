@@ -18,7 +18,7 @@ Or run it without installing: `npx @rply/cli <command>`.
 ## Commands
 
 ```sh
-rply send "Deployed **3** pages" [--title Update] [--blocks blocks.json]
+rply send "Deployed **3** pages" [--title Update] [--blocks blocks.json] [--silent]   # --silent: no push notification
 rply edit <id> "Deploying…" --patch '{"id":"progress","value":7}'   # update a message in place
 rply delete <id>
 

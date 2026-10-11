@@ -6,6 +6,7 @@ import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import type { DB } from "../db/index.ts";
 import { loadMessage, recordChanges, toMessage } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
+import { notifyAboutMessage } from "../push/notify.ts";
 import { now, randomId } from "../tokens.ts";
 
 type Stored = Exclude<SecretStatus, "expired">;
@@ -77,7 +78,9 @@ export function secretRoutes(deps: Deps) {
           .execute();
       });
       await recordChanges(deps, channel.id, [messageId]);
-      return c.json({ id, message: toMessage(await loadMessage(db, channel.id, messageId)) }, 201);
+      const message = toMessage(await loadMessage(db, channel.id, messageId));
+      notifyAboutMessage(deps, channel, message);
+      return c.json({ id, message }, 201);
     })
     .get("/secrets/:id", agent, async (c) => {
       const { channel } = c.var.auth;

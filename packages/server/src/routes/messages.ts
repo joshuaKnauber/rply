@@ -18,6 +18,7 @@ import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { longPoll } from "../notifier.ts";
+import { notifyAboutMessage } from "../push/notify.ts";
 import { applyPatch } from "../patch.ts";
 import { now, randomId } from "../tokens.ts";
 
@@ -97,7 +98,9 @@ export function messageRoutes(deps: Deps) {
 
       await linkFiles(deps, fileIds, id);
       await recordChanges(deps, channel.id, changed);
-      return c.json({ message: toMessage(await loadMessage(db, channel.id, id)) }, 201);
+      const message = toMessage(await loadMessage(db, channel.id, id));
+      if (sender === "agent" && !req.silent) notifyAboutMessage(deps, channel, message);
+      return c.json({ message }, 201);
     })
     .get("/messages", auth, async (c) => {
       const { channel, sender: reader } = c.var.auth;

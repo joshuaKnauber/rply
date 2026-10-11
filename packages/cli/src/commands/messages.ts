@@ -17,11 +17,12 @@ export function registerMessages(program: Command) {
     .option("--blocks <json|file|->", "blocks as a JSON array, a file path, or - for stdin")
     .option("--image <path>", "attach an image (repeatable)", collect, [])
     .option("--file <path>", "attach a file (repeatable)", collect, [])
-    .action(async (text: string | undefined, opts: { title?: string; blocks?: string; image: string[]; file: string[] }) => {
+    .option("--silent", "don't send a push notification for this message")
+    .action(async (text: string | undefined, opts: { title?: string; blocks?: string; image: string[]; file: string[]; silent?: boolean }) => {
       const attached = await attachmentBlocks(opts);
       const blocks = [...(opts.blocks ? parseBlocks(readJson(opts.blocks)) : []), ...attached];
       if (!text && blocks.length === 0) throw new CliError("Nothing to send, pass text, --blocks, --image or --file");
-      const message = await post({ title: opts.title, text, blocks: blocks.length ? blocks : undefined });
+      const message = await post({ title: opts.title, text, blocks: blocks.length ? blocks : undefined }, { silent: opts.silent });
       if (json()) return printJson(message);
       console.log(`Sent (id: ${message.id})`);
     });
@@ -113,7 +114,7 @@ export function registerMessages(program: Command) {
     });
 }
 
-export async function post(body: AgentMessageBody, extra: { ask?: { expires_at?: number } } = {}) {
+export async function post(body: AgentMessageBody, extra: { ask?: { expires_at?: number }; silent?: boolean } = {}) {
   const { client } = connect();
   const { message } = await client.request<{ message: Message }>("POST", "/messages", { body, ...extra });
   return message;

@@ -198,6 +198,7 @@ export const PostMessageRequest = z.intersection(
   z.object({
     reply_to: z.string().optional(),
     ask: z.object({ expires_at: z.number().int().optional() }).optional(),
+    silent: z.boolean().optional(),
   }),
 );
 export const ReplaceMessageRequest = Payload;
@@ -226,7 +227,18 @@ export const SyncRequest = z.object({
   tokens: z.array(z.string()).max(200),
   cursor: z.string().optional(),
   wait: z.number().min(0).max(60).optional(),
+  viewing: z.string().max(64).nullable().optional(),
+  push_endpoint: z.string().max(2000).nullable().optional(),
 });
+
+export const PushSubscriptionRequest = z.object({
+  subscription: z.object({
+    endpoint: z.url().max(2000),
+    keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+  }),
+  tokens: z.array(z.string()).max(200),
+});
+export const PushUnsubscribeRequest = z.object({ endpoint: z.string().max(2000) });
 
 export type Sender = "agent" | "human";
 export type AskStatus = "open" | "answered" | "expired" | "cancelled";
@@ -252,7 +264,11 @@ export type Message = {
 
 export type Pairing = { code: string; expires_at: number };
 
-export type ServerInfo = { server_token_required: boolean; files: { enabled: boolean; max_size: number } };
+export type ServerInfo = {
+  server_token_required: boolean;
+  files: { enabled: boolean; max_size: number };
+  push: { public_key: string } | null;
+};
 
 export type FileInfo = FileRef & { created_at: number };
 

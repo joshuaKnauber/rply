@@ -8,7 +8,7 @@ import { hashToken, now } from "../tokens.ts";
 
 const BATCH = 1000;
 
-export function syncRoutes({ db, notifier }: Deps) {
+export function syncRoutes({ db, notifier, push }: Deps) {
   return new Hono<AppEnv>().post("/sync", async (c) => {
     const req = parse(SyncRequest, await c.req.json());
 
@@ -30,11 +30,13 @@ export function syncRoutes({ db, notifier }: Deps) {
     const revoked = [...hashes].filter(([hash]) => !valid.has(hash)).map(([, token]) => token);
 
     const cursor = req.cursor ? Number(req.cursor) || 0 : await maxChange();
+    const wait = req.wait ?? 0;
+    if (push && req.push_endpoint) push.setPresence(req.push_endpoint, req.viewing ?? null, (wait + 15) * 1000);
 
     const changes = await longPoll({
       notifier,
       channelIds,
-      waitSeconds: req.wait ?? 0,
+      waitSeconds: wait,
       signal: c.req.raw.signal,
       fetch: () =>
         channelIds.length === 0

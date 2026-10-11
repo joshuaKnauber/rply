@@ -5,7 +5,7 @@ export type Method = "agent" | "here";
 
 const methods = [
   { value: "agent", icon: TerminalIcon, title: "On the agent's machine", description: "Run rply init, then pair this browser." },
-  { value: "here", icon: MonitorIcon, title: "In this browser", description: "Create it here, then send the agent a join command." },
+  { value: "here", icon: MonitorIcon, title: "In this browser", description: "Create it here, then give the agent a setup prompt." },
 ] as const;
 
 export function MethodPicker({ value, onChange }: { value: Method; onChange: (value: Method) => void }) {

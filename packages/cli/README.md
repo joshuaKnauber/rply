@@ -25,7 +25,7 @@ Each agent shows up in the app under a name, the machine's hostname unless you p
 
 Or run it without installing: `npx @rply/cli <command>`.
 
-Agents should start with `rply guide`, which explains the commands, blocks, HTML embeds and secrets. `rply guide --snippet` prints a few lines for your `AGENTS.md` or `CLAUDE.md`.
+On a new machine, agents should run `rply guide setup` and follow it: it installs a background service that runs scripts for apps and wakes the agent when you write. `rply guide` explains the commands, blocks, HTML embeds, apps and secrets, and `rply guide --snippet` prints a few lines for your `AGENTS.md` or `CLAUDE.md`.
 
 ## Commands
 
@@ -54,7 +54,7 @@ rply status set|patch|get                                         # shortcut for
 
 rply app set dashboard dashboard.html --title Dashboard           # full-page HTML app, shown as a tab
 rply app list | app remove <key> | app commands                   # app commands: where command scripts go
-rply serve                                                        # runs command scripts when an app calls rply.call()
+rply serve --install --on-message "claude -p '...'"               # background service: runs scripts for apps, wakes the agent on messages
 rply respond <call-id> '{"ok":true}'                              # answer a call that has no script
 
 rply secret request OPENAI_API_KEY --to .env --reason "for keyword research" --wait

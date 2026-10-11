@@ -6,7 +6,7 @@ import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from ".
 import { connect, json, requested } from "../context.ts";
 import { printJson, printPairing } from "../io.ts";
 
-const nextSteps = "\nNext: run `rply guide` to learn how to talk to the human.\nTip: `rply guide --snippet` prints lines for AGENTS.md or CLAUDE.md, so future sessions know about rply.";
+const nextSteps = "\nNext: run `rply guide setup` and follow it to finish setting up this machine.";
 
 function checkFree(key: string, force?: boolean) {
   const existing = readConfigFile().channels[key];

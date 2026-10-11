@@ -8,6 +8,7 @@ export type ChannelConfig = {
   token: string;
   channel?: { id: string; name: string };
   inbox_cursor?: number;
+  wake_cursor?: number;
   secret_key?: string;
   public_key?: string;
 };

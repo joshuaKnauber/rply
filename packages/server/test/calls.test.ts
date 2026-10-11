@@ -105,3 +105,10 @@ test("the human can remove apps but not other pins", async () => {
   const { json } = await request("GET", "/pins", { token: human });
   assert.deepEqual(json.messages.map((m: any) => m.pin), ["status"]);
 });
+
+test("agents show which of them run serve and wake on messages", async () => {
+  const { request, agent, human } = await withApp();
+  assert.equal((await request("GET", "/agents", { token: human })).json.agents[0].serve, null);
+  await request("GET", "/calls?wait=0&commands=stats&wakes=1", { token: agent });
+  assert.deepEqual((await request("GET", "/agents", { token: human })).json.agents[0].serve, { commands: ["stats"], wakes: true });
+});

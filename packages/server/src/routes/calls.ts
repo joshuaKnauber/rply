@@ -5,23 +5,18 @@ import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import { loadMessage, recordChanges } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
+import type { Serve, Serves } from "../serves.ts";
 import { now, randomId } from "../tokens.ts";
 
 const SCRIPT_TIMEOUT = 35_000;
-const ONLINE_GRACE = 15_000;
 
-type Server = { channelId: string; commands: Set<string>; polling: number; seen: number; queue: PendingCall[] };
 type Waiting = { channelId: string; resolve: (res: CallResponse) => void };
 
-export function callRoutes(deps: Deps) {
+export function callRoutes(deps: Deps, serves: Serves) {
   const { db, notifier } = deps;
   const agent = requireAuth(deps, "agent");
   const human = requireAuth(deps, "human");
-  const servers = new Map<string, Server>();
   const waiting = new Map<string, Waiting>();
-
-  const online = (s: Server) => s.polling > 0 || Date.now() - s.seen < ONLINE_GRACE;
-  const onlineIn = (channelId: string) => [...servers].filter(([, s]) => s.channelId === channelId && online(s));
 
   const callResponse = (id: string, call: Call): CallResponse =>
     call.error !== undefined ? { id, status: "error", error: call.error } : "result" in call ? { id, status: "done", result: call.result } : { id, status: "pending" };
@@ -43,7 +38,7 @@ export function callRoutes(deps: Deps) {
       isEmpty: (res) => res.status === "pending",
     });
 
-  const runScript = (server: Server, agentId: string, call: PendingCall, signal: AbortSignal) =>
+  const runScript = (server: Serve, agentId: string, call: PendingCall, signal: AbortSignal) =>
     new Promise<CallResponse | undefined>((resolve) => {
       const finish = (res: CallResponse | undefined) => {
         clearTimeout(timer);
@@ -69,9 +64,9 @@ export function callRoutes(deps: Deps) {
 
       const id = randomId();
       if (!req.agent) {
-        const serves = onlineIn(channel.id);
-        if (serves.length === 0) throw new HTTPException(503, { message: "offline" });
-        const [agentId, server] = serves.find(([, s]) => s.commands.has(req.name)) ?? [];
+        const online = serves.onlineIn(channel.id);
+        if (online.length === 0) throw new HTTPException(503, { message: "offline" });
+        const [agentId, server] = online.find(([, s]) => s.commands.has(req.name)) ?? [];
         if (!server) throw new HTTPException(404, { message: `No command "${req.name}"` });
         const call: PendingCall = { id, name: req.name, args: req.args, block_id: req.block_id, message_id: target.id };
         const res = await runScript(server, agentId!, call, c.req.raw.signal);
@@ -104,8 +99,8 @@ export function callRoutes(deps: Deps) {
     })
     .get("/calls", agent, async (c) => {
       const { channel, agentId } = c.var.auth;
-      const server = servers.get(agentId!) ?? { channelId: channel.id, commands: new Set(), polling: 0, seen: 0, queue: [] };
-      servers.set(agentId!, server);
+      const server = serves.register(agentId!, channel.id);
+      server.wakes = c.req.query("wakes") === "1";
       server.commands = new Set((c.req.query("commands") ?? "").split(",").filter((name) => COMMAND_NAME.test(name)));
       server.polling++;
       try {

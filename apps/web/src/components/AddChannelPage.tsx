@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminToken, type StoredChannel } from "@/lib/channels";
 import { formatTime } from "@/lib/format";
-import { createChannel } from "@/lib/pairing";
+import { createChannel, initPrompt } from "@/lib/pairing";
 import { useAgents, useServerInfo } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { MethodPicker, type Method } from "./MethodPicker";
@@ -52,19 +52,16 @@ function FromAgent() {
   const tokenFlag = info?.server_token_required ? " --server-token <admin token>" : "";
   return (
     <ol>
-      <Step n={1} title="Install the CLI">
-        <CommandBlock text="npm install --global @rply/cli" />
-      </Step>
-      <Step n={2} title="Create a channel">
-        <CommandBlock text={`rply init ${location.origin} --name "My agent"${tokenFlag}`} />
+      <Step n={1} title="Give the agent this prompt">
+        <CommandBlock text={initPrompt(tokenFlag)} wrap />
         {tokenFlag && (
           <p className="text-muted-foreground text-sm">
             Replace <code className="font-mono">&lt;admin token&gt;</code> with the server's <code className="font-mono">RPLY_ADMIN_TOKEN</code>.
           </p>
         )}
       </Step>
-      <Step n={3} title="Pair this browser" last>
-        <p className="text-muted-foreground text-sm">Open the printed link, or enter or paste the code. Codes from rply pair or another device work too.</p>
+      <Step n={2} title="Pair this browser" last>
+        <p className="text-muted-foreground text-sm">Enter the code the agent gives you, or open its link. Codes from rply pair or another device work too.</p>
         <PairingCodeInput />
       </Step>
     </ol>
@@ -102,7 +99,7 @@ function FromHere() {
         {create.error && <p className="text-destructive text-sm">{create.error.message}</p>}
       </Step>
       <Step n={2} title="Give the agent a code" upcoming>
-        <p className="text-muted-foreground text-sm">You get a command to paste to the agent. You can add more agents later.</p>
+        <p className="text-muted-foreground text-sm">You get a prompt to paste to the agent. It sets itself up from there. You can add more agents later.</p>
       </Step>
       <Step n={3} title="Wait for the agent" upcoming last />
     </ol>
@@ -124,7 +121,7 @@ function WaitForAgent({ entry, code }: { entry: StoredChannel; code: Pairing }) 
     <ol>
       <Step n={1} title={`Created "${entry.channel.name}"`} done />
       <Step n={2} title="Give the agent a code">
-        <p className="text-muted-foreground text-sm">Paste these commands to the agent, or run them on its machine. The code works once and expires at {formatTime(code.expires_at)}.</p>
+        <p className="text-muted-foreground text-sm">Paste this prompt to the agent. It installs rply, joins and sets itself up. The code works once and expires at {formatTime(code.expires_at)}.</p>
         <JoinInstructions code={code.code} />
       </Step>
       <Step n={3} title="Wait for the agent" last>

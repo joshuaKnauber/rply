@@ -14,19 +14,21 @@ import { pinRoutes } from "./routes/pins.ts";
 import { pushRoutes } from "./routes/push.ts";
 import { secretRoutes } from "./routes/secrets.ts";
 import { syncRoutes } from "./routes/sync.ts";
+import { createServes } from "./serves.ts";
 
 export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
+  const serves = createServes();
   const api = new Hono<AppEnv>()
     .use(cors({ origin: "*", allowHeaders: ["authorization", "content-type", "x-rply-channel"] }))
     .use((c, next) => (c.req.method === "POST" && c.req.path === "/v1/files" ? next() : bodyLimit({ maxSize: 256 * 1024 })(c, next)))
     .route("/", adminRoutes(deps))
-    .route("/", channelRoutes(deps))
+    .route("/", channelRoutes(deps, serves))
     .route("/", syncRoutes(deps))
     .route("/", pinRoutes(deps))
     .route("/", secretRoutes(deps))
     .route("/", fileRoutes(deps))
     .route("/", pushRoutes(deps))
-    .route("/", callRoutes(deps))
+    .route("/", callRoutes(deps, serves))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

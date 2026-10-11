@@ -6,6 +6,36 @@ import { configPath } from "../config.ts";
 import { VERSION } from "../update.ts";
 
 const topics: Record<string, string> = {
+  setup: `Setting up this machine. Follow every step; the human is waiting for the result in the rply app.
+
+1. Install the CLI globally, not with npx (the background service needs a stable path):
+     npm install --global @rply/cli
+2. Connect, with the server and code the human gave you (skip if \`rply whoami\` already works):
+     rply join <server-url> <code> --agent-name "<short name for you>"
+   One machine can hold several channels (\`rply channels\`). For any channel that isn't the default,
+   add --channel <key> to every command below.
+3. Learn the rest: \`rply guide all\`. Then add the output of \`rply guide --snippet\` to the instructions
+   file your future sessions read (AGENTS.md, CLAUDE.md, ...), so they keep using rply.
+4. Decide how the human wakes you. You are probably not running all the time, so rply starts you when
+   a message arrives. You need one shell command that runs you headless in your project, for example:
+     claude -p "You have new messages in rply. Run rply inbox and handle them."
+     codex exec "You have new messages in rply. Run rply inbox and handle them."
+   Use your own CLI's non-interactive mode, with permissions that let you do the work unattended.
+   Test it once by hand before installing.
+5. Install the background service from your project directory:
+     cd <your project> && rply serve --install --on-message "<the command from step 4>"
+   It restarts on crash and reboot, runs your command once at a time when the human writes (the new
+   messages are also on stdin), and runs command scripts for apps. Logs: see the install output.
+   Only one agent per channel should use --on-message; others install without it.
+   Never also run \`rply serve\` by hand for the same channel.
+6. If you'll build apps, see \`rply guide apps\` and put command scripts in the folder from \`rply app commands\`.
+7. Verify: rply send "Setup done. Reply to this message to check I get woken up."
+   When you're woken with that reply, answer it. Then setup is complete.
+
+If something can't work here (no service manager, sandbox resets, no headless mode), don't pretend:
+tell the human with rply send what works and what doesn't. \`rply listen\` is the fallback for an agent
+that runs continuously, and \`rply serve --uninstall\` removes the service.`,
+
   basics: `rply connects you to the human you work for. They read and answer in the rply app (web and phone, with push notifications).
 
 Talking
@@ -23,6 +53,7 @@ Good habits
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
 
+Setting up a new machine: rply guide setup
 More: rply guide ask | blocks | html | pins | apps | secrets | files | all`,
 
   ask: `Questions
@@ -102,7 +133,7 @@ Fetch data with rply.call when the page loads instead of baking it into the HTML
 
 Commands are executables you write, one file per command name:
   rply app commands          shows the folder, e.g. ~/.config/rply/commands/<channel>/
-  rply serve                 runs them when the app calls; keep it running (systemd, tmux, nohup)
+  rply serve --install       runs them when the app calls, as a background service (see rply guide setup)
 A command gets the args as JSON on stdin (env RPLY_CALL_NAME, RPLY_CALL_ID) and prints its result
 to stdout (JSON, or plain text). A non-zero exit fails the call with the last line of stderr. 30s limit.
 Example, saved as <folder>/stats and made executable (chmod +x):
@@ -132,14 +163,15 @@ Exit codes: 2 = expired or timed out, 3 = declined or cancelled.`,
 \`rply inbox\` lists files the human attached, with the \`rply file get\` command for each.`,
 };
 
-const order = ["basics", "ask", "blocks", "html", "pins", "apps", "secrets", "files"];
+const order = ["setup", "basics", "ask", "blocks", "html", "pins", "apps", "secrets", "files"];
 
 const snippet = `## Talking to the human (rply)
 
 This agent reports to its human through the \`rply\` CLI. Run \`rply guide\` once per session before using it.
 - Send progress with \`rply send\`, keep \`rply status\` up to date, and check \`rply inbox\` for new instructions.
 - Ask with \`rply ask ... --wait\` when a decision is the human's.
-- Request credentials with \`rply secret request\`, never through messages.`;
+- Request credentials with \`rply secret request\`, never through messages.
+- When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.`;
 
 const seenPath = () => join(dirname(configPath()), "guide.json");
 
@@ -167,7 +199,7 @@ export function registerGuide(program: Command) {
     .action((topic: string | undefined, opts: { snippet?: boolean }) => {
       if (opts.snippet) return console.log(snippet);
       if (topic && topic !== "all" && !topics[topic]) throw new CliError(`Unknown topic "${topic}". Topics: ${order.join(", ")}, all`);
-      const names = topic === "all" ? order : [topic ?? "basics"];
+      const names = topic === "all" ? order.filter((t) => t !== "setup") : [topic ?? "basics"];
       console.log(names.map((name) => topics[name]).join("\n\n"));
       markSeen();
     });

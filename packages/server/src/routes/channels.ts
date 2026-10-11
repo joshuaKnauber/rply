@@ -18,13 +18,14 @@ import {
 } from "@rply/schema";
 import { requireAuth, requireServerToken, serverTokenRequired } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
+import type { Serves } from "../serves.ts";
 import type { DB } from "../db/index.ts";
 import { toChannel } from "../serialize.ts";
 import { createPairingCode, createToken, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 
-export function channelRoutes(deps: Deps) {
+export function channelRoutes(deps: Deps, serves: Serves) {
   const { db } = deps;
   const human = requireAuth(deps, "human");
 
@@ -76,7 +77,12 @@ export function channelRoutes(deps: Deps) {
     })
     .get("/agents", requireAuth(deps), async (c) => {
       const rows = await activeTokens(db, "agent_tokens", c.var.auth.channel.id);
-      const res: AgentsResponse = { agents: rows.map((a) => ({ ...a, current: a.id === c.var.auth.agentId })) };
+      const res: AgentsResponse = {
+        agents: rows.map((a) => {
+          const serve = serves.online(a.id);
+          return { ...a, current: a.id === c.var.auth.agentId, serve: serve ? { commands: [...serve.commands], wakes: serve.wakes } : null };
+        }),
+      };
       return c.json(res);
     })
     .delete("/devices/:id", human, (c) => revoke(db, "human_tokens", c.var.auth.channel.id, c.req.param("id")).then(() => c.body(null, 204)))

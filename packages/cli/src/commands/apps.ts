@@ -1,16 +1,11 @@
-import { spawn } from "node:child_process";
-import { accessSync, constants, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { Command } from "commander";
-import type { CallsResponse, Message, PendingCall } from "@rply/schema";
+import type { Message } from "@rply/schema";
 import { appTitle, COMMAND_NAME, isApp } from "@rply/schema/helpers";
-import { CliError, type Client } from "../client.ts";
 import { configPath, type Selected } from "../config.ts";
 import { connect, json } from "../context.ts";
 import { printJson } from "../io.ts";
-
-const SCRIPT_TIMEOUT = 30_000;
-const MAX_OUTPUT = 200 * 1024;
 
 export function registerApps(program: Command) {
   const app = program.command("app").description("full-page HTML apps listed under the channel, e.g. dashboards and control panels");
@@ -63,23 +58,6 @@ export function registerApps(program: Command) {
     });
 
   program
-    .command("serve")
-    .description("run command scripts when an app calls them (keep this running, e.g. with systemd)")
-    .option("--dir <path>", "folder with command scripts (default: see rply app commands)")
-    .action(async (opts: { dir?: string }) => {
-      const { client, selected } = connect();
-      const dir = opts.dir ? resolve(opts.dir) : commandsDir(selected);
-      mkdirSync(dir, { recursive: true });
-      console.log(`Serving commands from ${dir}`);
-      await client.poll(undefined, async (waitSeconds) => {
-        const names = listCommands(dir);
-        const { calls } = await client.once<CallsResponse>("GET", `/calls?wait=${waitSeconds}&commands=${names.join(",")}`);
-        for (const call of calls) void handle(client, dir, call);
-        return undefined;
-      });
-    });
-
-  program
     .command("respond")
     .description("answer a call from an app (shown by rply inbox)")
     .argument("<call-id>")
@@ -94,7 +72,7 @@ export function registerApps(program: Command) {
 
 export const commandsDir = (selected: Selected) => join(dirname(configPath()), "commands", selected.key ?? "default");
 
-function listCommands(dir: string) {
+export function listCommands(dir: string) {
   try {
     return readdirSync(dir).filter((name) => COMMAND_NAME.test(name) && isExecutable(join(dir, name)));
   } catch {
@@ -102,7 +80,7 @@ function listCommands(dir: string) {
   }
 }
 
-function isExecutable(path: string) {
+export function isExecutable(path: string) {
   try {
     accessSync(path, constants.X_OK);
     return statSync(path).isFile();
@@ -111,7 +89,7 @@ function isExecutable(path: string) {
   }
 }
 
-function parseOutput(output: string) {
+export function parseOutput(output: string) {
   const trimmed = output.trim();
   if (!trimmed) return null;
   try {
@@ -119,35 +97,4 @@ function parseOutput(output: string) {
   } catch {
     return trimmed;
   }
-}
-
-async function handle(client: Client, dir: string, call: PendingCall) {
-  const started = Date.now();
-  const outcome = await run(join(dir, call.name), call);
-  const status = "error" in outcome ? `failed: ${outcome.error}` : "ok";
-  console.log(`${new Date().toLocaleTimeString()} ${call.name} ${status} (${Date.now() - started}ms)`);
-  await client.request("POST", `/calls/${call.id}/result`, outcome).catch((err) => console.error(`rply: ${err.message}`));
-}
-
-function run(path: string, call: PendingCall) {
-  return new Promise<{ result: unknown } | { error: string }>((done) => {
-    if (!isExecutable(path)) return done({ error: `No command "${call.name}"` });
-    const child = spawn(path, [], {
-      env: { ...process.env, RPLY_CALL_NAME: call.name, RPLY_CALL_ID: call.id },
-      timeout: SCRIPT_TIMEOUT,
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk));
-    child.stderr.on("data", (chunk) => (stderr = (stderr + chunk).slice(-4096)));
-    child.stdin.on("error", () => {});
-    child.stdin.end(JSON.stringify(call.args ?? null));
-    child.on("error", (err) => done({ error: err.message }));
-    child.on("close", (code, signal) => {
-      if (signal) return done({ error: signal === "SIGTERM" ? "timed out" : `killed by ${signal}` });
-      if (code !== 0) return done({ error: stderr.trim().split("\n").at(-1) || `exited with code ${code}` });
-      if (stdout.length > MAX_OUTPUT) return done({ error: "output too large" });
-      done({ result: parseOutput(stdout) });
-    });
-  });
 }

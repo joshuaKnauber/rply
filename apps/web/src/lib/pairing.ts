@@ -33,8 +33,23 @@ export const createAgentCode = (entry: StoredChannel) => api<Pairing>("/pairings
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 
-export const joinCommand = (code: string, agentName = "") =>
-  `npm install --global @rply/cli\nrply join ${location.origin} ${code}${agentName.trim() ? ` --agent-name ${shellQuote(agentName.trim())}` : ""}\nrply guide`;
+const setupPrompt = (connect: string, last: string) =>
+  `Connect yourself to rply so I can reach you from the rply app:
+1. npm install --global @rply/cli
+2. ${connect}
+3. ${last}`;
+
+export const joinPrompt = (code: string, agentName = "") =>
+  setupPrompt(
+    `rply join ${location.origin} ${code}${agentName.trim() ? ` --agent-name ${shellQuote(agentName.trim())}` : ""}`,
+    "Run `rply guide setup` and follow every step, including the background service and the test message at the end.",
+  );
+
+export const initPrompt = (tokenFlag: string) =>
+  setupPrompt(
+    `rply init ${location.origin} --name "<a short name for you>"${tokenFlag}`,
+    "Tell me the pairing code it prints, then run `rply guide setup` and follow every step, including the background service and the test message at the end.",
+  );
 
 function deviceLabel() {
   const ua = navigator.userAgent;

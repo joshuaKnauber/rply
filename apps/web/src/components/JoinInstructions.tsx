@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { joinCommand } from "@/lib/pairing";
+import { joinPrompt } from "@/lib/pairing";
 import { CommandBlock } from "./CommandBlock";
 
 export function JoinInstructions({ code }: { code: string }) {
@@ -12,7 +12,7 @@ export function JoinInstructions({ code }: { code: string }) {
         <Label htmlFor="agent-name">Agent name</Label>
         <Input id="agent-name" placeholder="Optional, defaults to the hostname" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
-      <CommandBlock text={joinCommand(code, name)} />
+      <CommandBlock text={joinPrompt(code, name)} wrap />
     </div>
   );
 }

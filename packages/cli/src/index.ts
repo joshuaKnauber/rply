@@ -9,6 +9,7 @@ import { registerMessages } from "./commands/messages.ts";
 import { registerSetup } from "./commands/setup.ts";
 import { registerPins } from "./commands/pins.ts";
 import { registerSecrets } from "./commands/secrets.ts";
+import { registerServe } from "./commands/serve.ts";
 import { setGlobalOptions } from "./context.ts";
 import { checkForUpdate, registerUpdate, updateNotice, VERSION } from "./update.ts";
 
@@ -29,6 +30,7 @@ registerAsks(program);
 registerFiles(program);
 registerPins(program);
 registerApps(program);
+registerServe(program);
 registerSecrets(program);
 registerUpdate(program);
 

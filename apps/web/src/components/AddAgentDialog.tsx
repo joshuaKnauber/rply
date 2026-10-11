@@ -40,7 +40,7 @@ export function AddAgentDialog({ entry }: { entry: StoredChannel }) {
         <DialogHeader>
           <DialogTitle>Add an agent</DialogTitle>
           <DialogDescription>
-            Give these commands to the agent, or run them on its machine. Use this to add another agent to "{entry.channel.name}" or to reconnect one that lost its setup.
+            Paste this prompt to the agent. It installs rply, joins "{entry.channel.name}" and sets itself up. Also use it to reconnect an agent that lost its setup.
           </DialogDescription>
         </DialogHeader>
         {code.error && <p className="text-destructive text-sm">{code.error.message}</p>}

@@ -64,7 +64,7 @@ function FromAgent() {
         )}
       </Step>
       <Step n={3} title="Pair this browser" last>
-        <p className="text-muted-foreground text-sm">Open the printed link, or enter the code. Codes from rply pair or another device work here too.</p>
+        <p className="text-muted-foreground text-sm">Open the printed link, or enter or paste the code. Codes from rply pair or another device work too.</p>
         <PairingCodeInput />
       </Step>
     </ol>

@@ -37,11 +37,7 @@ export function PairingCodeInput({ autoFocus }: { autoFocus?: boolean }) {
         </InputOTP>
         {claim.isPending && <Loader2Icon className="text-muted-foreground size-4 animate-spin" />}
       </div>
-      {claim.error ? (
-        <p className="text-destructive text-sm">{claim.error.message}</p>
-      ) : (
-        <p className="text-muted-foreground text-sm">Codes work once and expire after 10 minutes. Pasting a pairing link works too.</p>
-      )}
+      {claim.error && <p className="text-destructive text-sm">{claim.error.message}</p>}
     </div>
   );
 }

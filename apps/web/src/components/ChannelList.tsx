@@ -1,4 +1,4 @@
-import { PlusIcon, SettingsIcon } from "lucide-react";
+import { ArrowUpRightIcon, BookOpenIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { Link } from "wouter";
 import type { Message } from "@rply/schema";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useAllMessages } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { NotificationsButton } from "./NotificationsButton";
 import { OwnerButton } from "./OwnerButton";
-import { Bird } from "./Bird";
+import { Logo } from "./Logo";
 
 export function ChannelList({ channels, activeId, adding, settings }: { channels: StoredChannel[]; activeId?: string; adding?: boolean; settings?: boolean }) {
   const results = useAllMessages(channels);
@@ -27,10 +27,7 @@ export function ChannelList({ channels, activeId, adding, settings }: { channels
   return (
     <div className="flex h-full w-full flex-col">
       <div className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:pr-2">
-        <span className="flex items-center gap-2 font-semibold">
-          <Bird className="w-5" />
-          rply
-        </span>
+        <Logo />
         <div className="flex items-center gap-1">
           <NotificationsButton channels={channels} />
           <OwnerButton />
@@ -68,7 +65,17 @@ export function ChannelList({ channels, activeId, adding, settings }: { channels
           </Link>
         ))}
       </nav>
-      <div className="shrink-0 border-t p-2">
+      <div className="flex shrink-0 flex-col gap-0.5 border-t p-2">
+        <a
+          href="https://rply.sh/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-muted-foreground hover:bg-foreground/4 hover:text-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+        >
+          <BookOpenIcon className="size-4" />
+          Documentation
+          <ArrowUpRightIcon className="ml-auto size-3.5" />
+        </a>
         <Link
           href="/settings"
           className={cn("text-muted-foreground hover:bg-foreground/4 hover:text-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm", settings && "bg-foreground/6 text-foreground")}

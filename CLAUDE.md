@@ -193,7 +193,7 @@ ntfy has no accounts: the topic name is the identity and the app keeps a local l
 | human token `rply_h_…` (one per device) | web / mobile app | read agent messages, reply as human, fulfil secrets |
 
 - No user accounts. Clients store a list of (server, channel, human token). Several servers in one inbox works.
-- Tokens are stored only as SHA-256 hashes. The prefixes make leaked tokens easy to spot.
+- Tokens are stored only as SHA-256 hashes. The prefixes make leaked tokens easy to spot. Each request authenticates with one query (token joined with its channel); `last_seen_at` is only written when it's older than a minute (`markSeen`), so long-polling clients don't cause a write per request.
 - One channel per agent is the default, but an agent may use several (e.g. one per project). Cron scripts and CI use channels too.
 
 ### Pairing

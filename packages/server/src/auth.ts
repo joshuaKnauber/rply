@@ -22,34 +22,46 @@ export function requireAuth({ db }: Deps, role?: Sender) {
 async function authenticate(db: DB, token: string, channelId: string | undefined) {
   const hash = hashToken(token);
   if (token.startsWith("rply_a_")) {
-    const agent = await db
-      .updateTable("agent_tokens")
-      .set({ last_seen_at: now() })
-      .where("token_hash", "=", hash)
-      .where("revoked_at", "is", null)
-      .returning(["id", "channel_id"])
+    const row = await db
+      .selectFrom("agent_tokens as t")
+      .innerJoin("channels", "channels.id", "t.channel_id")
+      .selectAll("channels")
+      .select(["t.id as token_id", "t.last_seen_at as token_seen_at"])
+      .where("t.token_hash", "=", hash)
+      .where("t.revoked_at", "is", null)
       .executeTakeFirst();
-    if (!agent) return undefined;
-    const channel = await db.selectFrom("channels").selectAll().where("id", "=", agent.channel_id).executeTakeFirstOrThrow();
-    return { channel, sender: "agent" as const, agentId: agent.id };
+    if (!row) return undefined;
+    const { token_id, token_seen_at, ...channel } = row;
+    await markSeen(db, "agent_tokens", [{ id: token_id, last_seen_at: token_seen_at }]);
+    return { channel, sender: "agent" as const, agentId: token_id };
   }
   if (token.startsWith("rply_h_")) {
-    const human = await db
-      .updateTable("human_tokens")
-      .set({ last_seen_at: now() })
-      .where("token_hash", "=", hash)
-      .where("revoked_at", "is", null)
-      .returning(["id", "channel_id"])
+    const row = await db
+      .selectFrom("human_tokens as t")
+      .innerJoin("channels", "channels.id", "t.channel_id")
+      .selectAll("channels")
+      .select(["t.id as token_id", "t.last_seen_at as token_seen_at"])
+      .where("t.token_hash", "=", hash)
+      .where("t.revoked_at", "is", null)
       .executeTakeFirst();
-    if (!human) return undefined;
-    const channel = await db.selectFrom("channels").selectAll().where("id", "=", human.channel_id).executeTakeFirstOrThrow();
-    return { channel, sender: "human" as const, deviceId: human.id };
+    if (!row) return undefined;
+    const { token_id, token_seen_at, ...channel } = row;
+    await markSeen(db, "human_tokens", [{ id: token_id, last_seen_at: token_seen_at }]);
+    return { channel, sender: "human" as const, deviceId: token_id };
   }
   if (channelId && (await isServerToken(db, token))) {
     const channel = await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirst();
     return channel && { channel, sender: "human" as const };
   }
   return undefined;
+}
+
+const SEEN_EVERY_MS = 60_000;
+
+// last_seen_at only feeds "seen 5 minutes ago", so long-polling clients don't need a write per request
+export async function markSeen(db: DB, table: "agent_tokens" | "human_tokens", tokens: { id: string; last_seen_at: number | null }[]) {
+  const stale = tokens.filter((t) => t.last_seen_at === null || now() - t.last_seen_at >= SEEN_EVERY_MS).map((t) => t.id);
+  if (stale.length) await db.updateTable(table).set({ last_seen_at: now() }).where("id", "in", stale).execute();
 }
 
 export async function isServerToken(db: DB, token: string | undefined) {

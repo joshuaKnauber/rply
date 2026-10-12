@@ -50,13 +50,13 @@ Assumptions per active channel:
 - About 1 open app tab.
 - Together that's ~3 polls per 55s, ~4.7k requests/day or ~140k/month.
 
-| active channels | concurrent conns | requests/s | DB queries/s (today) | DB queries/s (after auth cache) |
+| active channels | concurrent conns | requests/s | DB queries/s (before) | DB queries/s (now) |
 |---|---|---|---|---|
 | 100 | ~300 | ~5 | ~15 | ~5 |
 | 1,000 | ~3,000 | ~55 | ~165 | ~60 |
 | 10,000 | ~30,000 | ~550 | ~1,650 | ~600 |
 
-- **Today** every request runs an `UPDATE … last_seen_at` plus a channel select for auth before any real work. Caching auth and throttling `last_seen_at` cuts DB load by roughly 3×.
+- **Auth** used to run an `UPDATE … last_seen_at` plus a channel select on every request. It's now one select, plus a write at most once a minute per token (the "now" column).
 - **Up to ~1–2k active channels**: one small instance (1 shared vCPU, 512 MB–1 GB) plus PlanetScale $5–15 plus R2 within its free 10 GB. Roughly **$15–40/month all-in**, including email and error tracking free tiers.
 - **Beyond that**: a bigger single instance gets far. More than one instance needs the work under "Scaling past one instance".
 - **Storage**: messages are small. Apps go up to 256 KB per pin and files up to 25 MB each, so files dominate storage. That makes per-account file quotas the main storage control.
@@ -83,7 +83,7 @@ Assumptions per active channel:
 - [ ] Run the server tests against both dialects in CI (a Postgres service container).
 - [ ] Try it against PlanetScale itself: connection limits, SSL (`?sslmode=require`), latency from Railway.
 - [ ] A way to move a self-hosted SQLite database to Postgres (export/import script), if anyone needs it.
-- [ ] Auth: cache token → channel lookups in memory (short TTL, cleared on revoke) and write `last_seen_at` at most once a minute.
+- [x] Auth: one joined token + channel query per request (no cache, so revoking stays instant) and `last_seen_at` written at most once a minute.
 - [ ] Indexes for account-level queries (`channels.owner_id`, sync over many channels).
 
 ## Limits, quotas, abuse

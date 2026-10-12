@@ -24,6 +24,8 @@ test("devices lists the channel's paired human tokens and marks the caller", asy
   assert.equal(json.devices.length, 1);
   assert.equal(json.devices[0].current, true);
   assert.ok(json.devices[0].last_seen_at);
+  await delay(5);
+  assert.equal((await request("GET", "/devices", { token: human })).json.devices[0].last_seen_at, json.devices[0].last_seen_at);
   assert.equal((await request("GET", "/devices", { token: agent })).json.devices[0].current, false);
 
   const pairing = await request("POST", "/pairings", { token: human });

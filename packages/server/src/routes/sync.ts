@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { SyncRequest, type SyncResponse } from "@rply/schema";
-import { isServerToken } from "../auth.ts";
+import { isServerToken, markSeen } from "../auth.ts";
 import { bearer, parse, type AppEnv, type Deps } from "../context.ts";
 import { selectMessages, toMessage } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
-import { hashToken, now } from "../tokens.ts";
+import { hashToken } from "../tokens.ts";
 
 const BATCH = 1000;
 
@@ -15,13 +15,13 @@ export function syncRoutes({ db, notifier, push }: Deps) {
     const hashes = new Map(req.tokens.map((t) => [hashToken(t), t]));
     const humans = hashes.size
       ? await db
-          .updateTable("human_tokens")
-          .set({ last_seen_at: now() })
+          .selectFrom("human_tokens")
+          .select(["id", "token_hash", "channel_id", "last_seen_at"])
           .where("token_hash", "in", [...hashes.keys()])
           .where("revoked_at", "is", null)
-          .returning(["token_hash", "channel_id"])
           .execute()
       : [];
+    await markSeen(db, "human_tokens", humans);
     const isAdmin = await isServerToken(db, bearer(c.req.header("authorization")));
     const channelIds = isAdmin
       ? (await db.selectFrom("channels").select("id").execute()).map((ch) => ch.id)

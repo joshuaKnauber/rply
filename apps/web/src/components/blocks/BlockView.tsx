@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileView, ImageView } from "./Attachments";
 import { HtmlBlock } from "./HtmlBlock";
+import { LabeledLink, LinkCard } from "./LinkPreview";
 import { Markdown } from "./Markdown";
 import { SecretBlock } from "./SecretBlock";
 
@@ -70,11 +71,14 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
         </pre>
       );
     case "link":
-      return /^https?:\/\//.test(block.url) ? (
-        <a href={block.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline underline-offset-4 wrap-anywhere">
-          {block.label ?? block.url}
-        </a>
-      ) : null;
+      if (!/^https?:\/\//.test(block.url)) return null;
+      return block.label ? (
+        <span className="text-sm font-medium underline underline-offset-4 wrap-anywhere">
+          <LabeledLink url={block.url}>{block.label}</LabeledLink>
+        </span>
+      ) : (
+        <LinkCard url={block.url} />
+      );
     case "image":
       return <ImageView fileId={block.file_id} name={block.name ?? block.alt} />;
     case "file":

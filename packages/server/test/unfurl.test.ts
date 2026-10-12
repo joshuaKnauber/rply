@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePreview } from "../src/routes/unfurl.ts";
+import { fallbackPreview, parsePreview } from "../src/routes/unfurl.ts";
 import { setup } from "./helpers.ts";
 
 test("previews read open graph tags and fall back to title and favicon", () => {
@@ -33,4 +33,18 @@ test("unfurl refuses private addresses and non-http URLs", async () => {
     const { json } = await request("GET", `/unfurl?url=${encodeURIComponent(url)}`, { token: human });
     assert.equal(json.title, null, url);
   }
+});
+
+test("pages that can't be read still get a favicon, and GitHub links a title", () => {
+  assert.deepEqual(fallbackPreview("https://github.com/acme/app/pull/15", "https://github.com/acme/app/pull/15"), {
+    url: "https://github.com/acme/app/pull/15",
+    title: "acme/app #15",
+    description: null,
+    image: null,
+    icon: "https://github.com/favicon.ico",
+    site: "GitHub",
+  });
+  const other = fallbackPreview("https://example.com/report.pdf", "https://cdn.example.com/report.pdf");
+  assert.equal(other.title, null);
+  assert.equal(other.icon, "https://cdn.example.com/favicon.ico");
 });

@@ -44,10 +44,23 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
       current = new URL(location, current).toString();
       continue;
     }
-    if (!res.ok || !res.headers.get("content-type")?.includes("text/html")) throw new Error("Not an HTML page");
+    if (!res.ok || !res.headers.get("content-type")?.includes("text/html")) return fallbackPreview(url, current);
     return parsePreview(url, current, await readStart(res));
   }
   throw new Error("Too many redirects");
+}
+
+export function fallbackPreview(url: string, pageUrl: string): LinkPreview {
+  const { host, pathname } = new URL(url);
+  const repo = host === "github.com" ? pathname.match(/^\/([^/]+\/[^/]+)(?:\/(?:pull|issues)\/(\d+))?/) : null;
+  return {
+    url,
+    title: repo ? (repo[2] ? `${repo[1]} #${repo[2]}` : repo[1]!) : null,
+    description: null,
+    image: null,
+    icon: new URL("/favicon.ico", pageUrl).toString(),
+    site: repo ? "GitHub" : null,
+  };
 }
 
 async function assertPublic(hostname: string) {

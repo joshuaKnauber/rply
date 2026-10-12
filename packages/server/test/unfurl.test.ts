@@ -47,4 +47,6 @@ test("pages that can't be read still get a favicon, and GitHub links a title", (
   const other = fallbackPreview("https://example.com/report.pdf", "https://cdn.example.com/report.pdf");
   assert.equal(other.title, null);
   assert.equal(other.icon, "https://cdn.example.com/favicon.ico");
+  const homeIcon = "https://github.githubassets.com/favicons/favicon.png";
+  assert.equal(fallbackPreview("https://github.com/acme/app", "https://github.com/acme/app", homeIcon).icon, homeIcon);
 });

@@ -2,11 +2,18 @@ import { Fragment, useMemo, type ReactNode } from "react";
 import { useColorScheme, View, type TextStyle } from "react-native";
 import { Renderer, useMarkdown } from "react-native-marked";
 import { isBareLink, splitUrlLines } from "@rply/schema";
-import { LinkCard, LinkText } from "./LinkPreview";
+import { LabeledLinkText, LinkCard, LinkText } from "./LinkPreview";
 
 class LinkPreviewRenderer extends Renderer {
   link(children: string | ReactNode[], href: string, styles?: TextStyle, title?: string): ReactNode {
     if (typeof children === "string" && isBareLink(href, children)) return <LinkText key={this.getKey()} url={href} style={styles} />;
+    if (/^https?:\/\//.test(href)) {
+      return (
+        <LabeledLinkText key={this.getKey()} url={href} style={styles}>
+          {children}
+        </LabeledLinkText>
+      );
+    }
     return super.link(children, href, styles, title);
   }
 }

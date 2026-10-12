@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Image, Linking, Pressable, Text, View, type TextStyle } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { shortUrl, type LinkPreview } from "@rply/schema";
@@ -22,6 +22,18 @@ export function LinkText({ url, style }: { url: string; style?: TextStyle }) {
   return (
     <Text style={style} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
       {preview?.title ?? shortUrl(url)}
+    </Text>
+  );
+}
+
+export function LabeledLinkText({ url, style, children }: { url: string; style?: TextStyle; children: ReactNode }) {
+  const preview = usePreview(url);
+  const [failed, setFailed] = useState(false);
+  return (
+    <Text style={style} accessibilityRole="link" onPress={() => Linking.openURL(url)}>
+      {preview?.icon && !failed && <Image source={{ uri: preview.icon }} onError={() => setFailed(true)} style={{ width: 14, height: 14, borderRadius: 3 }} />}
+      {preview?.icon && !failed ? " " : ""}
+      {children}
     </Text>
   );
 }

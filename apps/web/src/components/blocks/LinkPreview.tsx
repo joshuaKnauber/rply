@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LinkIcon } from "lucide-react";
 import { shortUrl, type LinkPreview } from "@rply/schema";
@@ -29,6 +29,16 @@ export function LinkChip({ url }: { url: string }) {
     >
       <Favicon src={preview?.icon} />
       <span className="truncate">{preview?.title ?? shortUrl(url)}</span>
+    </a>
+  );
+}
+
+export function LabeledLink({ url, children }: { url: string; children: ReactNode }) {
+  const preview = usePreview(url);
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={url}>
+      {preview?.icon && <InlineFavicon src={preview.icon} />}
+      {children}
     </a>
   );
 }
@@ -67,6 +77,12 @@ export function LinkCard({ url }: { url: string }) {
       )}
     </a>
   );
+}
+
+function InlineFavicon({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="mr-1 inline-block size-3.5 rounded-sm align-[-2px]" />;
 }
 
 function Favicon({ src }: { src?: string | null }) {

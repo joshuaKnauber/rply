@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { isBareLink, splitUrlLines } from "@rply/schema";
-import { LinkCard, LinkChip } from "./LinkPreview";
+import { LabeledLink, LinkCard, LinkChip } from "./LinkPreview";
 
 type HastNode = { value?: string; children?: HastNode[] };
 
@@ -23,6 +23,8 @@ export function Markdown({ text }: { text: string }) {
               a: ({ node, href, children, ...props }) =>
                 href && node && isBareLink(href, textOf(node as HastNode)) ? (
                   <LinkChip url={href} />
+                ) : href && /^https?:\/\//.test(href) ? (
+                  <LabeledLink url={href}>{children}</LabeledLink>
                 ) : (
                   <a {...props} href={href} target="_blank" rel="noopener noreferrer">
                     {children}

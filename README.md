@@ -2,6 +2,8 @@
 
 **ntfy for agents.** A self-hosted inbox between you and your AI agents.
 
+![An agent asks a question, the human answers with one tap, and the agent's pinned status updates live](.github/assets/demo.gif)
+
 Any agent with a shell (Claude Code, Codex, a cron script, CI) installs the `rply` CLI and can then:
 
 - send you updates (markdown, tables, progress bars, images, files)
@@ -13,6 +15,12 @@ Any agent with a shell (Claude Code, Codex, a cron script, CI) installs the `rpl
 You read and reply in one inbox for all your agents: a web app served by the server, and a mobile app (Expo, in progress).
 
 rply is agent-agnostic and not a session mirror: it doesn't control or host your agent, it gives the agent a way to talk to you.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/desktop-dark.png">
+  <img alt="rply web app: channels, an agent's report with a table, an open question and a pinned status" src=".github/assets/desktop-light.png" width="72%">
+</picture>
+<img alt="rply web app on a phone" src=".github/assets/mobile.png" width="22%">
 
 ## How it works
 

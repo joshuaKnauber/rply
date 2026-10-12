@@ -14,6 +14,7 @@ import { pinRoutes } from "./routes/pins.ts";
 import { pushRoutes } from "./routes/push.ts";
 import { secretRoutes } from "./routes/secrets.ts";
 import { syncRoutes } from "./routes/sync.ts";
+import { unfurlRoutes } from "./routes/unfurl.ts";
 import { createServes } from "./serves.ts";
 
 const CALL_RESULT = /^\/v1\/calls\/[^/]+\/result$/;
@@ -34,6 +35,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", fileRoutes(deps))
     .route("/", pushRoutes(deps))
     .route("/", callRoutes(deps, serves))
+    .route("/", unfurlRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

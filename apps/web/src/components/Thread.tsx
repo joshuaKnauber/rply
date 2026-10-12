@@ -52,7 +52,7 @@ export function Thread({ entry }: { entry: StoredChannel }) {
     send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => toast.error(err.message) });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-6" onScroll={onScroll}>
         <div ref={contentRef} className="mx-auto flex max-w-3xl flex-col gap-1">
           {isPending && <p className="text-muted-foreground text-sm">Loading…</p>}

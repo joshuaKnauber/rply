@@ -88,6 +88,45 @@ export const fileIdsOf = (body: unknown): string[] => {
   ];
 };
 
+export function shortUrl(url: string) {
+  try {
+    const { host, pathname, search } = new URL(url);
+    const path = (pathname === "/" ? "" : pathname) + (search.length > 1 ? search : "");
+    const short = host.replace(/^www\./, "") + path;
+    if (short.length <= 48) return short;
+    const parts = pathname.split("/").filter(Boolean);
+    return `${host.replace(/^www\./, "")}/…/${parts.slice(-2).join("/")}`.slice(0, 64);
+  } catch {
+    return url;
+  }
+}
+
+export const MAX_LINK_CARDS = 3;
+
+export type TextPart = { type: "text"; text: string } | { type: "url"; url: string };
+
+export function splitUrlLines(text: string): TextPart[] {
+  const parts: TextPart[] = [];
+  let buffer: string[] = [];
+  let fenced = false;
+  const flush = () => {
+    if (buffer.join("").trim()) parts.push({ type: "text", text: buffer.join("\n") });
+    buffer = [];
+  };
+  for (const line of text.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (!fenced && /^\s*https?:\/\/\S+\s*$/.test(line) && parts.filter((p) => p.type === "url").length < MAX_LINK_CARDS) {
+      flush();
+      parts.push({ type: "url", url: line.trim() });
+    } else buffer.push(line);
+  }
+  flush();
+  return parts;
+}
+
+export const isBareLink = (href: string, text: string) =>
+  /^https?:\/\//.test(href) && href.replace(/^https?:\/\//, "") === text.replace(/^https?:\/\//, "");
+
 export function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;

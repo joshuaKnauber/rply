@@ -146,7 +146,14 @@ body,
 }
 
 .markdown {
-  @apply flex flex-col gap-2 text-base leading-relaxed break-words;
+  @apply flex min-w-0 flex-col gap-2 text-base leading-relaxed wrap-anywhere;
+}
+.markdown table {
+  @apply w-full text-sm wrap-normal;
+}
+.markdown th,
+.markdown td {
+  @apply border-b px-2 py-1 text-left align-top;
 }
 .markdown a {
   @apply underline underline-offset-4;

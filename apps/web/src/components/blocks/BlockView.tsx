@@ -33,11 +33,11 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
     }
     case "keyvalue":
       return (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
           {block.items.map((item) => (
             <div key={item.key} className="contents">
               <dt className="text-muted-foreground">{item.key}</dt>
-              <dd className="font-medium">{item.value}</dd>
+              <dd className="font-medium wrap-anywhere">{item.value}</dd>
             </div>
           ))}
         </dl>
@@ -71,7 +71,7 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
       );
     case "link":
       return /^https?:\/\//.test(block.url) ? (
-        <a href={block.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline underline-offset-4">
+        <a href={block.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline underline-offset-4 wrap-anywhere">
           {block.label ?? block.url}
         </a>
       ) : null;

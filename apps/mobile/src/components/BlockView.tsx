@@ -1,4 +1,4 @@
-import { Linking, Pressable, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { isKnownBlock, type Block } from "@rply/schema";
 import { FileView, ImageView } from "./Attachments";
 import { HtmlBlock } from "./HtmlBlock";
@@ -45,13 +45,14 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           ))}
         </View>
       );
-    case "table":
-      return (
+    case "table": {
+      const wide = block.columns.length > 3;
+      const table = (
         <View className="rounded-lg border border-neutral-200 dark:border-neutral-800">
           {[block.columns, ...block.rows].map((row, i) => (
             <View key={i} className={`flex-row ${i > 0 ? "border-t border-neutral-200 dark:border-neutral-800" : ""}`}>
               {row.map((cell, j) => (
-                <Text key={j} className={`flex-1 px-3 py-2 ${i === 0 ? "font-medium" : ""} ${text}`}>
+                <Text key={j} className={`${wide ? "w-36" : "flex-1"} px-3 py-2 ${i === 0 ? "font-medium" : ""} ${text}`}>
                   {String(cell)}
                 </Text>
               ))}
@@ -59,6 +60,14 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
           ))}
         </View>
       );
+      return wide ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {table}
+        </ScrollView>
+      ) : (
+        table
+      );
+    }
     case "code":
       return (
         <View className="rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800">

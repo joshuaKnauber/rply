@@ -8,3 +8,4 @@ dist/
 *.db.bak-*
 .astro/
 packages/server/files/
+TODO*.md

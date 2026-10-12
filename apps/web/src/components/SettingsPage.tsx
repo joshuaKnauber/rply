@@ -5,14 +5,11 @@ import { useTheme } from "next-themes";
 import { RadioGroup } from "radix-ui";
 import { toast } from "sonner";
 import { Link } from "wouter";
-import type { ApiKeysResponse, CreateApiKeyResponse } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
 import { authClient, orThrow, signOut, useSession } from "@/lib/auth";
 import { formatTime } from "@/lib/format";
 import { useServerInfo } from "@/lib/queries";
-import { CommandBlock } from "./CommandBlock";
 import { confirmDialog } from "./ConfirmDialog";
 
 const themes = [
@@ -41,7 +38,6 @@ export function SettingsPage() {
           </Setting>
           <Password />
           {info?.passkeys && <Passkeys />}
-          <ApiKeys />
         </div>
       </div>
     </div>
@@ -156,57 +152,6 @@ function Passkeys() {
               <span className="text-muted-foreground ml-auto text-xs group-hover/row:hidden">Added {formatTime(new Date(p.createdAt).getTime())}</span>
               <Button size="xs" variant="ghost" className="text-muted-foreground -mr-2 ml-auto hidden group-hover/row:flex" onClick={() => remove(p.id)}>
                 Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  );
-}
-
-function ApiKeys() {
-  const queryClient = useQueryClient();
-  const [label, setLabel] = useState("");
-  const { data: keys = [] } = useQuery({ queryKey: ["api-keys"], queryFn: () => api<ApiKeysResponse>("/api-keys").then((r) => r.keys) });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["api-keys"] });
-  const create = useMutation({
-    mutationFn: () => api<CreateApiKeyResponse>("/api-keys", { body: { label: label.trim() } }),
-    onSuccess: () => (setLabel(""), refresh()),
-  });
-  const remove = async (id: string, name: string) => {
-    const ok = await confirmDialog({ title: `Delete "${name}"?`, description: "Anything using this key can't create channels anymore.", action: "Delete", destructive: true });
-    if (!ok) return;
-    await api(`/api-keys/${id}`, { method: "DELETE" }).then(refresh, (err: Error) => toast.error(err.message));
-  };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    create.mutate();
-  };
-
-  return (
-    <Section title="API keys" description="Let scripts and CI create channels in your account without a claim link: rply init --api-key <key>.">
-      <form onSubmit={submit} className="flex max-w-sm gap-2">
-        <Input placeholder="Label, e.g. CI" value={label} onChange={(e) => setLabel(e.target.value)} className="h-9" aria-label="Key label" />
-        <Button type="submit" variant="outline" size="lg" disabled={!label.trim() || create.isPending}>
-          Create
-        </Button>
-      </form>
-      {create.data && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-muted-foreground text-sm">Copy the key now. It isn't shown again.</p>
-          <CommandBlock text={create.data.token} />
-        </div>
-      )}
-      {keys.length > 0 && (
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {keys.map((k) => (
-            <li key={k.id} className="group/row flex items-center gap-2.5">
-              <KeyRoundIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="truncate">{k.label}</span>
-              <span className="text-muted-foreground ml-auto text-xs group-hover/row:hidden">Created {formatTime(k.created_at)}</span>
-              <Button size="xs" variant="ghost" className="text-muted-foreground -mr-2 ml-auto hidden group-hover/row:flex" onClick={() => remove(k.id, k.label)}>
-                Delete
               </Button>
             </li>
           ))}

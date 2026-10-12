@@ -1,5 +1,5 @@
 import { hostname } from "node:os";
-import { Option, type Command } from "commander";
+import type { Command } from "commander";
 import type { Channel, CreateChannelResponse, JoinChannelResponse, Pairing } from "@rply/schema";
 import { CliError, createClient } from "../client.ts";
 import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from "../config.ts";
@@ -32,21 +32,18 @@ export function registerSetup(program: Command) {
     .argument("<server-url>", "your rply server, e.g. https://rply.example.com")
     .option("--name <name>", "channel name shown in the app", hostname())
     .option("--agent-name <name>", "name of this agent in the app", hostname())
-    .addOption(new Option("--api-key <key>", "an API key from the app's settings: the channel goes straight into that account, no claim link").env("RPLY_API_KEY"))
     .option("--force", "replace a local channel with the same name")
     .addHelpText("after", "\nThe channel is stored under --channel <name> if given, otherwise under a slug of --name.\nThe first channel becomes the default.")
-    .action(async (serverUrl: string, opts: { name: string; agentName: string; apiKey?: string; force?: boolean }) => {
+    .action(async (serverUrl: string, opts: { name: string; agentName: string; force?: boolean }) => {
       const key = requested() ?? channelKey(opts.name);
       checkFree(key, opts.force);
       const server = normalizeServer(serverUrl);
-      const res = await createClient(server, opts.apiKey).request<CreateChannelResponse>("POST", "/channels", { name: opts.name, label: opts.agentName });
+      const res = await createClient(server).request<CreateChannelResponse>("POST", "/channels", { name: opts.name, label: opts.agentName });
       const isDefault = saveChannel(key, server, res.agent_token, res.channel);
 
-      const claim = res.claim && { ...res.claim, url: claimUrl(server, res.claim.code) };
-      if (json()) return printJson({ key, default: isDefault, channel: res.channel, claim });
+      if (json()) return printJson({ key, default: isDefault, channel: res.channel, claim: { ...res.claim, url: claimUrl(server, res.claim.code) } });
       console.log(`Created channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}\n`);
-      if (res.claim) await printClaim(server, res.claim.code, res.claim.expires_at);
-      else console.log("It's in the account the API key belongs to.");
+      await printClaim(server, res.claim.code, res.claim.expires_at);
       console.log(nextSteps);
     });
 

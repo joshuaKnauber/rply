@@ -6,7 +6,7 @@ const randomString = (length: number) => Array.from({ length }, () => CROCKFORD[
 
 export const randomId = () => randomString(16).toLowerCase();
 
-export const createToken = (kind: "a" | "k") => `rply_${kind}_${randomBytes(32).toString("base64url")}`;
+export const createAgentToken = () => `rply_a_${randomBytes(32).toString("base64url")}`;
 
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 

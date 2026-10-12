@@ -17,12 +17,12 @@ import {
   type Sender,
   type ServerInfo,
 } from "@rply/schema";
-import { apiKeyOwner, requireAuth, requireUser } from "../auth.ts";
-import { bearer, parse, type AppEnv, type Deps } from "../context.ts";
+import { requireAuth, requireUser } from "../auth.ts";
+import { parse, type AppEnv, type Deps } from "../context.ts";
 import type { Serves } from "../serves.ts";
 import type { DB } from "../db/index.ts";
 import { toChannel, toChannelEntry } from "../serialize.ts";
-import { createPairingCode, createToken, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
+import { createAgentToken, createPairingCode, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
 const PAIRING_TTL_MS = 60 * 60 * 1000;
 const ANONYMOUS_CHANNELS_PER_HOUR = 20;
@@ -72,23 +72,21 @@ export function channelRoutes(deps: Deps, serves: Serves) {
     })
     .post("/channels", async (c) => {
       const req = parse(CreateChannelRequest, await c.req.json());
-      const keyOwner = await apiKeyOwner(db, bearer(c.req.header("authorization")));
-      const signedIn = keyOwner ? null : await accounts.user(c.req.raw.headers);
+      const signedIn = await accounts.user(c.req.raw.headers);
 
       if (signedIn) {
         const channel = await createChannel(req.name);
         const res: CreateOwnedChannelResponse = { channel: await addMember(channel.id, signedIn.id), agent_code: await createPairing(db, channel.id, "agent") };
         return c.json(res, 201);
       }
-      if (!keyOwner && !allowAnonymous(c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "direct")) {
-        throw new HTTPException(429, { message: "Too many new channels, try again later or use an API key (--api-key)" });
+      if (!allowAnonymous(c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "direct")) {
+        throw new HTTPException(429, { message: "Too many new channels, try again later" });
       }
       const channel = await createChannel(req.name);
-      if (keyOwner) await addMember(channel.id, keyOwner);
       const res: CreateChannelResponse = {
         channel: toChannel(channel),
         agent_token: await addAgentToken(db, channel.id, req.label),
-        claim: keyOwner ? null : await createPairing(db, channel.id, "human"),
+        claim: await createPairing(db, channel.id, "human"),
       };
       return c.json(res, 201);
     })
@@ -248,7 +246,7 @@ async function usePairing(db: DB, code: string, role: Sender) {
 }
 
 async function addAgentToken(db: DB, channelId: string, label?: string) {
-  const token = createToken("a");
+  const token = createAgentToken();
   await db
     .insertInto("agent_tokens")
     .values({ id: randomId(), channel_id: channelId, token_hash: hashToken(token), label: label ?? null, public_key: null, created_at: now(), last_seen_at: null, revoked_at: null })

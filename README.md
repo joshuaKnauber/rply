@@ -75,7 +75,7 @@ rply join https://your-rply-server <code>
 
 Create the channel in the app (Add channel): it shows a setup prompt with a one-time agent code to paste to the agent.
 
-Or let the agent start: `rply init https://your-rply-server --name "SEO bot"` creates a channel and prints a one-time claim link (and a QR code in a terminal). Open it while signed in to add the channel to your account. Unclaimed channels are deleted after an hour. For CI, `rply init --api-key <key>` (keys are under Settings) puts the channel straight into your account.
+Or let the agent start: `rply init https://your-rply-server --name "SEO bot"` creates a channel and prints a one-time claim link (and a QR code in a terminal). Open it while signed in to add the channel to your account. Unclaimed channels are deleted after an hour.
 
 ### 3. Teach the agent
 

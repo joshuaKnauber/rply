@@ -72,26 +72,13 @@ test("unclaimed channels are removed once their claim codes expire", async () =>
   assert.equal((await request("GET", "/channel", { token: json.agent_token })).status, 401);
 });
 
-test("anonymous channel creation is rate limited, API keys create owned channels", async () => {
-  const { request, signUp } = await setup();
+test("anonymous channel creation is rate limited", async () => {
+  const { request } = await setup();
   const ip = { "x-forwarded-for": "203.0.113.7" };
   for (let i = 0; i < 20; i++) assert.equal((await request("POST", "/channels", { body: { name: `c${i}` }, headers: ip })).status, 201);
   assert.equal((await request("POST", "/channels", { body: { name: "one too many" }, headers: ip })).status, 429);
-
-  const user = (await signUp()).token!;
-  const key = await request("POST", "/api-keys", { token: user, body: { label: "CI" } });
-  assert.equal(key.status, 201);
-  assert.match(key.json.token, /^rply_k_/);
-  const created = await request("POST", "/channels", { token: key.json.token, body: { name: "ci" }, headers: ip });
-  assert.equal(created.status, 201);
-  assert.equal(created.json.claim, null);
-  assert.deepEqual((await request("GET", "/channels", { token: user })).json.channels.map((c: any) => c.name), ["ci"]);
-
-  assert.deepEqual((await request("GET", "/api-keys", { token: user })).json.keys.map((k: any) => k.label), ["CI"]);
-  assert.equal((await request("DELETE", `/api-keys/${key.json.key.id}`, { token: user })).status, 204);
-  assert.equal((await request("POST", "/channels", { token: key.json.token, body: { name: "after" }, headers: ip })).status, 429);
+  assert.equal((await request("POST", "/channels", { body: { name: "elsewhere" }, headers: { "x-forwarded-for": "203.0.113.8" } })).status, 201);
 });
-
 test("a channel created in the app gets its agent through a single-use agent code", async () => {
   const { request, signUp } = await setup();
   const user = (await signUp()).token!;

@@ -68,9 +68,3 @@ async function markSeen(db: DB, id: string, lastSeen: number | null) {
   if (lastSeen !== null && now() - lastSeen < SEEN_EVERY_MS) return;
   await db.updateTable("agent_tokens").set({ last_seen_at: now() }).where("id", "=", id).execute();
 }
-
-export async function apiKeyOwner(db: DB, token: string | undefined) {
-  if (!token?.startsWith("rply_k_")) return undefined;
-  const key = await db.selectFrom("api_keys").select("user_id").where("token_hash", "=", hashToken(token)).executeTakeFirst();
-  return key?.user_id;
-}

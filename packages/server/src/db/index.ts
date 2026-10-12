@@ -7,9 +7,11 @@ import { isPostgres } from "./dialect.ts";
 import { nodeSqlite } from "./node-sqlite.ts";
 import type { Database } from "./schema.ts";
 import * as m0001 from "./migrations/0001_init.ts";
+import * as m0002 from "./migrations/0002_drop_api_keys.ts";
 
 const migrations: Record<string, Migration> = {
   "0001_init": m0001,
+  "0002_drop_api_keys": m0002,
 };
 
 export type DB = Kysely<Database>;

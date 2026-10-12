@@ -9,5 +9,5 @@ Outline only, copy comes later.
 :::
 
 - Sign up, create a channel, give your agent the prompt
-- Or `rply init https://rply.sh` and open the claim link; `--api-key` for CI
+- Or `rply init https://rply.sh` and open the claim link
 - Limits and retention

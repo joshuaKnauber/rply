@@ -204,7 +204,6 @@ export const JoinChannelRequest = z.object({ code: z.string().min(1).max(32), la
 export const ClaimChannelRequest = z.object({ code: z.string().min(1).max(32) });
 export const ReadRequest = z.object({ seq: z.number().int().min(0) });
 export const StorageRequest = z.object({ value: Json });
-export const CreateApiKeyRequest = z.object({ label: z.string().trim().min(1).max(100) });
 export const PostMessageRequest = z.intersection(
   Payload,
   z.object({
@@ -306,13 +305,10 @@ export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"]
 export type ChannelRole = "owner" | "member";
 export type ChannelEntry = Channel & { role: ChannelRole; read_seq: number };
 export type ChannelsResponse = { channels: ChannelEntry[] };
-export type CreateChannelResponse = { channel: Channel; agent_token: string; claim: Pairing | null };
+export type CreateChannelResponse = { channel: Channel; agent_token: string; claim: Pairing };
 export type ClaimChannelResponse = { channel: ChannelEntry };
 export type StorageResponse = { value: unknown };
 export type StorageListResponse = { values: Record<string, unknown> };
-export type ApiKey = { id: string; label: string; created_at: number };
-export type ApiKeysResponse = { keys: ApiKey[] };
-export type CreateApiKeyResponse = { key: ApiKey; token: string };
 export type AgentParticipant = Participant & { serve: { commands: string[]; wakes: boolean } | null };
 export type AgentsResponse = { agents: AgentParticipant[] };
 export type CreateOwnedChannelResponse = { channel: ChannelEntry; agent_code: Pairing };

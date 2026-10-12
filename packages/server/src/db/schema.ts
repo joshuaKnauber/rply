@@ -5,7 +5,6 @@ export interface Database {
   channels: ChannelsTable;
   agent_tokens: AgentTokensTable;
   pairing_codes: PairingCodesTable;
-  api_keys: ApiKeysTable;
   messages: MessagesTable;
   asks: AsksTable;
   changes: ChangesTable;
@@ -64,14 +63,6 @@ interface PairingCodesTable {
   role: Sender;
   expires_at: number;
   used_at: number | null;
-}
-
-interface ApiKeysTable {
-  id: string;
-  user_id: string;
-  token_hash: string;
-  label: string;
-  created_at: number;
 }
 
 interface MessagesTable {

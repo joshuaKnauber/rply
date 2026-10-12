@@ -78,7 +78,6 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - `channel_members (user_id, channel_id, role owner|member)`; channels without a member are unclaimed.
 - Read positions are `channel_members.read_seq`, so unread counts match across devices.
 - `app_storage (user_id, channel_id, app_key, value, updated_at)`, primary key on the first three, value max 256 KB, cascades with user and channel. `app_key` is the pin key or the message id. Clients load it with the app and write it debounced; per user, not shared (shared data is the agent's, fetched with `rply.call`).
-- `api_keys.owner_id` set: per-user API keys created in settings.
 - Push subscriptions belong to a session/user instead of human tokens.
 - Stays on the device on purpose: E2E channel keys and the trusted secret keys (`rply.keys`), since both protect against the server; plus the theme.
 - Removed: `human_tokens`, human pairing codes, `/pair?c=`, owner mode, `rply.admin`, `RPLY_ADMIN_TOKEN`, "Remove from this browser". Existing data doesn't need migrating; servers are set up again.
@@ -86,17 +85,16 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 ### Flows
 - **App first (main path):** sign in → New channel → you're the owner → the app shows the prompt with a one-time agent code (1h) → `rply join <server> <code>` → `rply guide setup`. The channel shows "Waiting for an agent" until one joins. "Add an agent" issues new codes (second agent, lost config).
 - **Agent first:** `rply init <server> --name ..` creates an unclaimed channel and prints a claim link (QR in a TTY). Opening it signed in (or after registering) adds the channel to the account. The agent can post meanwhile. Unclaimed channels are deleted after 1 hour; creation is rate-limited per IP. `rply pair` reprints the claim link while unclaimed.
-- **Headless (CI):** `rply init --api-key rply_k_…` creates the channel owned by that key's user.
 - **Another device:** just sign in.
 - **Sharing (later, schema ready):** the owner creates an invite link; the invitee signs in or registers through it even when registration is invite-only and becomes a `member` (read and reply; only owners delete the channel or manage agents).
 - **Agents:** unchanged, `rply_a_` tokens, no login, `--channel` for several channels per machine.
 
 ### Build steps
 - [x] Server: better-auth with migrations for its tables plus `channel_members` (with `read_seq`, no separate reads table) and `app_storage`; registration modes; optional email (Resend); reset-password command.
-- [x] Server: session auth on the human routes (`X-Rply-Channel`), `/v1/sync` over the user's channels, claim links + unclaimed expiry + rate limit, API keys, push per user, origin check for cookie writes; removed human tokens, device pairing and admin routes.
+- [x] Server: session auth on the human routes (`X-Rply-Channel`), `/v1/sync` over the user's channels, claim links + unclaimed expiry + rate limit, push per user (per-user API keys were built and then removed as too rare), origin check for cookie writes; removed human tokens, device pairing and admin routes.
 - [ ] SMTP as a second email option for self-hosters.
-- [x] Web: sign in/register (first-run owner setup), claim page, channel list and read positions from the server, app storage via the API, settings (password, passkeys, API keys, sign out); only the push endpoint, trusted secret keys and theme stay in localStorage.
-- [x] CLI: `init` prints the claim link, `--api-key`, `pair` reprints the claim link, guide and onboarding prompt updated.
+- [x] Web: sign in/register (first-run owner setup), claim page, channel list and read positions from the server, app storage via the API, settings (password, passkeys, sign out); only the push endpoint, trusted secret keys and theme stay in localStorage.
+- [x] CLI: `init` prints the claim link, `pair` reprints the claim link, guide and onboarding prompt updated.
 - [x] Mobile: rply.sh by default with "Use another server", sign in, sessions per server; device pairing dropped. Email + password only (no passkeys or magic links in the app yet).
 - [x] Docs: CLAUDE.md sections 8 and 11, README, site outlines and setup prompts.
 - [ ] Invites: channel members and registration through an invite link (`RPLY_REGISTRATION=invite` acts as closed until then).
@@ -165,6 +163,6 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - [ ] Transactional email for sign-in (Resend, Postmark).
 
 ## Clients and docs
-- [ ] Web app: sign-in and sign-up, account settings (usage, delete account, API keys), and a channel list from the account instead of localStorage.
+- [ ] Web app: sign-in and sign-up, account settings (usage, delete account), and a channel list from the account instead of localStorage.
 - [ ] Site: pricing page (if paid), "rply.sh hosted vs self-host" docs, security page.
 - [ ] Guide and onboarding prompt: the hosted URL as the default in examples.

@@ -38,9 +38,9 @@ export async function deleteFilesOf(deps: Deps, messageId: string) {
 }
 
 export async function sweepFiles(deps: Deps) {
-  if (!deps.files) return;
+  if (!deps.files) return 0;
   const cutoff = now();
-  let query = deps.db
+  const query = deps.db
     .selectFrom("files")
     .select("id")
     .where("deleted_at", "is", null)

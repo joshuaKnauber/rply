@@ -19,13 +19,13 @@ import {
 } from "@rply/schema";
 import { requireAuth, requireUser } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
+import { clientIp, GUARDS } from "../limits.ts";
 import type { Serves } from "../serves.ts";
 import type { DB } from "../db/index.ts";
 import { toChannel, toChannelEntry } from "../serialize.ts";
 import { createAgentToken, createPairingCode, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
 const PAIRING_TTL_MS = 60 * 60 * 1000;
-const ANONYMOUS_CHANNELS_PER_HOUR = 20;
 
 export const userKey = (userId: string) => `user:${userId}`;
 
@@ -33,7 +33,7 @@ export function channelRoutes(deps: Deps, serves: Serves) {
   const { db, accounts } = deps;
   const user = requireUser(deps);
   const owner = requireAuth(deps, "owner");
-  const allowAnonymous = rateLimiter(ANONYMOUS_CHANNELS_PER_HOUR, 60 * 60 * 1000);
+  const { limits } = deps;
 
   const memberChannels = (userId: string) =>
     db
@@ -75,13 +75,12 @@ export function channelRoutes(deps: Deps, serves: Serves) {
       const signedIn = await accounts.user(c.req.raw.headers);
 
       if (signedIn) {
+        await limits.canOwnAnother(signedIn.id);
         const channel = await createChannel(req.name);
         const res: CreateOwnedChannelResponse = { channel: await addMember(channel.id, signedIn.id), agent_code: await createPairing(db, channel.id, "agent") };
         return c.json(res, 201);
       }
-      if (!allowAnonymous(c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "direct")) {
-        throw new HTTPException(429, { message: "Too many new channels, try again later" });
-      }
+      limits.anonymousChannel(clientIp(c));
       const channel = await createChannel(req.name);
       const res: CreateChannelResponse = {
         channel: toChannel(channel),
@@ -92,7 +91,8 @@ export function channelRoutes(deps: Deps, serves: Serves) {
     })
     .post("/channels/claim", user, async (c) => {
       const { code } = parse(ClaimChannelRequest, await c.req.json());
-      const channelId = await usePairing(db, code, "human");
+      await limits.canOwnAnother(c.var.user.id);
+      const channelId = await limits.code(clientIp(c), () => usePairing(db, code, "human"));
       if (await isClaimed(db, channelId)) throw new HTTPException(409, { message: "This channel already belongs to an account" });
       const res: ClaimChannelResponse = { channel: await addMember(channelId, c.var.user.id) };
       return c.json(res, 201);
@@ -162,7 +162,8 @@ export function channelRoutes(deps: Deps, serves: Serves) {
     })
     .post("/agents/join", async (c) => {
       const { code, label } = parse(JoinChannelRequest, await c.req.json());
-      const channelId = await usePairing(db, code, "agent");
+      const channelId = await limits.code(clientIp(c), () => usePairing(db, code, "agent"));
+      await limits.agentSlot(channelId);
       const token = await addAgentToken(db, channelId, label);
       const res: JoinChannelResponse = { channel: toChannel(await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirstOrThrow()), agent_token: token };
       return c.json(res, 201);
@@ -187,7 +188,8 @@ export async function deleteOwnedChannels(deps: Deps, userId: string) {
   for (const { channel_id } of owned) await deleteChannel(deps, channel_id);
 }
 
-// channels created by `rply init` disappear when nobody claimed them before their last claim code expired
+// channels created by `rply init` disappear when nobody claimed them before their last claim code expired,
+// and after a day at most, however often `rply pair` renewed the code
 export async function sweepUnclaimed(deps: Deps) {
   const rows = await deps.db
     .selectFrom("channels")
@@ -196,34 +198,25 @@ export async function sweepUnclaimed(deps: Deps) {
     .where((eb) =>
       eb.and([
         eb.not(eb.exists(eb.selectFrom("channel_members").select("user_id").whereRef("channel_members.channel_id", "=", "channels.id"))),
-        eb.not(
-          eb.exists(
-            eb
-              .selectFrom("pairing_codes")
-              .select("code_hash")
-              .whereRef("pairing_codes.channel_id", "=", "channels.id")
-              .where("pairing_codes.role", "=", "human")
-              .where("pairing_codes.used_at", "is", null)
-              .where("pairing_codes.expires_at", ">", now()),
+        eb.or([
+          eb("created_at", "<", now() - GUARDS.unclaimedLifetimeMs),
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("pairing_codes")
+                .select("code_hash")
+                .whereRef("pairing_codes.channel_id", "=", "channels.id")
+                .where("pairing_codes.role", "=", "human")
+                .where("pairing_codes.used_at", "is", null)
+                .where("pairing_codes.expires_at", ">", now()),
+            ),
           ),
-        ),
+        ]),
       ]),
     )
     .execute();
   for (const row of rows) await deleteChannel(deps, row.id);
-}
-
-function rateLimiter(max: number, windowMs: number) {
-  const hits = new Map<string, number[]>();
-  return (key: string) => {
-    const cutoff = Date.now() - windowMs;
-    const recent = (hits.get(key) ?? []).filter((t) => t > cutoff);
-    if (recent.length >= max) return false;
-    hits.delete(key);
-    hits.set(key, [...recent, Date.now()]);
-    if (hits.size > 10_000) hits.delete(hits.keys().next().value!);
-    return true;
-  };
+  return rows.length;
 }
 
 async function createPairing(db: DB, channelId: string, role: Sender): Promise<Pairing> {

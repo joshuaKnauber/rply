@@ -41,6 +41,7 @@ export function messageRoutes(deps: Deps) {
     .post("/messages", auth, async (c) => {
       const { channel, sender } = c.var.auth;
       const req = parse(PostMessageRequest, await c.req.json());
+      await deps.limits.newMessage(channel.id);
       const body = req.enc ? undefined : parse(sender === "agent" ? AgentMessageBody : HumanMessageBody, req.body);
       if (body && "blocks" in body) rejectSecretBlocks(body.blocks);
       const id = randomId();
@@ -120,6 +121,7 @@ export function messageRoutes(deps: Deps) {
           ? await query()
           : await longPoll({
               notifier,
+              client: c.var.auth.agentId ?? c.var.auth.userId!,
               channelIds: [channel.id],
               waitSeconds: waitParam(c.req.query("wait")),
               signal: c.req.raw.signal,
@@ -142,6 +144,7 @@ export function messageRoutes(deps: Deps) {
     })
     .put("/messages/:id", agent, async (c) => {
       const { channel } = c.var.auth;
+      deps.limits.write(channel.id);
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       const req = parse(ReplaceMessageRequest, await c.req.json());
       rejectSecretBlocks(JSON.parse(target.enc ? "{}" : target.body).blocks);
@@ -155,6 +158,7 @@ export function messageRoutes(deps: Deps) {
     })
     .patch("/messages/:id", agent, async (c) => {
       const { channel } = c.var.auth;
+      deps.limits.write(channel.id);
       const target = await loadAgentMessage(channel.id, c.req.param("id"));
       if (target.enc) throw new HTTPException(400, { message: "Encrypted messages can't be patched, replace them with PUT" });
       rejectSecretBlocks(JSON.parse(target.body).blocks);
@@ -230,6 +234,7 @@ export function messageRoutes(deps: Deps) {
       const untilExpiry = first.ask.expires_at === null ? Infinity : Math.max(0, Math.ceil((first.ask.expires_at - Date.now()) / 1000));
       const message = await longPoll({
         notifier,
+        client: c.var.auth.agentId!,
         channelIds: [channel.id],
         waitSeconds: Math.min(waitParam(c.req.query("wait")), untilExpiry),
         signal: c.req.raw.signal,

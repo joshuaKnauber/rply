@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { sweepOldMessages } from "../src/messages.ts";
 import { sweepUnclaimed } from "../src/routes/channels.ts";
 import { delay, setup } from "./helpers.ts";
 
@@ -61,17 +62,23 @@ test("a channel created by an agent is claimed once, with sloppy input, and then
   assert.deepEqual(thread.json.messages.map((m: any) => m.body.text), ["before the claim"]);
 });
 
-test("unclaimed channels are removed once their claim codes expire", async () => {
+test("unclaimed channels are removed once their claim codes expire, and after a day at most", async () => {
   const { request, deps, db } = await setup();
   const { json } = await request("POST", "/channels", { body: { name: "seo" } });
-  await db.updateTable("channels").set({ created_at: 0 }).execute();
+  const alive = () => request("GET", "/channel", { token: json.agent_token }).then((r) => r.status === 200);
+  await db.updateTable("channels").set({ created_at: Date.now() - 2 * 60 * 60 * 1000 }).execute();
   await sweepUnclaimed(deps);
-  assert.equal((await request("GET", "/channel", { token: json.agent_token })).status, 200);
+  assert.equal(await alive(), true);
+  await db.updateTable("channels").set({ created_at: Date.now() - 25 * 60 * 60 * 1000 }).execute();
+  await sweepUnclaimed(deps);
+  assert.equal(await alive(), false);
+
+  const other = (await request("POST", "/channels", { body: { name: "other" } })).json;
+  await db.updateTable("channels").set({ created_at: Date.now() - 2 * 60 * 60 * 1000 }).execute();
   await db.updateTable("pairing_codes").set({ expires_at: 0 }).execute();
   await sweepUnclaimed(deps);
-  assert.equal((await request("GET", "/channel", { token: json.agent_token })).status, 401);
+  assert.equal((await request("GET", "/channel", { token: other.agent_token })).status, 401);
 });
-
 test("anonymous channel creation is rate limited", async () => {
   const { request } = await setup();
   const ip = { "x-forwarded-for": "203.0.113.7" };
@@ -79,6 +86,92 @@ test("anonymous channel creation is rate limited", async () => {
   assert.equal((await request("POST", "/channels", { body: { name: "one too many" }, headers: ip })).status, 429);
   assert.equal((await request("POST", "/channels", { body: { name: "elsewhere" }, headers: { "x-forwarded-for": "203.0.113.8" } })).status, 201);
 });
+test("account quotas: owned channels, messages per day and file storage", async () => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createDirectoryStore } = await import("../src/files/store.ts");
+  const dir = await mkdtemp(join(tmpdir(), "rply-files-"));
+  const files = { store: createDirectoryStore(dir), maxSize: 1024, totalLimit: 1024 * 1024, retentionMs: null };
+  const { request, ownedChannel, signUp, upload } = await setup({ files, quotas: { channels: 2, messagesPerDay: 3, storage: 10, messageRetentionMs: null } });
+  const user = (await signUp()).token!;
+  const a = await ownedChannel("a", user);
+  await ownedChannel("b", user);
+  assert.equal((await request("POST", "/channels", { token: user, body: { name: "c" } })).status, 403);
+  const unclaimed = (await request("POST", "/channels", { body: { name: "d" } })).json;
+  assert.equal((await request("POST", "/channels/claim", { token: user, body: { code: unclaimed.claim.code } })).status, 403);
+
+  for (let i = 0; i < 3; i++) assert.equal((await request("POST", "/messages", { token: a.agent, body: { body: { text: `m${i}` } } })).status, 201);
+  assert.equal((await request("POST", "/messages", { token: a.agent, body: { body: { text: "one too many" } } })).status, 429);
+  assert.equal((await request("PUT", "/pins/status", { token: a.agent, body: { body: { text: "pinned" } } })).status, 429);
+
+  assert.equal((await upload(a.agent, "a.txt", "123456")).status, 201);
+  assert.equal((await upload(a.agent, "b.txt", "123456")).status, 507);
+
+  assert.deepEqual((await request("GET", "/account/usage", { token: user })).json, {
+    channels: { used: 2, limit: 2 },
+    messages_per_day: { used: 3, limit: 3 },
+    storage: { used: 6, limit: 10 },
+    message_retention_days: null,
+  });
+});
+
+test("unclaimed channels can't upload files and hold at most 100 messages", async () => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createDirectoryStore } = await import("../src/files/store.ts");
+  const dir = await mkdtemp(join(tmpdir(), "rply-files-"));
+  const { request, upload } = await setup({ files: { store: createDirectoryStore(dir), maxSize: 1024, totalLimit: 1024 * 1024, retentionMs: null } });
+  const { agent_token: agent } = (await request("POST", "/channels", { body: { name: "seo" } })).json;
+  assert.equal((await upload(agent, "a.txt", "hi")).status, 403);
+  for (let i = 0; i < 100; i++) await request("POST", "/messages", { token: agent, body: { body: { text: `m${i}` } } });
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { text: "101" } } })).status, 403);
+});
+
+test("guards: guessing codes, agents per channel, write bursts and open waits", async () => {
+  const { request, ownedChannel, signUp } = await setup();
+  const user = (await signUp()).token!;
+  const ip = { "x-forwarded-for": "spoofed, 198.51.100.4" };
+  for (let i = 0; i < 10; i++) assert.equal((await request("POST", "/agents/join", { body: { code: `WRNG-${String(i).padStart(4, "0")}` }, headers: ip })).status, 404);
+  const { channel, human, agent } = await ownedChannel("seo", user);
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  assert.equal((await request("POST", "/agents/join", { body: { code }, headers: ip })).status, 429);
+  assert.equal((await request("POST", "/agents/join", { body: { code }, headers: { "x-forwarded-for": "spoofed, 198.51.100.5" } })).status, 201);
+
+  for (let i = 0; i < 18; i++) {
+    const next = (await request("POST", "/pairings", { token: human })).json.code;
+    assert.equal((await request("POST", "/agents/join", { body: { code: next } })).status, 201);
+  }
+  const extra = (await request("POST", "/pairings", { token: human })).json.code;
+  assert.equal((await request("POST", "/agents/join", { body: { code: extra } })).status, 403);
+
+  const writes = await Promise.all(Array.from({ length: 121 }, (_, i) => request("POST", "/messages", { token: agent, body: { body: { text: `w${i}` } } })));
+  assert.equal(writes.filter((r) => r.status === 429).length, 1);
+
+  const waits = await Promise.all(Array.from({ length: 11 }, () => request("GET", "/messages?since=999999&wait=1", { token: agent })));
+  assert.deepEqual(waits.map((r) => r.status).sort(), [...Array(10).fill(200), 429]);
+  assert.ok(channel.id);
+});
+
+test("usage reports nothing on a server without quotas", async () => {
+  const { request, ownedChannel } = await setup();
+  const { human } = await ownedChannel();
+  assert.deepEqual((await request("GET", "/account/usage", { token: human })).json, { channels: null, messages_per_day: null, storage: null, message_retention_days: null });
+});
+
+test("message retention deletes old unpinned messages", async () => {
+  const { request, ownedChannel, db, deps } = await setup({ quotas: { channels: null, messagesPerDay: null, storage: null, messageRetentionMs: 60_000 } });
+  const { agent, human } = await ownedChannel();
+  await request("POST", "/messages", { token: agent, body: { body: { text: "old" } } });
+  await request("PUT", "/pins/status", { token: agent, body: { body: { text: "pinned" } } });
+  await db.updateTable("messages").set({ created_at: 0 }).execute();
+  await request("POST", "/messages", { token: agent, body: { body: { text: "new" } } });
+  await sweepOldMessages(deps);
+  assert.deepEqual((await request("GET", "/messages", { token: human })).json.messages.map((m: any) => m.body.text), ["new"]);
+  assert.equal((await request("GET", "/pins", { token: human })).json.messages.length, 1);
+});
+
 test("a channel created in the app gets its agent through a single-use agent code", async () => {
   const { request, signUp } = await setup();
   const user = (await signUp()).token!;

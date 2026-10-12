@@ -22,6 +22,7 @@ export function syncRoutes(deps: Deps) {
 
     const result = await longPoll({
       notifier,
+      client: userId,
       channelIds: [...channelIds, userKey(userId)],
       waitSeconds: wait,
       signal: c.req.raw.signal,

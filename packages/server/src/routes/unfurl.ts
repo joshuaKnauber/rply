@@ -21,6 +21,7 @@ export function unfurlRoutes(deps: Deps, fetchPage: typeof fetchPreview = fetchP
     if (!/^https?:\/\//i.test(url) || !URL.canParse(url)) throw new HTTPException(400, { message: "Expected an http(s) URL" });
     const cached = cache.get(url);
     if (cached && cached.expires > Date.now()) return c.json(cached.preview);
+    deps.limits.unfurl(c.var.auth.channel.id);
 
     const preview = await fetchPage(url).catch(() => ({ url, title: null, description: null, image: null, icon: null, site: null }));
     cache.delete(url);

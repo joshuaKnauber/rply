@@ -34,6 +34,7 @@ export function fileRoutes(deps: Deps) {
         const bytes = new Uint8Array(await c.req.arrayBuffer());
         if (bytes.byteLength === 0) throw new HTTPException(400, { message: "Empty file" });
 
+        await deps.limits.upload(channel.id, bytes.byteLength);
         const { used } = await db
           .selectFrom("files")
           .select((eb) => eb.fn.coalesce(eb.fn.sum<number>("size"), eb.lit(0)).as("used"))

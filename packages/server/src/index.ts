@@ -3,11 +3,13 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { emailFromEnv } from "./email.ts";
 import { createAccounts } from "./accounts.ts";
+import { createLimits, quotasFromEnv } from "./limits.ts";
 import { databaseFromEnv, isPostgresUrl, openDatabase } from "./db/index.ts";
 import { filesConfigFromEnv } from "./files/config.ts";
 import { sweepFiles } from "./files/manage.ts";
 import { createNotifier } from "./notifier.ts";
 import { createPush } from "./push/index.ts";
+import { sweepOldMessages } from "./messages.ts";
 import { deleteOwnedChannels, sweepUnclaimed } from "./routes/channels.ts";
 
 const port = Number(process.env.PORT ?? 8080);
@@ -27,11 +29,23 @@ const accounts = await createAccounts(db, {
 
 const files = filesConfigFromEnv(process.env, dbPath);
 const push = process.env.RPLY_PUSH === "off" ? null : await createPush(db, { env: process.env });
-const deps = { db, notifier: createNotifier(), accounts, files, push };
+const limits = createLimits(db, quotasFromEnv(process.env));
+const deps = { db, notifier: createNotifier(), accounts, limits, files, push };
 const app = createApp(deps, { webDir });
+// logs only runs that deleted something
 const sweep = () => {
-  sweepFiles(deps).catch((err) => console.error("file cleanup failed", err));
-  sweepUnclaimed(deps).catch((err) => console.error("channel cleanup failed", err));
+  sweepFiles(deps).then(
+    (n) => n && console.log(`cleanup: deleted ${n} expired or unattached file${n === 1 ? "" : "s"}`),
+    (err) => console.error("file cleanup failed", err),
+  );
+  sweepUnclaimed(deps).then(
+    (n) => n && console.log(`cleanup: deleted ${n} unclaimed channel${n === 1 ? "" : "s"}`),
+    (err) => console.error("channel cleanup failed", err),
+  );
+  sweepOldMessages(deps).then(
+    ({ messages, files }) => messages && console.log(`retention: deleted ${messages} message${messages === 1 ? "" : "s"} and ${files} file${files === 1 ? "" : "s"}`),
+    (err) => console.error("message cleanup failed", err),
+  );
 };
 sweep();
 const sweeper = setInterval(sweep, 10 * 60 * 1000);

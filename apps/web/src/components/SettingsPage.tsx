@@ -5,8 +5,11 @@ import { useTheme } from "next-themes";
 import { RadioGroup } from "radix-ui";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import type { AccountUsage } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { api } from "@/lib/api";
 import { authClient, orThrow, signOut, useSession } from "@/lib/auth";
 import { formatTime } from "@/lib/format";
 import { useServerInfo } from "@/lib/queries";
@@ -33,6 +36,7 @@ export function SettingsPage() {
       <div className="flex-1 overflow-y-auto px-6">
         <div className="mx-auto flex max-w-2xl flex-col divide-y py-6">
           <Account />
+          <UsageSection />
           <Setting title="Theme" description="Follow your system, or pick light or dark.">
             <ThemePicker />
           </Setting>
@@ -88,6 +92,41 @@ function Account() {
         Sign out
       </Button>
     </Setting>
+  );
+}
+
+const megabytes = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+
+// only what this server limits; self-hosted servers without quotas show nothing
+function UsageSection() {
+  const { data } = useQuery({ queryKey: ["usage"], queryFn: () => api<AccountUsage>("/account/usage"), refetchOnWindowFocus: true });
+  if (!data) return null;
+  const rows = [
+    data.channels && { label: "Channels you own", ...data.channels, text: `${data.channels.used} of ${data.channels.limit}` },
+    data.messages_per_day && { label: "Messages in the last 24 hours", ...data.messages_per_day, text: `${data.messages_per_day.used} of ${data.messages_per_day.limit}` },
+    data.storage && { label: "File storage", ...data.storage, text: `${megabytes(data.storage.used)} of ${megabytes(data.storage.limit)}` },
+  ].filter((row) => row !== null);
+  if (rows.length === 0 && data.message_retention_days === null) return null;
+
+  return (
+    <Section title="Usage" description="Your account's limits on this server, counted over the channels you own.">
+      {rows.length > 0 && (
+        <ul className="flex max-w-sm flex-col gap-4">
+          {rows.map((row) => (
+            <li key={row.label} className="flex flex-col gap-1.5">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span>{row.label}</span>
+                <span className="text-muted-foreground tabular-nums">{row.text}</span>
+              </div>
+              <Progress value={Math.min(100, (row.used / row.limit) * 100)} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {data.message_retention_days !== null && (
+        <p className="text-muted-foreground text-sm">Messages are kept for {data.message_retention_days} days, pinned ones until they're removed.</p>
+      )}
+    </Section>
   );
 }
 

@@ -309,6 +309,8 @@ export type CreateChannelResponse = { channel: Channel; agent_token: string; cla
 export type ClaimChannelResponse = { channel: ChannelEntry };
 export type StorageResponse = { value: unknown };
 export type StorageListResponse = { values: Record<string, unknown> };
+export type Usage = { used: number; limit: number };
+export type AccountUsage = { channels: Usage | null; messages_per_day: Usage | null; storage: Usage | null; message_retention_days: number | null };
 export type AccountExport = {
   exported_at: number;
   user: { id: string; email: string; name: string };

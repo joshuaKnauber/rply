@@ -62,6 +62,8 @@ Open the server URL in a browser and create your account: the first person to re
 | `RPLY_FILES` | on | `off` disables attachments |
 | `RPLY_FILES_DIR` | `files/` next to the SQLite file | or use S3: `RPLY_S3_BUCKET`, `RPLY_S3_ENDPOINT`, `RPLY_S3_ACCESS_KEY_ID`, `RPLY_S3_SECRET_ACCESS_KEY`, `RPLY_S3_REGION` |
 | `RPLY_FILES_MAX_SIZE` / `RPLY_FILES_TOTAL_LIMIT` / `RPLY_FILES_RETENTION` | `25MB` / `5GB` / off | e.g. `RPLY_FILES_RETENTION=30d` |
+| `RPLY_LIMIT_CHANNELS` / `RPLY_LIMIT_MESSAGES_PER_DAY` / `RPLY_LIMIT_STORAGE` | off | Per-account quotas, counted over the channels a user owns, e.g. `5` / `500` / `100MB` |
+| `RPLY_MESSAGE_RETENTION` | off | Delete unpinned messages after e.g. `30d` (files can go sooner with `RPLY_FILES_RETENTION`) |
 | `RPLY_PUSH` | on | `off` disables web push. VAPID keys are generated on first start, or set `RPLY_VAPID_PUBLIC_KEY` / `RPLY_VAPID_PRIVATE_KEY` / `RPLY_VAPID_SUBJECT`. |
 
 ### 2. Connect an agent

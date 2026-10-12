@@ -117,12 +117,14 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - [ ] Indexes for account-level queries (`channels.owner_id`, sync over many channels).
 
 ## Limits, quotas, abuse
-- [ ] Per-account limits: channels, agents per channel, messages per minute, file storage total (replaces the global `RPLY_FILES_TOTAL_LIMIT`), app/pin size, calls per minute.
-- [ ] Rate limiting per token and per IP: pairing claims (codes are short), unfurl, sign-in, channel creation.
-- [ ] Unfurl is an open fetcher for anyone with a token: rate limit it per account and keep the cache.
-- [ ] Message and file retention for free accounts (e.g. 90 days), using the existing retention sweep made per account.
-- [ ] Abuse handling: way to report a channel, admin tools to suspend an account, terms that forbid using channels to distribute malware or phishing (html apps and files are served from our origin, inside the sandbox / as attachments).
-- [ ] Request body limits are global today (256 KB, 5 MB for call results, 25 MB files); review them for a shared instance.
+- [x] Guards on every server: write and call bursts per channel, link previews per channel, open long-polls per client, wrong codes per IP, agents per channel, anonymous channels per IP, unclaimed channels (no files, 100 messages, 24h max). Client IP from the last `X-Forwarded-For` entry.
+- [x] Per-account quotas from env: owned channels, messages per rolling day, file storage, message retention (plus the existing shorter file retention).
+- [ ] rply.sh free plan values to start with: `RPLY_LIMIT_CHANNELS=5`, `RPLY_LIMIT_MESSAGES_PER_DAY=500`, `RPLY_LIMIT_STORAGE=100MB`, `RPLY_MESSAGE_RETENTION=30d`, `RPLY_FILES_RETENTION=7d`, `RPLY_FILES_MAX_SIZE=10MB`. Watch real usage before tightening.
+- [x] Usage in Settings (`GET /v1/account/usage`), only for quotas the server sets.
+- [ ] Check what `X-Forwarded-For` looks like on Railway (one proxy hop expected; with two, `clientIp` would see the inner proxy).
+- [x] `delete-user` server command for removing abusive accounts with their channels.
+- [ ] Abuse handling: a way to report a channel, terms that forbid malware or phishing.
+- [ ] Email sending limits per account once rply.sh sends more than auth emails.
 
 ## Realtime and calls
 - [ ] Single instance first: keep the in-memory notifier, serve registry and call waiters.
@@ -143,11 +145,6 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - [ ] R2 bucket via the existing S3 config.
 - [ ] Per-account quota (see limits) and the 24h unreferenced-upload sweep (already built).
 
-## Billing (only if there's a paid tier)
-- [ ] Decide free vs paid limits (channels, storage, retention, history).
-- [ ] Merchant of record (Polar, Lemon Squeezy, Paddle) so VAT is handled, or Stripe Billing.
-- [ ] Enforce limits from the plan, show usage in the app.
-
 ## Security and privacy
 - [ ] Decide whether E2E is the default on rply.sh ("we can't read your agents' messages"). Its costs are listed in CLAUDE.md section 8: no curl, no server-side validation, no remote MCP, generic push text.
 - [ ] The web app's code is served by us, so on hosted "the server can capture secrets as they're typed" means "rply.sh can". Say so plainly in the security docs.
@@ -165,5 +162,5 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 
 ## Clients and docs
 - [ ] Web app: sign-in and sign-up, account settings (usage, delete account), and a channel list from the account instead of localStorage.
-- [ ] Site: pricing page (if paid), "rply.sh hosted vs self-host" docs, security page.
+- [ ] Site: "rply.sh hosted vs self-host" docs, security page.
 - [ ] Guide and onboarding prompt: the hosted URL as the default in examples.

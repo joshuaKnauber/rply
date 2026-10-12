@@ -68,3 +68,23 @@ export async function recordChanges({ db, notifier }: Deps, channelId: string, m
   });
   notifier.notify(channelId);
 }
+
+// RPLY_MESSAGE_RETENTION: unpinned messages (and their files) older than that are deleted for good
+export async function sweepOldMessages(deps: Deps) {
+  const deleted = { messages: 0, files: 0 };
+  const retention = deps.limits.quotas.messageRetentionMs;
+  if (retention === null) return deleted;
+  const cutoff = now() - retention;
+  while (true) {
+    const rows = await deps.db.selectFrom("messages").select("id").where("pin", "is", null).where("created_at", "<", cutoff).limit(500).execute();
+    if (rows.length === 0) return deleted;
+    const ids = rows.map((r) => r.id);
+    const files = await deps.db.selectFrom("files").select("id").where("message_id", "in", ids).where("deleted_at", "is", null).execute();
+    await Promise.all(files.map((f) => deps.files?.store.remove(f.id)));
+    await deps.db.deleteFrom("files").where("message_id", "in", ids).execute();
+    await deps.db.deleteFrom("changes").where("message_id", "in", ids).execute();
+    await deps.db.deleteFrom("messages").where("id", "in", ids).execute();
+    deleted.messages += ids.length;
+    deleted.files += files.length;
+  }
+}

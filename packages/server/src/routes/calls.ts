@@ -29,9 +29,10 @@ export function callRoutes(deps: Deps, serves: Serves) {
     return { row, call };
   };
 
-  const waitForAgent = (channelId: string, id: string, seconds: number, signal: AbortSignal) =>
+  const waitForAgent = (client: string, channelId: string, id: string, seconds: number, signal: AbortSignal) =>
     longPoll({
       notifier,
+      client,
       channelIds: [channelId],
       waitSeconds: seconds,
       signal,
@@ -64,6 +65,8 @@ export function callRoutes(deps: Deps, serves: Serves) {
       if (target.sender !== "agent") throw new HTTPException(400, { message: "Calls can only come from agent messages" });
 
       const id = randomId();
+      if (req.agent) await deps.limits.newMessage(channel.id);
+      else deps.limits.call(channel.id);
       if (!req.agent) {
         const online = serves.onlineIn(channel.id);
         if (online.length === 0) throw new HTTPException(503, { message: "offline" });
@@ -90,10 +93,10 @@ export function callRoutes(deps: Deps, serves: Serves) {
         deleted_at: null,
       });
       await recordChanges(deps, channel.id, [id]);
-      return c.json(await waitForAgent(channel.id, id, req.wait ?? 0, c.req.raw.signal));
+      return c.json(await waitForAgent(c.var.auth.userId!, channel.id, id, req.wait ?? 0, c.req.raw.signal));
     })
     .get("/calls/:id", human, async (c) => {
-      return c.json(await waitForAgent(c.var.auth.channel.id, c.req.param("id"), waitParam(c.req.query("wait")), c.req.raw.signal));
+      return c.json(await waitForAgent(c.var.auth.userId!, c.var.auth.channel.id, c.req.param("id"), waitParam(c.req.query("wait")), c.req.raw.signal));
     })
     .get("/calls", agent, async (c) => {
       const { channel, agentId } = c.var.auth;
@@ -104,6 +107,7 @@ export function callRoutes(deps: Deps, serves: Serves) {
       try {
         const calls = await longPoll({
           notifier,
+          client: agentId!,
           channelIds: [`calls:${agentId}`],
           waitSeconds: waitParam(c.req.query("wait")),
           signal: c.req.raw.signal,

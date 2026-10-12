@@ -1,11 +1,27 @@
+import { HTTPException } from "hono/http-exception";
+
 type Listener = () => void;
+
+// open long-polls per agent or user; more than this is a client gone wrong or someone tying up connections
+export const MAX_WAITS_PER_CLIENT = 10;
 
 export type Notifier = ReturnType<typeof createNotifier>;
 
 export function createNotifier() {
   const listeners = new Map<string, Set<Listener>>();
+  const waits = new Map<string, number>();
 
   return {
+    enter(client: string) {
+      const open = waits.get(client) ?? 0;
+      if (open >= MAX_WAITS_PER_CLIENT) throw new HTTPException(429, { message: `Too many open waits (max ${MAX_WAITS_PER_CLIENT}), close some first` });
+      waits.set(client, open + 1);
+      return () => {
+        const left = (waits.get(client) ?? 1) - 1;
+        if (left > 0) waits.set(client, left);
+        else waits.delete(client);
+      };
+    },
     notify(channelId: string) {
       for (const listener of listeners.get(channelId) ?? []) listener();
     },
@@ -27,12 +43,23 @@ export function createNotifier() {
 
 export async function longPoll<T>(opts: {
   notifier: Notifier;
+  client: string;
   channelIds: string[];
   waitSeconds: number;
   signal: AbortSignal;
   fetch: () => Promise<T>;
   isEmpty: (result: T) => boolean;
 }): Promise<T> {
+  if (opts.waitSeconds <= 0) return opts.fetch();
+  const leave = opts.notifier.enter(opts.client);
+  try {
+    return await waitFor(opts);
+  } finally {
+    leave();
+  }
+}
+
+async function waitFor<T>(opts: Parameters<typeof longPoll<T>>[0]): Promise<T> {
   const deadline = Date.now() + opts.waitSeconds * 1000;
   while (true) {
     const { promise: woken, resolve: wake } = Promise.withResolvers<void>();

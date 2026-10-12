@@ -44,6 +44,7 @@ export function secretRoutes(deps: Deps) {
       const { public_key: publicKey } = await db.selectFrom("agent_tokens").select("public_key").where("id", "=", agentId!).executeTakeFirstOrThrow();
       if (!publicKey) throw new HTTPException(400, { message: "Upload a public key first (PUT /v1/channel/key)" });
       const req = parse(CreateSecretRequest, await c.req.json());
+      await deps.limits.newMessage(channel.id);
       const id = randomId();
       const messageId = randomId();
       const block: BlockOf<"secret"> = {
@@ -88,6 +89,7 @@ export function secretRoutes(deps: Deps) {
       const untilExpiry = first.expires_at === null ? Infinity : Math.max(0, Math.ceil((Number(first.expires_at) - Date.now()) / 1000));
       const row = await longPoll({
         notifier,
+        client: c.var.auth.agentId!,
         channelIds: [channel.id],
         waitSeconds: Math.min(waitParam(c.req.query("wait")), untilExpiry),
         signal: c.req.raw.signal,

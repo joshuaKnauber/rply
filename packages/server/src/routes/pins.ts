@@ -23,6 +23,8 @@ export function pinRoutes(deps: Deps) {
 
   const save = async (channelId: string, key: string, enc: boolean, body: string) => {
     const existing = await findPinned(channelId, key);
+    if (existing) deps.limits.write(channelId);
+    else await deps.limits.newMessage(channelId);
     const id = existing?.id ?? randomId();
     const fileIds = enc ? [] : await checkFiles(deps, channelId, JSON.parse(body));
     if (existing) {
@@ -58,6 +60,7 @@ export function pinRoutes(deps: Deps) {
       const current = await findPinned(channel.id, key);
       if (!current) throw new HTTPException(404, { message: `Nothing pinned as "${key}". It was never set or the human unpinned it; use pin set to pin a new one` });
       if (current.enc) throw new HTTPException(400, { message: "Encrypted pins can't be patched, use PUT" });
+      deps.limits.write(channel.id);
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(PinnedBody, applyPatch(current.body, patch)));
       rejectSecretBlocks(JSON.parse(body).blocks);

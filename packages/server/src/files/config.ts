@@ -13,10 +13,10 @@ export function parseSize(input: string | undefined, fallback: number) {
   return Math.round(Number(match[1]) * unit);
 }
 
-function parseRetention(input: string | undefined) {
+export function parseRetention(input: string | undefined, name = "RPLY_FILES_RETENTION") {
   if (!input) return null;
   const match = input.trim().match(/^(\d+)\s*(h|d)$/);
-  if (!match) throw new Error(`Invalid RPLY_FILES_RETENTION "${input}", use e.g. 30d or 12h`);
+  if (!match) throw new Error(`Invalid ${name} "${input}", use e.g. 30d or 12h`);
   return Number(match[1]) * (match[2] === "h" ? 3_600_000 : 86_400_000);
 }
 

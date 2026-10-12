@@ -20,7 +20,7 @@ function parseRetention(input: string | undefined) {
   return Number(match[1]) * (match[2] === "h" ? 3_600_000 : 86_400_000);
 }
 
-export function filesConfigFromEnv(env: NodeJS.ProcessEnv, dbPath: string): FilesConfig | null {
+export function filesConfigFromEnv(env: NodeJS.ProcessEnv, dbPath: string | null): FilesConfig | null {
   if (env.RPLY_FILES === "off") return null;
   const limits = {
     maxSize: parseSize(env.RPLY_FILES_MAX_SIZE, 25 * MB),
@@ -39,6 +39,6 @@ export function filesConfigFromEnv(env: NodeJS.ProcessEnv, dbPath: string): File
     });
     return { store, ...limits };
   }
-  const dir = env.RPLY_FILES_DIR ?? (dbPath === ":memory:" ? null : join(dirname(resolve(dbPath)), "files"));
+  const dir = env.RPLY_FILES_DIR ?? (dbPath === null || dbPath === ":memory:" ? null : join(dirname(resolve(dbPath)), "files"));
   return dir ? { store: createDirectoryStore(resolve(dir)), ...limits } : null;
 }

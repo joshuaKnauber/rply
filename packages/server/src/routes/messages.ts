@@ -15,7 +15,7 @@ import {
 } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { longPoll } from "../notifier.ts";
 import { notifyAboutMessage } from "../push/notify.ts";
@@ -72,22 +72,19 @@ export function messageRoutes(deps: Deps) {
           }
         }
 
-        await trx
-          .insertInto("messages")
-          .values({
-            id,
-            channel_id: channel.id,
-            sender,
-            enc: req.enc ? 1 : 0,
-            body: req.enc ? req.body : JSON.stringify(body),
-            reply_to: req.reply_to ?? null,
-            pin: null,
-            state: null,
-            created_at: now(),
-            updated_at: null,
-            deleted_at: null,
-          })
-          .execute();
+        await insertMessage(trx, {
+          id,
+          channel_id: channel.id,
+          sender,
+          enc: req.enc ? 1 : 0,
+          body: req.enc ? req.body : JSON.stringify(body),
+          reply_to: req.reply_to ?? null,
+          pin: null,
+          state: null,
+          created_at: now(),
+          updated_at: null,
+          deleted_at: null,
+        });
         if (ask) {
           await trx
             .insertInto("asks")

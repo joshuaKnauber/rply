@@ -4,7 +4,7 @@ import { CreateSecretRequest, FulfilSecretRequest, type BlockOf, type SecretResp
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import type { DB } from "../db/index.ts";
-import { loadMessage, recordChanges, toMessage } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, toMessage } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
 import { notifyAboutMessage } from "../push/notify.ts";
 import { now, randomId } from "../tokens.ts";
@@ -58,22 +58,19 @@ export function secretRoutes(deps: Deps) {
         public_key: publicKey,
       };
       await db.transaction().execute(async (trx) => {
-        await trx
-          .insertInto("messages")
-          .values({
-            id: messageId,
-            channel_id: channel.id,
-            sender: "agent",
-            enc: 0,
-            body: JSON.stringify({ blocks: [block] }),
-            reply_to: null,
-            pin: null,
-            state: null,
-            created_at: now(),
-            updated_at: null,
-            deleted_at: null,
-          })
-          .execute();
+        await insertMessage(trx, {
+          id: messageId,
+          channel_id: channel.id,
+          sender: "agent",
+          enc: 0,
+          body: JSON.stringify({ blocks: [block] }),
+          reply_to: null,
+          pin: null,
+          state: null,
+          created_at: now(),
+          updated_at: null,
+          deleted_at: null,
+        });
         await trx
           .insertInto("secret_requests")
           .values({ id, channel_id: channel.id, message_id: messageId, name: req.name, target: req.target, mode: req.mode, status: "open", ciphertext: null, public_key: publicKey, expires_at: req.expires_at ?? null, created_at: now(), closed_at: null })

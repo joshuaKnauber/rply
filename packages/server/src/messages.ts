@@ -1,7 +1,10 @@
 import { HTTPException } from "hono/http-exception";
 import type { Message } from "@rply/schema";
 import type { Deps } from "./context.ts";
+import type { Insertable } from "kysely";
+import { inSeqOrder } from "./db/dialect.ts";
 import type { DB } from "./db/index.ts";
+import type { Database } from "./db/schema.ts";
 import { now } from "./tokens.ts";
 
 export const selectMessages = (db: DB) =>
@@ -49,12 +52,19 @@ export async function loadMessage(db: DB, channelId: string, id: string) {
   return row;
 }
 
+export const insertMessage = (db: DB, values: Insertable<Database["messages"]>) =>
+  inSeqOrder(db, async (trx) => {
+    await trx.insertInto("messages").values(values).execute();
+  });
+
 export async function recordChanges({ db, notifier }: Deps, channelId: string, messageIds: string[]) {
   if (messageIds.length === 0) return;
   const created_at = now();
-  await db
-    .insertInto("changes")
-    .values(messageIds.map((message_id) => ({ channel_id: channelId, message_id, created_at })))
-    .execute();
+  await inSeqOrder(db, async (trx) => {
+    await trx
+      .insertInto("changes")
+      .values(messageIds.map((message_id) => ({ channel_id: channelId, message_id, created_at })))
+      .execute();
+  });
   notifier.notify(channelId);
 }

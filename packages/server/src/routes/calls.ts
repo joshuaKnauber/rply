@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { CallRequest, CallResultRequest, COMMAND_NAME, type Call, type CallResponse, type CallsResponse, type PendingCall } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { loadMessage, recordChanges } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
 import type { Serve, Serves } from "../serves.ts";
 import { now, randomId } from "../tokens.ts";
@@ -76,22 +76,19 @@ export function callRoutes(deps: Deps, serves: Serves) {
       }
 
       const call: Call = { name: req.name, block_id: req.block_id, args: req.args };
-      await db
-        .insertInto("messages")
-        .values({
-          id,
-          channel_id: channel.id,
-          sender: "human",
-          enc: 0,
-          body: JSON.stringify({ call }),
-          reply_to: target.id,
-          pin: null,
-          state: null,
-          created_at: now(),
-          updated_at: null,
-          deleted_at: null,
-        })
-        .execute();
+      await insertMessage(db, {
+        id,
+        channel_id: channel.id,
+        sender: "human",
+        enc: 0,
+        body: JSON.stringify({ call }),
+        reply_to: target.id,
+        pin: null,
+        state: null,
+        created_at: now(),
+        updated_at: null,
+        deleted_at: null,
+      });
       await recordChanges(deps, channel.id, [id]);
       return c.json(await waitForAgent(channel.id, id, req.wait ?? 0, c.req.raw.signal));
     })

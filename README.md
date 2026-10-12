@@ -53,9 +53,10 @@ Open the server URL in a browser to get the web app. With an admin token set, yo
 |---|---|---|
 | `PORT` | `8080` | |
 | `RPLY_DB` | `/data/rply.db` in Docker | SQLite file |
+| `RPLY_DATABASE_URL` | unset | `postgres://…` to use Postgres instead of SQLite. Files then need `RPLY_FILES_DIR` or S3. |
 | `RPLY_ADMIN_TOKEN` | unset | If set, creating channels needs it (`--server-token`). Unset means anyone who can reach the server can create channels. |
 | `RPLY_FILES` | on | `off` disables attachments |
-| `RPLY_FILES_DIR` | `files/` next to the database | or use S3: `RPLY_S3_BUCKET`, `RPLY_S3_ENDPOINT`, `RPLY_S3_ACCESS_KEY_ID`, `RPLY_S3_SECRET_ACCESS_KEY`, `RPLY_S3_REGION` |
+| `RPLY_FILES_DIR` | `files/` next to the SQLite file | or use S3: `RPLY_S3_BUCKET`, `RPLY_S3_ENDPOINT`, `RPLY_S3_ACCESS_KEY_ID`, `RPLY_S3_SECRET_ACCESS_KEY`, `RPLY_S3_REGION` |
 | `RPLY_FILES_MAX_SIZE` / `RPLY_FILES_TOTAL_LIMIT` / `RPLY_FILES_RETENTION` | `25MB` / `5GB` / off | e.g. `RPLY_FILES_RETENTION=30d` |
 | `RPLY_PUSH` | on | `off` disables web push. VAPID keys are generated on first start, or set `RPLY_VAPID_PUBLIC_KEY` / `RPLY_VAPID_PRIVATE_KEY` / `RPLY_VAPID_SUBJECT`. |
 

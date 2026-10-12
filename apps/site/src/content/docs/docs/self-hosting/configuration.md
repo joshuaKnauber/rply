@@ -8,4 +8,4 @@ sidebar:
 Outline only, copy comes later.
 :::
 
-- Env vars: `PORT`, `RPLY_DB`, `RPLY_ADMIN_TOKEN`, `RPLY_WEB_DIR`
+- Env vars: `PORT`, `RPLY_DB`, `RPLY_DATABASE_URL` (Postgres), `RPLY_ADMIN_TOKEN`, `RPLY_WEB_DIR`

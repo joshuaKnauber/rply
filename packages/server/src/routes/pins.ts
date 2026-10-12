@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { isApp, PatchMessageRequest, PIN_KEY, PinnedBody, PutPinRequest } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
-import { loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { applyPatch } from "../patch.ts";
 import { rejectSecretBlocks } from "./messages.ts";
@@ -28,10 +28,7 @@ export function pinRoutes(deps: Deps) {
     if (existing) {
       await db.updateTable("messages").set({ enc: enc ? 1 : 0, body, updated_at: now() }).where("id", "=", id).execute();
     } else {
-      await db
-        .insertInto("messages")
-        .values({ id, channel_id: channelId, sender: "agent", enc: enc ? 1 : 0, body, reply_to: null, pin: key, state: null, created_at: now(), updated_at: null, deleted_at: null })
-        .execute();
+      await insertMessage(db, { id, channel_id: channelId, sender: "agent", enc: enc ? 1 : 0, body, reply_to: null, pin: key, state: null, created_at: now(), updated_at: null, deleted_at: null });
     }
     await linkFiles(deps, fileIds, id);
     await recordChanges(deps, channelId, [id]);

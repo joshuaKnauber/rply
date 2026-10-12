@@ -1,4 +1,5 @@
 import type { Kysely } from "kysely";
+import { seqColumn } from "../dialect.ts";
 
 export async function up(db: Kysely<any>) {
   await db.schema
@@ -42,7 +43,7 @@ export async function up(db: Kysely<any>) {
 
   await db.schema
     .createTable("messages")
-    .addColumn("seq", "integer", (c) => c.primaryKey().autoIncrement())
+    .$call(seqColumn(db))
     .addColumn("id", "text", (c) => c.notNull().unique())
     .addColumn("channel_id", "text", (c) => c.notNull().references("channels.id").onDelete("cascade"))
     .addColumn("sender", "text", (c) => c.notNull())
@@ -72,7 +73,7 @@ export async function up(db: Kysely<any>) {
 
   await db.schema
     .createTable("changes")
-    .addColumn("seq", "integer", (c) => c.primaryKey().autoIncrement())
+    .$call(seqColumn(db))
     .addColumn("channel_id", "text", (c) => c.notNull().references("channels.id").onDelete("cascade"))
     .addColumn("message_id", "text", (c) => c.notNull())
     .addColumn("created_at", "bigint", (c) => c.notNull())

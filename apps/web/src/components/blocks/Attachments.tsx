@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DownloadIcon, ImageOffIcon } from "lucide-react";
 import { toast } from "sonner";
-import { formatBytes, INLINE_IMAGE_TYPES, type FileRef } from "@rply/schema";
+import { formatBytes, INLINE_IMAGE_TYPES, INLINE_VIDEO_TYPES, type FileRef } from "@rply/schema";
 import { useChannelEntry } from "@/lib/channel-context";
 import { downloadFile, useFileUrl } from "@/lib/files";
 import { ImagePreview } from "./ImagePreview";
@@ -28,7 +28,27 @@ export function ImageView({ fileId, name }: { fileId: string; name?: string }) {
   );
 }
 
+function VideoView(props: FileProps) {
+  const entry = useChannelEntry();
+  const { data: url, isPending, error } = useFileUrl(entry, props.fileId);
+  const [failed, setFailed] = useState(false);
+  if (error || failed) return <FileView {...props} mime={undefined} />;
+  if (isPending) return <div className="bg-muted aspect-video w-full max-w-md animate-pulse rounded-lg" />;
+  return (
+    <video
+      src={url}
+      controls
+      playsInline
+      preload="metadata"
+      aria-label={props.name}
+      onError={() => setFailed(true)}
+      className="max-h-96 w-fit max-w-full rounded-lg border bg-black"
+    />
+  );
+}
+
 export function FileView(props: FileProps) {
+  if (props.mime && INLINE_VIDEO_TYPES.includes(props.mime)) return <VideoView {...props} />;
   return (
     <div className="max-w-md overflow-hidden rounded-lg border">
       <FileRow {...props} />
@@ -54,11 +74,15 @@ function FileRow({ fileId, name, size }: FileProps) {
 
 export function AttachmentList({ attachments }: { attachments: FileRef[] }) {
   const images = attachments.filter((a) => INLINE_IMAGE_TYPES.includes(a.mime));
-  const files = attachments.filter((a) => !INLINE_IMAGE_TYPES.includes(a.mime));
+  const videos = attachments.filter((a) => INLINE_VIDEO_TYPES.includes(a.mime));
+  const files = attachments.filter((a) => !INLINE_IMAGE_TYPES.includes(a.mime) && !INLINE_VIDEO_TYPES.includes(a.mime));
   return (
     <div className="flex flex-col gap-2">
       {images.map((a) => (
         <ImageView key={a.file_id} fileId={a.file_id} name={a.name} />
+      ))}
+      {videos.map((a) => (
+        <VideoView key={a.file_id} fileId={a.file_id} name={a.name} mime={a.mime} size={a.size} />
       ))}
       {files.length > 0 && (
         <div className="flex max-w-md flex-col divide-y overflow-hidden rounded-lg border">

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
-import { INLINE_IMAGE_TYPES, type FileInfo } from "@rply/schema";
+import { INLINE_IMAGE_TYPES, INLINE_VIDEO_TYPES, type FileInfo } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import type { AppEnv, Deps } from "../context.ts";
 import { now, randomId } from "../tokens.ts";
@@ -63,7 +63,7 @@ export function fileRoutes(deps: Deps) {
       if (!row) throw new HTTPException(404, { message: "File not found" });
       if (row.deleted_at) throw new HTTPException(410, { message: "This file is no longer available" });
 
-      const inline = INLINE_IMAGE_TYPES.includes(row.mime);
+      const inline = INLINE_IMAGE_TYPES.includes(row.mime) || INLINE_VIDEO_TYPES.includes(row.mime);
       const headers = {
         contentType: inline ? row.mime : "application/octet-stream",
         disposition: disposition(inline ? "inline" : "attachment", row.name),

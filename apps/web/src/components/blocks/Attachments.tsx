@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DownloadIcon, ImageOffIcon } from "lucide-react";
+import { DownloadIcon, ImageOffIcon, LoaderIcon, PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes, INLINE_IMAGE_TYPES, INLINE_VIDEO_TYPES, type FileRef } from "@rply/schema";
 import { useChannelEntry } from "@/lib/channel-context";
@@ -30,16 +30,33 @@ export function ImageView({ fileId, name }: { fileId: string; name?: string }) {
 
 function VideoView(props: FileProps) {
   const entry = useChannelEntry();
-  const { data: url, isPending, error } = useFileUrl(entry, props.fileId);
+  const [play, setPlay] = useState(false);
+  const { data: url, isFetching, error } = useFileUrl(entry, props.fileId, play);
   const [failed, setFailed] = useState(false);
   if (error || failed) return <FileView {...props} mime={undefined} />;
-  if (isPending) return <div className="bg-muted aspect-video w-full max-w-md animate-pulse rounded-lg" />;
+  if (!url) {
+    return (
+      <button
+        type="button"
+        onClick={() => setPlay(true)}
+        disabled={isFetching}
+        aria-label={`Play ${props.name}`}
+        className="bg-muted hover:bg-muted/70 relative flex aspect-video w-full max-w-md items-center justify-center rounded-lg border transition-colors"
+      >
+        {isFetching ? <LoaderIcon className="text-muted-foreground size-8 animate-spin" /> : <PlayIcon className="text-muted-foreground size-10" />}
+        <span className="text-muted-foreground absolute inset-x-3 bottom-2 flex gap-2 text-xs">
+          <span className="min-w-0 flex-1 truncate text-left">{props.name}</span>
+          {props.size !== undefined && <span className="tabular-nums">{formatBytes(props.size)}</span>}
+        </span>
+      </button>
+    );
+  }
   return (
     <video
       src={url}
       controls
+      autoPlay={play}
       playsInline
-      preload="metadata"
       aria-label={props.name}
       onError={() => setFailed(true)}
       className="max-h-96 w-fit max-w-full rounded-lg border bg-black"

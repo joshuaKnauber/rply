@@ -309,6 +309,17 @@ export type CreateChannelResponse = { channel: Channel; agent_token: string; cla
 export type ClaimChannelResponse = { channel: ChannelEntry };
 export type StorageResponse = { value: unknown };
 export type StorageListResponse = { values: Record<string, unknown> };
+export type AccountExport = {
+  exported_at: number;
+  user: { id: string; email: string; name: string };
+  channels: (Channel & {
+    role: ChannelRole;
+    agents: { label: string | null; created_at: number; last_seen_at: number | null; revoked_at: number | null }[];
+    messages: Message[];
+    files: { id: string; name: string; mime: string; size: number; message_id: string | null; created_at: number }[];
+    app_storage: Record<string, unknown>;
+  })[];
+};
 export type AgentParticipant = Participant & { serve: { commands: string[]; wakes: boolean } | null };
 export type AgentsResponse = { agents: AgentParticipant[] };
 export type CreateOwnedChannelResponse = { channel: ChannelEntry; agent_code: Pairing };

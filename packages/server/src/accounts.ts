@@ -8,7 +8,14 @@ import { isPostgres } from "./db/dialect.ts";
 import type { DB } from "./db/index.ts";
 import type { EmailSender } from "./email.ts";
 
-export type AccountsOptions = { url?: string; registration?: string; email?: EmailSender | null; secret?: string; trustedOrigins?: string[] };
+export type AccountsOptions = {
+  url?: string;
+  registration?: string;
+  email?: EmailSender | null;
+  secret?: string;
+  trustedOrigins?: string[];
+  beforeDeleteUser?: (userId: string) => Promise<void>;
+};
 export type Accounts = Awaited<ReturnType<typeof createAccounts>>;
 
 const REGISTRATION_MODES: Registration[] = ["open", "invite", "closed"];
@@ -60,6 +67,8 @@ export async function createAccounts(db: DB, opts: AccountsOptions = {}) {
           sendVerificationEmail: ({ user, url }) => email({ to: user.email, subject: "Confirm your email for rply", text: `Confirm your email: ${url}` }),
         }
       : undefined,
+    // needs the password or a session from the last day; owned channels go first (memberships, sessions and push cascade)
+    user: { deleteUser: { enabled: true, beforeDelete: async (user) => opts.beforeDeleteUser?.(user.id) } },
     databaseHooks: {
       user: {
         create: {

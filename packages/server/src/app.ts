@@ -5,6 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { AppEnv, Deps } from "./context.ts";
+import { accountRoutes } from "./routes/account.ts";
 import { callRoutes } from "./routes/calls.ts";
 import { channelRoutes } from "./routes/channels.ts";
 import { fileRoutes } from "./routes/files.ts";
@@ -37,6 +38,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
       return bodyLimit({ maxSize: CALL_RESULT.test(c.req.path) ? 5 * 1024 * 1024 : 256 * 1024 })(c, next);
     })
     .on(["GET", "POST"], "/auth/*", (c) => deps.accounts.handler(c.req.raw))
+    .route("/", accountRoutes(deps))
     .route("/", channelRoutes(deps, serves))
     .route("/", syncRoutes(deps))
     .route("/", pinRoutes(deps))

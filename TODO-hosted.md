@@ -101,7 +101,8 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - [ ] Passkeys and sign-in links in the mobile app.
 - [ ] Convert the Railway SQLite database by hand once the clients are done (keep its data): create the new tables, move channels to the owner's account, drop the old columns/tables, and leave `kysely_migration` with only `0001_init`.
 - [ ] Default server: `rply join <code>` and `init` without a URL point at rply.sh.
-- [ ] Account deletion (deletes owned channels, files, push subscriptions) and data export.
+- [x] Account deletion (deletes owned channels and their files; memberships, sessions, storage and push cascade), web and mobile.
+- [x] Data export as JSON (Settings > Your data); file contents not included yet.
 
 ## Database (Postgres)
 - [x] Postgres dialect next to SQLite, picked by env (`RPLY_DATABASE_URL`).

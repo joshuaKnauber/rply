@@ -8,7 +8,7 @@ import { filesConfigFromEnv } from "./files/config.ts";
 import { sweepFiles } from "./files/manage.ts";
 import { createNotifier } from "./notifier.ts";
 import { createPush } from "./push/index.ts";
-import { sweepUnclaimed } from "./routes/channels.ts";
+import { deleteOwnedChannels, sweepUnclaimed } from "./routes/channels.ts";
 
 const port = Number(process.env.PORT ?? 8080);
 const dbTarget = databaseFromEnv(process.env);
@@ -22,6 +22,7 @@ const accounts = await createAccounts(db, {
   email: emailFromEnv(process.env),
   secret: process.env.RPLY_AUTH_SECRET,
   trustedOrigins: process.env.RPLY_TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean),
+  beforeDeleteUser: (userId) => deleteOwnedChannels(deps, userId),
 });
 
 const files = filesConfigFromEnv(process.env, dbPath);

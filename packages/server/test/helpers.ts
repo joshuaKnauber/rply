@@ -2,6 +2,7 @@ import pg from "pg";
 import { createAccounts, type AccountsOptions } from "../src/accounts.ts";
 import { createApp } from "../src/app.ts";
 import { openDatabase } from "../src/db/index.ts";
+import { deleteOwnedChannels } from "../src/routes/channels.ts";
 import { randomId } from "../src/tokens.ts";
 import { createNotifier } from "../src/notifier.ts";
 import type { FilesConfig } from "../src/files/config.ts";
@@ -11,7 +12,7 @@ import type { CreateOwnedChannelResponse, JoinChannelResponse } from "@rply/sche
 export async function setup(opts: { files?: FilesConfig; pushSend?: PushSender; accounts?: AccountsOptions } = {}) {
   const db = await openDatabase(await testDatabase());
   const push = opts.pushSend ? await createPush(db, { send: opts.pushSend }) : null;
-  const accounts = await createAccounts(db, { registration: "open", ...opts.accounts });
+  const accounts = await createAccounts(db, { registration: "open", beforeDeleteUser: (userId) => deleteOwnedChannels(deps, userId), ...opts.accounts });
   const deps = { db, notifier: createNotifier(), accounts, files: opts.files ?? null, push };
   const app = createApp(deps);
   // session tokens act on one channel through X-Rply-Channel, like the apps do; tests set it per token

@@ -32,3 +32,8 @@ export async function signOut(session: Session) {
   await api(session.server, "/auth/sign-out", { token: session.token, body: {} }).catch(() => undefined);
   forgetSession(session.server);
 }
+
+export async function deleteAccount(session: Session, password: string) {
+  await api(session.server, "/auth/delete-user", { token: session.token, body: password ? { password } : {} });
+  forgetSession(session.server);
+}

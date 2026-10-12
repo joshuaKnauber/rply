@@ -182,6 +182,11 @@ export async function deleteChannel(deps: Deps, channelId: string) {
   for (const m of members) deps.notifier.notify(userKey(m.user_id));
 }
 
+export async function deleteOwnedChannels(deps: Deps, userId: string) {
+  const owned = await deps.db.selectFrom("channel_members").select("channel_id").where("user_id", "=", userId).where("role", "=", "owner").execute();
+  for (const { channel_id } of owned) await deleteChannel(deps, channel_id);
+}
+
 // channels created by `rply init` disappear when nobody claimed them before their last claim code expired
 export async function sweepUnclaimed(deps: Deps) {
   const rows = await deps.db

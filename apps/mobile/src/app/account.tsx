@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { useQueryClient } from "@tanstack/react-query";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/Button";
 import { SignInForm } from "@/components/SignInForm";
 import { channelsKey } from "@/lib/channels";
-import { signOut, useSessions } from "@/lib/sessions";
+import { deleteAccount, signOut, useSessions, type Session } from "@/lib/sessions";
 
 export default function Account() {
   const sessions = useSessions();
@@ -28,6 +28,11 @@ export default function Account() {
           </View>
         ))}
       </View>
+      <View className="gap-3">
+        {sessions.map((s) => (
+          <DeleteAccount key={s.server} session={s} />
+        ))}
+      </View>
       {adding ? (
         <View className="gap-3">
           <Text className="font-semibold text-neutral-900 dark:text-neutral-100">Sign in to another server</Text>
@@ -37,5 +42,42 @@ export default function Account() {
         <Button label="Sign in to another server" variant="outline" onPress={() => setAdding(true)} />
       )}
     </ScrollView>
+  );
+}
+
+function DeleteAccount({ session }: { session: Session }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const remove = useMutation({
+    mutationFn: () => deleteAccount(session, password),
+    onSuccess: () => queryClient.removeQueries({ queryKey: channelsKey(session.server) }),
+  });
+
+  if (!open) {
+    return (
+      <Pressable onPress={() => setOpen(true)}>
+        <Text className="text-red-600">Delete account on {session.server.replace(/^https?:\/\//, "")}</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View className="gap-3 rounded-xl border border-red-200 p-3 dark:border-red-900">
+      <Text className="text-neutral-700 dark:text-neutral-300">
+        Deletes {session.email} and every channel it owns, with their messages, files and apps. Their agents lose access. This can't be undone.
+      </Text>
+      <TextInput
+        className="rounded-lg border border-neutral-300 px-3 py-2.5 text-neutral-900 dark:border-neutral-700 dark:text-neutral-100"
+        secureTextEntry
+        placeholder="Your password"
+        value={password}
+        onChangeText={setPassword}
+      />
+      {remove.error && <Text className="text-red-600">{remove.error.message}</Text>}
+      <Pressable disabled={remove.isPending} onPress={() => remove.mutate()} className="items-center rounded-lg bg-red-600 px-4 py-2.5">
+        <Text className="font-medium text-white">{remove.isPending ? "Deleting…" : "Delete everything"}</Text>
+      </Pressable>
+      <Button label="Cancel" variant="outline" onPress={() => setOpen(false)} />
+    </View>
   );
 }

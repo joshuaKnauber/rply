@@ -340,6 +340,52 @@ test("sync covers all of the user's channels and wakes when the channel list cha
   assert.equal(changed.json.channels.length, 3);
 });
 
+test("the account export has every channel with its messages, agents and storage", async () => {
+  const { request, ownedChannel } = await setup();
+  const { human, agent } = await ownedChannel("seo");
+  await request("POST", "/messages", { token: agent, body: { body: { text: "hello" } } });
+  await request("POST", "/messages", { token: human, body: { body: { text: "hi back" } } });
+  await request("PUT", "/storage/dash", { token: human, body: { value: { tab: "runs" } } });
+  assert.equal((await request("GET", "/account/export")).status, 401);
+  const res = await request("GET", "/account/export", { token: human });
+  assert.equal(res.status, 200);
+  const [channel] = res.json.channels;
+  assert.equal(res.json.user.email, "user1@example.com");
+  assert.equal(channel.name, "seo");
+  assert.equal(channel.role, "owner");
+  assert.deepEqual(channel.messages.map((m: any) => m.body.text), ["hello", "hi back"]);
+  assert.equal(channel.agents.length, 1);
+  assert.equal(JSON.stringify(res.json).includes("token_hash"), false);
+  assert.deepEqual(channel.app_storage, { dash: { tab: "runs" } });
+});
+
+test("deleting an account deletes the channels it owns and leaves the others", async () => {
+  const { mkdtemp, readdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createDirectoryStore } = await import("../src/files/store.ts");
+  const dir = await mkdtemp(join(tmpdir(), "rply-files-"));
+  const { db, request, ownedChannel, signUp, upload } = await setup({ files: { store: createDirectoryStore(dir), maxSize: 1024, totalLimit: 4096, retentionMs: null } });
+  const mine = await ownedChannel("mine");
+  const theirs = await ownedChannel("theirs");
+  const me = (await request("GET", "/channels", { token: mine.human })).json.channels[0];
+  const myUserId = (await db.selectFrom("channel_members").select("user_id").where("channel_id", "=", me.id).executeTakeFirstOrThrow()).user_id;
+  await db.insertInto("channel_members").values({ channel_id: theirs.channel.id, user_id: myUserId, role: "member", created_at: Date.now() }).execute();
+  await upload(mine.agent, "a.txt", "hello");
+
+  const del = (body: unknown) => request("POST", "/auth/delete-user", { token: mine.human, body });
+  assert.equal((await del({ password: "wrong password" })).status, 400);
+  assert.equal((await del({ password: "correct horse" })).status, 200);
+
+  assert.equal((await request("GET", "/channel", { token: mine.agent })).status, 401);
+  assert.equal((await request("GET", "/channel", { token: theirs.agent })).status, 200);
+  assert.deepEqual((await db.selectFrom("channel_members").select("user_id").where("channel_id", "=", theirs.channel.id).execute()).length, 1);
+  assert.equal((await db.selectFrom("files").select("id").execute()).length, 0);
+  assert.deepEqual(await readdir(dir), []);
+  assert.equal((await request("GET", "/channels", { token: mine.human })).status, 401);
+  assert.equal((await signUp("user1@example.com")).status, 200);
+});
+
 test("only the owner deletes a channel, which removes it for everyone", async () => {
   const { db, request, ownedChannel, signUp } = await setup();
   const { channel, agent, human } = await ownedChannel();

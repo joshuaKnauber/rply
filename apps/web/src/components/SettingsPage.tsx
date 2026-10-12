@@ -38,6 +38,14 @@ export function SettingsPage() {
           </Setting>
           <Password />
           {info?.passkeys && <Passkeys />}
+          <Setting title="Your data" description="Download your account and every channel you're in, with messages, agents and app storage, as JSON.">
+            <Button asChild variant="outline">
+              <a href="/v1/account/export" download>
+                Download
+              </a>
+            </Button>
+          </Setting>
+          <DeleteAccount />
         </div>
       </div>
     </div>
@@ -156,6 +164,42 @@ function Passkeys() {
             </li>
           ))}
         </ul>
+      )}
+    </Section>
+  );
+}
+
+function DeleteAccount() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const remove = useMutation({
+    mutationFn: async () => {
+      await orThrow(authClient.deleteUser(password ? { password } : {}));
+      await signOut(() => queryClient.clear());
+    },
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    remove.mutate();
+  };
+
+  return (
+    <Section
+      title="Delete account"
+      description="Deletes your account and every channel you own, with their messages, files and apps. Their agents lose access. This can't be undone."
+      action={!open && <Button variant="outline" onClick={() => setOpen(true)}>Delete account</Button>}
+    >
+      {open && (
+        <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
+          <Input type="password" autoComplete="current-password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-9" />
+          <p className="text-muted-foreground text-sm">Signed in without a password? Leave it empty if you signed in today.</p>
+          {remove.error && <p className="text-destructive text-sm">{remove.error.message}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" variant="destructive" disabled={remove.isPending}>Delete everything</Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
       )}
     </Section>
   );

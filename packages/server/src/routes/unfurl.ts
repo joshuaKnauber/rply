@@ -44,10 +44,28 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
       current = new URL(location, current).toString();
       continue;
     }
-    if (!res.ok || !res.headers.get("content-type")?.includes("text/html")) throw new Error("Not an HTML page");
+    if (!res.ok || !res.headers.get("content-type")?.includes("text/html")) {
+      // Borrow the icon the site's homepage declares; a bare /favicon.ico is often an .ico the mobile app can't show.
+      const home = new URL("/", current).toString();
+      const icon = current === home ? null : (await fetchPreview(home).catch(() => null))?.icon;
+      return fallbackPreview(url, current, icon);
+    }
     return parsePreview(url, current, await readStart(res));
   }
   throw new Error("Too many redirects");
+}
+
+export function fallbackPreview(url: string, pageUrl: string, icon?: string | null): LinkPreview {
+  const { host, pathname } = new URL(url);
+  const repo = host === "github.com" ? pathname.match(/^\/([^/]+\/[^/]+)(?:\/(?:pull|issues)\/(\d+))?/) : null;
+  return {
+    url,
+    title: repo ? (repo[2] ? `${repo[1]} #${repo[2]}` : repo[1]!) : null,
+    description: null,
+    image: null,
+    icon: icon ?? new URL("/favicon.ico", pageUrl).toString(),
+    site: repo ? "GitHub" : null,
+  };
 }
 
 async function assertPublic(hostname: string) {

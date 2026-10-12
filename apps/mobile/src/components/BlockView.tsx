@@ -1,7 +1,8 @@
-import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { isKnownBlock, type Block } from "@rply/schema";
 import { FileView, ImageView } from "./Attachments";
 import { HtmlBlock } from "./HtmlBlock";
+import { LabeledLinkText, LinkCard } from "./LinkPreview";
 import { Markdown } from "./Markdown";
 import { SecretBlock } from "./SecretBlock";
 
@@ -75,11 +76,14 @@ export function BlockView({ block, onEvent }: { block: Block; onEvent?: OnEvent 
         </View>
       );
     case "link":
-      return /^https?:\/\//.test(block.url) ? (
-        <Pressable onPress={() => Linking.openURL(block.url)}>
-          <Text className={`font-medium underline ${text}`}>{block.label ?? block.url}</Text>
-        </Pressable>
-      ) : null;
+      if (!/^https?:\/\//.test(block.url)) return null;
+      return block.label ? (
+        <LabeledLinkText url={block.url}>
+          <Text className={`font-medium underline ${text}`}>{block.label}</Text>
+        </LabeledLinkText>
+      ) : (
+        <LinkCard url={block.url} />
+      );
     case "image":
       return <ImageView fileId={block.file_id} name={block.name ?? block.alt} />;
     case "file":

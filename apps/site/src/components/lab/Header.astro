@@ -1,0 +1,31 @@
+---
+import { siGithub } from "simple-icons";
+import Bird from "../Bird.astro";
+
+const nav = [
+  { href: "#features", label: "Features" },
+  { href: "#integrations", label: "Integrations" },
+  { href: "/docs/start/introduction/", label: "Docs" },
+];
+---
+
+<header>
+  <div class="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-6">
+    <a href="/" class="flex items-center gap-2 justify-self-start text-[17px] font-[550] tracking-[-0.02em] text-gray-900">
+      <span class="grid size-7 place-items-center rounded-lg border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]">
+        <Bird class="size-4" />
+      </span>
+      rply
+    </a>
+    <nav class="hidden items-center gap-1 text-sm text-gray-500 sm:flex">
+      {nav.map((item) => <a href={item.href} class="rounded-lg px-3 py-1.5 hover:bg-gray-100 hover:text-gray-900">{item.label}</a>)}
+    </nav>
+    <div class="flex items-center gap-2 justify-self-end">
+      <a href="https://github.com/joshuaKnauber/rply" aria-label="rply on GitHub" class="grid size-8 place-items-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+        <svg viewBox="0 0 24 24" class="size-[18px]" fill="currentColor" aria-hidden="true"><path d={siGithub.path} /></svg>
+      </a>
+      <a href="#get-started" class="btn btn-primary h-8 px-3">Get started</a>
+    </div>
+  </div>
+</header>
+

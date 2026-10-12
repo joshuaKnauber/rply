@@ -1,0 +1,99 @@
+---
+import {
+  siClaude,
+  siCursor,
+  siGooglegemini,
+  siGithubcopilot,
+  siOpencode,
+  siWarp,
+  siZedindustries,
+  siWindsurf,
+  siCline,
+  siReplit,
+  siJetbrains,
+  siOllama,
+  siGithubactions,
+  siGnubash,
+  siGitlab,
+  siJenkins,
+  siCircleci,
+  siN8n,
+  siRaycast,
+} from "simple-icons";
+
+type Tile = { name: string; path?: string; src?: string; bg: string; fg: string };
+
+const white = "bg-white";
+const rows: Tile[][] = [
+  [
+    { name: "Claude Code", path: siClaude.path, bg: "bg-[#D97757]", fg: "#fff" },
+    { name: "Codex", src: "/logos/openai.svg", bg: white, fg: "" },
+    { name: "Gemini CLI", path: siGooglegemini.path, bg: white, fg: "url(#gemini)" },
+    { name: "Cursor", path: siCursor.path, bg: "bg-gray-950", fg: "#fff" },
+    { name: "GitHub Copilot", path: siGithubcopilot.path, bg: white, fg: "#000" },
+    { name: "OpenCode", path: siOpencode.path, bg: "bg-gray-950", fg: "#fff" },
+    { name: "Warp", path: siWarp.path, bg: "bg-[#01A4FF]", fg: "#fff" },
+    { name: "Zed", path: siZedindustries.path, bg: "bg-[#084CCF]", fg: "#fff" },
+  ],
+  [
+    { name: "OpenClaw", src: "/logos/openclaw.svg", bg: white, fg: "" },
+    { name: "Windsurf", path: siWindsurf.path, bg: white, fg: "#0B100F" },
+    { name: "Cline", path: siCline.path, bg: "bg-[#18181B]", fg: "#fff" },
+    { name: "Replit", path: siReplit.path, bg: "bg-[#F26207]", fg: "#fff" },
+    { name: "JetBrains", path: siJetbrains.path, bg: "bg-gray-950", fg: "#fff" },
+    { name: "Ollama", path: siOllama.path, bg: white, fg: "#000" },
+    { name: "GitHub Actions", path: siGithubactions.path, bg: "bg-[#2088FF]", fg: "#fff" },
+    { name: "Shell scripts and cron", path: siGnubash.path, bg: "bg-gray-900", fg: "#4EAA25" },
+  ],
+  [
+    { name: "GitLab CI", path: siGitlab.path, bg: white, fg: "#FC6D26" },
+    { name: "Jenkins", path: siJenkins.path, bg: white, fg: "#D24939" },
+    { name: "CircleCI", path: siCircleci.path, bg: "bg-[#343434]", fg: "#fff" },
+    { name: "n8n", path: siN8n.path, bg: "bg-[#EA4B71]", fg: "#fff" },
+    { name: "Raycast", path: siRaycast.path, bg: "bg-[#FF6363]", fg: "#fff" },
+  ],
+];
+---
+
+<svg width="0" height="0" class="absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gemini" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1A73E8" />
+      <stop offset="0.5" stop-color="#8E75B2" />
+      <stop offset="1" stop-color="#E8453C" />
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="flex flex-col items-center gap-3 md:gap-6">
+  {
+    rows.map((row, r) => (
+      <ul
+        class:list={[
+          "flex flex-wrap justify-center gap-3 md:gap-6",
+          r === 2 && "pointer-events-none opacity-60 [mask-image:linear-gradient(black,transparent_85%)]",
+        ]}
+        aria-hidden={r === 2 ? "true" : undefined}
+      >
+        {row.map((t) => (
+          <li>
+            <span
+              class:list={[
+                "grid size-14 place-items-center rounded-[22%] ring-1 ring-black/5 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_10px_24px_-14px_rgb(0_0_0/0.35)] md:size-[72px]",
+                t.bg,
+              ]}
+            >
+              {t.path ? (
+                <svg viewBox="0 0 24 24" class="size-7 md:size-9" fill={t.fg} role="img" aria-label={t.name}>
+                  <path d={t.path} />
+                </svg>
+              ) : (
+                <img src={t.src} alt={t.name} class="size-7 object-contain md:size-9" />
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    ))
+  }
+</div>

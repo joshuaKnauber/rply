@@ -1,0 +1,169 @@
+---
+import Lab from "../../layouts/Lab.astro";
+import Header from "../../components/lab/Header.astro";
+import Bird from "../../components/Bird.astro";
+
+const feed = [
+  { time: "3:00", agent: "Nightly backup", text: "Backup finished, 2.1 GB uploaded to R2" },
+  { time: "7:15", agent: "Inbox triage", text: "Archived 38 newsletters, flagged 2 invoices" },
+  { time: "8:58", agent: "Deploy bot", text: "Deployed v2.4.1 to production" },
+  { time: "9:12", agent: "SEO bot", text: "Keyword research done, 14 new topics" },
+  { time: "9:41", agent: "SEO bot", text: "I drafted 5 new pages for acme.dev. Publish them now?", ask: true },
+  { time: "9:44", agent: "CI", text: "All 312 tests passed on main" },
+];
+
+const spec = [
+  {
+    label: "Questions",
+    text: "Your agent asks and blocks until you answer. Buttons, forms, or a plain reply. A default kicks in if you don't get to it.",
+    command: `rply ask "Publish?" --choices Publish,"Not yet" --wait`,
+  },
+  {
+    label: "Status",
+    text: "Pinned messages that update in place: numbers, progress, tables. The current state sits at the top of the chat.",
+    command: "rply status patch --patch '{\"id\":\"live\",\"value\":42}'",
+  },
+  {
+    label: "Your messages",
+    text: "Send new work whenever you think of it. The agent reads its inbox and marks what it's working on.",
+    command: "rply inbox --wait",
+  },
+  {
+    label: "Secrets",
+    text: "Paste a key in the app. It's encrypted on your device and written to the agent's .env, never into its context.",
+    command: "rply secret request OPENAI_API_KEY --to .env",
+  },
+  {
+    label: "Apps",
+    text: "Give an agent a full-page dashboard with buttons that run scripts on its machine. No website to host.",
+    command: "rply app set overview dashboard.html",
+  },
+];
+---
+
+<Lab title="rply · direction C">
+  <Header border={false} />
+
+  <section class="mx-auto max-w-6xl px-6 pt-24">
+    <h1 class="text-[clamp(3rem,7vw,5.5rem)] leading-[0.98] font-semibold tracking-[-0.045em]">
+      Your agents work.<br />You step in when they ask.
+    </h1>
+    <div class="mt-10 grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
+      <p class="max-w-xl text-lg leading-relaxed text-gray-500">
+        rply is one quiet inbox for every agent you run. Updates collect without pinging you. Questions wait for your
+        answer and reach your phone.
+      </p>
+      <div class="flex gap-3">
+        <a href="/docs/start/quickstart/" class="btn btn-primary">Get started</a>
+        <a href="/self-host/" class="btn btn-outline">Self-host</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-20 max-w-6xl px-6">
+    <ol class="feed border-t border-gray-200 text-[15px]">
+      {
+        feed.map((item, i) => (
+          <li
+            class:list={[
+              "grid grid-cols-[3.5rem_9rem_1fr] items-baseline gap-4 border-b border-gray-200 px-4 py-3.5 opacity-0 sm:grid-cols-[4rem_11rem_1fr]",
+              item.ask ? "bg-brand-50/60 shadow-[inset_2px_0_0_var(--color-brand-600)]" : "text-gray-500",
+            ]}
+            style={`animation-delay: ${i * 120}ms`}
+          >
+            <span class="text-[13px] text-gray-400 tabular-nums">{item.time}</span>
+            <span class:list={[item.ask ? "font-medium text-gray-900" : ""]}>{item.agent}</span>
+            {item.ask ? (
+              <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <span class="text-gray-900">{item.text}</span>
+                <span class="flex gap-2">
+                  <button class="btn btn-primary h-8">Publish</button>
+                  <button class="btn btn-outline h-8">Not yet</button>
+                </span>
+              </div>
+            ) : (
+              <span class="truncate">{item.text}</span>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+    <p class="mt-4 text-[13px] text-gray-400">Six messages since last night. One of them needs you.</p>
+  </section>
+
+  <section class="mx-auto mt-32 max-w-6xl px-6">
+    <h2 class="max-w-2xl text-[40px] leading-[1.05] font-semibold tracking-[-0.035em]">What an agent can do with it</h2>
+    <dl class="mt-12 border-t border-gray-200">
+      {
+        spec.map((s) => (
+          <div class="grid gap-x-10 gap-y-2 border-b border-gray-200 py-7 md:grid-cols-[12rem_1fr_minmax(0,22rem)]">
+            <dt class="text-[15px] font-medium text-gray-900">{s.label}</dt>
+            <dd class="max-w-lg text-[15px] leading-relaxed text-gray-500">{s.text}</dd>
+            <dd class="truncate font-mono text-[13px] leading-6 text-gray-600">{s.command}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </section>
+
+  <section class="mx-auto mt-32 grid max-w-6xl gap-10 px-6 md:grid-cols-2">
+    <div>
+      <h2 class="text-[40px] leading-[1.05] font-semibold tracking-[-0.035em]">Any agent with a shell</h2>
+      <p class="mt-5 max-w-md text-[15px] leading-relaxed text-gray-500">
+        Claude Code, Codex, Cursor, Gemini CLI, OpenClaw, cron jobs, GitHub Actions. No SDK, no MCP setup. Install the
+        CLI and pair your phone.
+      </p>
+    </div>
+    <pre class="self-end overflow-x-auto rounded-xl bg-gray-100 p-5 font-mono text-[13px] leading-6 text-gray-700"><span class="text-gray-400">$</span> npx @rply/cli init https://rply.example.com
+<span class="text-gray-500">Channel "SEO bot" created. Open the link to pair:</span>
+https://rply.example.com/pair?c=K7QX-M2PD
+<span class="text-gray-400">$</span> rply send "Hello from the agent"</pre>
+  </section>
+
+  <section class="mx-auto mt-32 max-w-6xl px-6">
+    <div class="grid gap-8 rounded-xl bg-gray-100 px-8 py-12 md:grid-cols-[1fr_auto] md:items-center md:px-12">
+      <div>
+        <h2 class="text-[28px] leading-tight font-semibold tracking-[-0.03em]">Open source, and yours to run</h2>
+        <p class="mt-3 max-w-lg text-[15px] leading-relaxed text-gray-500">
+          One Docker image with SQLite. Railway, a VPS, or right next to your agent on exe.dev. Push still works.
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/self-host/" class="btn btn-primary">Self-host rply</a>
+        <a href="https://github.com/joshuaKnauber/rply" class="btn btn-outline">GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-24 border-t border-gray-200">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-6 px-6 py-8 pb-20 text-sm text-gray-500">
+      <span class="flex items-center gap-2 text-gray-900"><Bird class="size-4" /> rply.sh</span>
+      <a href="/docs/start/introduction/" class="hover:text-gray-900">Docs</a>
+      <a href="/self-host/" class="hover:text-gray-900">Self-host</a>
+      <a href="/compare/" class="hover:text-gray-900">Compare</a>
+      <a href="https://www.npmjs.com/package/@rply/cli" class="hover:text-gray-900">npm</a>
+    </div>
+  </footer>
+</Lab>
+
+<style>
+  .feed li {
+    animation: arrive 0.5s ease-out forwards;
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .feed li {
+      animation: none;
+      opacity: 1;
+    }
+  }
+</style>

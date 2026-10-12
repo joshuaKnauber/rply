@@ -1,0 +1,147 @@
+---
+import Lab from "../../layouts/Lab.astro";
+import Header from "../../components/lab/Header.astro";
+import Icon from "../../components/lab/Icon.astro";
+import Bird from "../../components/Bird.astro";
+
+const dim = "text-gray-500";
+const agent = "rounded-lg px-3 py-2.5";
+const human = "rounded-lg bg-gray-100 px-3 py-2.5";
+const meta = "text-[13px] text-gray-500";
+const runsOn = ["Claude Code", "Codex", "Cursor", "Gemini CLI", "OpenClaw", "cron jobs", "GitHub Actions", "git hooks"];
+---
+
+<Lab title="rply · direction B">
+  <Header border={false} />
+
+  <section class="mx-auto max-w-6xl px-6 pt-20 pb-14">
+    <h1 class="max-w-4xl text-[52px] leading-[1.04] font-semibold tracking-[-0.035em]">
+      Your agent runs a command.<br />You get the message.
+    </h1>
+    <div class="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
+      <a href="/docs/start/quickstart/" class="btn btn-primary">Get started</a>
+      <p class="max-w-md text-[15px] leading-relaxed text-gray-500">
+        rply connects agents to the people they work for. Updates, questions, status and secrets, from any agent with a
+        shell.
+      </p>
+    </div>
+  </section>
+
+  <div class="pairs border-y border-gray-200">
+    <div class="row grid md:grid-cols-2">
+      <div class="bg-gray-900 px-6 py-12 font-mono text-[13px] leading-6 text-gray-300 md:pl-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))]">
+        <p class="mb-6 font-sans text-[15px] text-white">Ask and wait</p>
+        <p><span class={dim}>$</span> rply ask "Publish 5 new pages?" \</p>
+        <p class="pl-6">--choices Publish,"Not yet" --wait</p>
+        <p class="waiting mt-2 text-gray-500 [.answered_&]:hidden">waiting for an answer <span class="animate-pulse">▍</span></p>
+        <p class="hidden text-brand-300 [.answered_&]:block">Publish</p>
+        <p class="hidden [.answered_&]:block"><span class={dim}>$</span> ./publish.sh <span class="text-gray-500">5 pages</span></p>
+      </div>
+      <div class="relative px-6 py-12 md:pr-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))] md:before:absolute md:before:inset-y-0 md:before:left-0 md:before:w-0.5 md:before:bg-brand-500">
+        <p class="mb-6 text-[15px] text-gray-500">On your phone or laptop</p>
+        <div class:list={[agent, "max-w-md rounded-l-none border-l-2 border-brand-600 [.answered_&]:border-transparent"]}>
+          <p class={meta}><span class="font-medium text-gray-900">SEO bot</span> 9:41</p>
+          <p class="mt-1 text-sm">I drafted 5 new pages for acme.dev. Publish them now?</p>
+          <div class="mt-2.5 flex gap-2">
+            <button class="btn btn-outline h-8 [.answered_&]:btn-primary" data-choice>Publish</button>
+            <button class="btn btn-outline h-8 [.answered_&]:opacity-40">Not yet</button>
+          </div>
+        </div>
+        <p class="mt-3 pl-3 text-[13px] text-gray-400 [.answered_&]:hidden">Try it: tap Publish.</p>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2">
+      <div class="border-t border-white/8 bg-gray-900 px-6 py-12 font-mono text-[13px] leading-6 text-gray-300 md:pl-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))]">
+        <p class="mb-6 font-sans text-[15px] text-white">A status that updates in place</p>
+        <p><span class={dim}>$</span> rply status set --blocks status.json</p>
+        <p><span class={dim}>$</span> rply status patch \</p>
+        <p class="pl-6">--patch '{`{"id":"live","value":42}`}'</p>
+      </div>
+      <div class="relative border-t border-gray-200 px-6 py-12 md:pr-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))] md:before:absolute md:before:inset-y-0 md:before:left-0 md:before:w-0.5 md:before:bg-brand-500">
+        <p class="mb-6 text-[15px] text-gray-500">Pinned to the top of the chat</p>
+        <div class="max-w-md rounded-xl bg-gray-100 p-4 text-[13px]">
+          <p class="text-gray-500">Status <span class="float-right tabular-nums">just now</span></p>
+          <dl class="mt-3 grid grid-cols-3 gap-2">
+            <div><dt class="text-xs text-gray-500">Live</dt><dd class="text-xl font-semibold text-gray-900 tabular-nums">42</dd></div>
+            <div><dt class="text-xs text-gray-500">Indexed</dt><dd class="text-xl font-semibold text-gray-900 tabular-nums">38</dd></div>
+            <div><dt class="text-xs text-gray-500">Clicks</dt><dd class="text-xl font-semibold text-gray-900 tabular-nums">+38%</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2">
+      <div class="border-t border-white/8 bg-gray-900 px-6 py-12 font-mono text-[13px] leading-6 text-gray-300 md:pl-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))]">
+        <p class="mb-6 font-sans text-[15px] text-white">Work from you, whenever</p>
+        <p><span class={dim}>$</span> rply inbox --wait</p>
+        <p class="text-brand-300">"Add pages for the new pricing plans"</p>
+        <p><span class={dim}>$</span> rply ack msg_8f2 working</p>
+      </div>
+      <div class="relative border-t border-gray-200 px-6 py-12 md:pr-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))] md:before:absolute md:before:inset-y-0 md:before:left-0 md:before:w-0.5 md:before:bg-brand-500">
+        <p class="mb-6 text-[15px] text-gray-500">You write to it like a colleague</p>
+        <div class:list={[human, "max-w-md"]}>
+          <p class={meta}><span class="font-medium text-gray-900">You</span> 10:02 · Working</p>
+          <p class="mt-1 text-sm">Add pages for the new pricing plans</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2">
+      <div class="border-t border-white/8 bg-gray-900 px-6 py-12 font-mono text-[13px] leading-6 text-gray-300 md:pl-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))]">
+        <p class="mb-6 font-sans text-[15px] text-white">Secrets that skip the chat</p>
+        <p><span class={dim}>$</span> rply secret request OPENAI_API_KEY \</p>
+        <p class="pl-6">--to .env --wait</p>
+        <p class="text-brand-300">OPENAI_API_KEY written to /srv/seo/.env</p>
+      </div>
+      <div class="relative border-t border-gray-200 px-6 py-12 md:pr-[max(1.5rem,calc((100vw-72rem)/2+1.5rem))] md:before:absolute md:before:inset-y-0 md:before:left-0 md:before:w-0.5 md:before:bg-brand-500">
+        <p class="mb-6 text-[15px] text-gray-500">Encrypted on your device</p>
+        <div class="max-w-md rounded-xl border border-gray-200 p-4 text-[13px]">
+          <p class="flex items-center gap-2 font-medium text-gray-900"><Icon name="lock" class="size-3.5 text-gray-500" /> OPENAI_API_KEY</p>
+          <p class="mt-0.5 text-gray-500">Written to /srv/seo/.env</p>
+          <div class="mt-3 flex gap-2">
+            <span class="flex h-8 flex-1 items-center rounded-lg border border-gray-200 px-3 font-mono tracking-widest text-gray-400">••••••••••••</span>
+            <span class="btn btn-primary h-8">Send</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="mx-auto max-w-6xl px-6 py-24">
+    <p class="max-w-4xl text-[32px] leading-[1.25] font-medium tracking-[-0.025em] text-gray-400">
+      Works with {runsOn.map((name, i) => <><span class="text-gray-900">{name}</span>{i < runsOn.length - 1 ? ", " : ""}</>)} and anything else that can run a shell command.
+    </p>
+  </section>
+
+  <section class="border-t border-gray-200 bg-gray-100">
+    <div class="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-[1fr_auto]">
+      <div>
+        <h2 class="text-[32px] leading-tight font-semibold tracking-[-0.03em]">Run your own server</h2>
+        <p class="mt-4 max-w-lg text-[15px] leading-relaxed text-gray-500">
+          The server, CLI and apps are open source. One Docker image with SQLite, on Railway, a VPS, or next to your
+          agent on exe.dev.
+        </p>
+      </div>
+      <div class="flex items-start gap-3">
+        <a href="/self-host/" class="btn btn-primary">Self-host rply</a>
+        <a href="https://github.com/joshuaKnauber/rply" class="btn btn-outline">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="border-t border-gray-200">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-6 px-6 py-8 pb-20 text-sm text-gray-500">
+      <span class="flex items-center gap-2 text-gray-900"><Bird class="size-4" /> rply.sh</span>
+      <a href="/docs/start/introduction/" class="hover:text-gray-900">Docs</a>
+      <a href="/self-host/" class="hover:text-gray-900">Self-host</a>
+      <a href="/compare/" class="hover:text-gray-900">Compare</a>
+      <a href="https://www.npmjs.com/package/@rply/cli" class="hover:text-gray-900">npm</a>
+    </div>
+  </footer>
+</Lab>
+
+<script>
+  const row = document.querySelector<HTMLElement>(".row")!;
+  row.querySelector("[data-choice]")!.addEventListener("click", () => row.classList.add("answered"));
+</script>

@@ -1,0 +1,40 @@
+---
+import { siClaude, siCursor, siGooglegemini, siRailway, siDocker, siHetzner, siFlydotio, siGithubactions, siGnubash, siDigitalocean, siRender, siCoolify } from "simple-icons";
+
+const icons = {
+  claude: { label: "Claude Code", icon: siClaude },
+  codex: { label: "Codex", src: "/logos/openai.svg", mono: true },
+  cursor: { label: "Cursor", icon: siCursor },
+  gemini: { label: "Gemini CLI", icon: siGooglegemini },
+  openclaw: { label: "OpenClaw", src: "/logos/openclaw.svg" },
+  actions: { label: "GitHub Actions", icon: siGithubactions },
+  cron: { label: "cron", icon: siGnubash },
+  railway: { label: "Railway", icon: siRailway },
+  exe: { label: "exe.dev", src: "/logos/exe.png" },
+  docker: { label: "Docker", icon: siDocker },
+  hetzner: { label: "Hetzner", icon: siHetzner },
+  fly: { label: "Fly.io", icon: siFlydotio },
+  digitalocean: { label: "DigitalOcean", icon: siDigitalocean },
+  render: { label: "Render", icon: siRender },
+  coolify: { label: "Coolify", icon: siCoolify },
+};
+
+export type LogoName = keyof typeof icons;
+interface Props {
+  name: LogoName;
+  class?: string;
+}
+const { name, class: className } = Astro.props;
+const size = className?.includes("size-") ? "" : "size-5";
+const logo = icons[name];
+---
+
+{
+  "icon" in logo ? (
+    <svg viewBox="0 0 24 24" class:list={[size, className]} fill={`#${logo.icon.hex}`} role="img" aria-label={logo.label}>
+      <path d={logo.icon.path} />
+    </svg>
+  ) : (
+    <img src={logo.src} alt={logo.label} class:list={[size, className, "object-contain"]} />
+  )
+}

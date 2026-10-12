@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --color-gray-50: oklch(0.985 0.0015 80);
+  --color-gray-100: oklch(0.965 0.0015 80);
+  --color-gray-150: oklch(0.945 0.0015 80);
+  --color-gray-200: oklch(0.92 0.0015 80);
+  --color-gray-300: oklch(0.87 0.0015 80);
+  --color-gray-400: oklch(0.71 0.0015 80);
+  --color-gray-500: oklch(0.56 0.0015 80);
+  --color-gray-600: oklch(0.45 0.0015 80);
+  --color-gray-700: oklch(0.37 0.0015 80);
+  --color-gray-800: oklch(0.27 0.0015 80);
+  --color-gray-850: oklch(0.23 0.0015 80);
+  --color-gray-900: oklch(0.2 0.0015 80);
+  --color-gray-950: oklch(0.16 0.0015 80);
+
+  --color-brand-50: #f0f1ff;
+  --color-brand-100: #e3e6ff;
+  --color-brand-300: #aab3ff;
+  --color-brand-400: #97a3ff;
+  --color-brand-500: #6f7ef6;
+  --color-brand-600: #5b68e0;
+  --color-brand-700: #4a54c4;
+}
+
+@layer base {
+  html {
+    @media (prefers-reduced-motion: no-preference) {
+      scroll-behavior: smooth;
+    }
+  }
+  body {
+    @apply bg-white font-sans text-gray-800 antialiased;
+    font-feature-settings: "cv11", "ss03";
+  }
+  h1, h2, h3 {
+    @apply text-gray-900;
+    text-wrap: balance;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+@utility btn {
+  @apply inline-flex h-9 items-center gap-2 rounded-lg border px-3.5 text-sm font-medium;
+}
+@utility btn-primary {
+  @apply border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_1px_2px_rgb(0_0_0/0.08)] hover:brightness-105;
+}
+@utility btn-outline {
+  @apply border-gray-200 bg-white text-gray-800 shadow-[inset_0_1px_0_white,0_1px_2px_rgb(0_0_0/0.04)] hover:bg-gray-50;
+}
+
+@utility msg-in {
+  animation: msg-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-in {
+    animation: none;
+  }
+}

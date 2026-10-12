@@ -121,7 +121,7 @@ Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on 
 - [x] Per-account quotas from env: owned channels, messages per rolling day, file storage, message retention (plus the existing shorter file retention).
 - [ ] rply.sh free plan values to start with: `RPLY_LIMIT_CHANNELS=5`, `RPLY_LIMIT_MESSAGES_PER_DAY=500`, `RPLY_LIMIT_STORAGE=100MB`, `RPLY_MESSAGE_RETENTION=30d`, `RPLY_FILES_RETENTION=7d`, `RPLY_FILES_MAX_SIZE=10MB`. Watch real usage before tightening.
 - [x] Usage in Settings (`GET /v1/account/usage`), only for quotas the server sets.
-- [ ] Check what `X-Forwarded-For` looks like on Railway (one proxy hop expected; with two, `clientIp` would see the inner proxy).
+- [x] Railway's proxy adds one `X-Forwarded-For` hop and appends to forged headers (checked 2026-10-12), so `clientIp` (last entry) is the real client.
 - [x] `delete-user` server command for removing abusive accounts with their channels.
 - [ ] Abuse handling: a way to report a channel, terms that forbid malware or phishing.
 - [ ] Email sending limits per account once rply.sh sends more than auth emails.

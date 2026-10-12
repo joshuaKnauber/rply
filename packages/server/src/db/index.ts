@@ -23,11 +23,19 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, Number);
 
 export const isPostgresUrl = (target: string) => /^postgres(ql)?:\/\//.test(target);
 
+// PlanetScale and libpq 16 use sslrootcert=system for "the system's CAs"; pg would read it as a file path,
+// and Node verifies against its built-in CAs anyway, so drop it (sslmode=verify-full still applies)
+function withoutSystemRootCert(target: string) {
+  const url = new URL(target);
+  if (url.searchParams.get("sslrootcert") === "system") url.searchParams.delete("sslrootcert");
+  return url.toString();
+}
+
 export const databaseFromEnv = (env: NodeJS.ProcessEnv) => env.RPLY_DATABASE_URL ?? env.RPLY_DB ?? "rply.db";
 
 export async function openDatabase(target: string): Promise<DB> {
   if (isPostgresUrl(target)) {
-    const pool = new pg.Pool({ connectionString: target, max: 10, allowExitOnIdle: true });
+    const pool = new pg.Pool({ connectionString: withoutSystemRootCert(target), max: 10, allowExitOnIdle: true });
     const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
     await migrate(db, () => {});
     return db;

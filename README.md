@@ -1,6 +1,8 @@
 # rply
 
-**ntfy for agents.** A self-hosted inbox between you and your AI agents.
+**ntfy for agents.** One inbox between you and your AI agents. Free to start at [app.rply.sh](https://app.rply.sh), open source and self-hostable.
+
+[Website](https://rply.sh) · [Docs](https://rply.sh/docs/) · [Hosted app](https://app.rply.sh) · [`@rply/cli` on npm](https://www.npmjs.com/package/@rply/cli)
 
 ![An agent asks a question, the human answers with one tap, and the agent's pinned status updates live](.github/assets/demo.gif)
 
@@ -33,9 +35,14 @@ rply CLI  ── agent token ──▶  rply server (Docker,  ◀── your acc
 - One **channel** per agent (or per project). Agents hold agent tokens (CLI); you sign in to your account on every device and see all your channels there.
 - Agents join and channels get claimed with one-time codes, so no long-lived credential ever ends up in the agent's output.
 
-## Setup
+## Quick start
 
-### 1. Run the server
+1. Sign up at [app.rply.sh](https://app.rply.sh) and create a channel.
+2. Paste the setup prompt the app shows into your agent. It installs the CLI, joins the channel and sets itself up.
+
+That's it; your agent can now message you. Prefer to set it up by hand? See [Connect an agent by hand](#connect-an-agent-by-hand).
+
+## Self-hosting
 
 The server is one container with an SQLite database. Keep `/data` on a volume.
 
@@ -66,20 +73,20 @@ Open the server URL in a browser and create your account: the first person to re
 | `RPLY_MESSAGE_RETENTION` | off | Delete unpinned messages after e.g. `30d` (files can go sooner with `RPLY_FILES_RETENTION`) |
 | `RPLY_PUSH` | on | `off` disables web push. VAPID keys are generated on first start, or set `RPLY_VAPID_PUBLIC_KEY` / `RPLY_VAPID_PRIVATE_KEY` / `RPLY_VAPID_SUBJECT`. |
 
-### 2. Connect an agent
+## Connect an agent by hand
 
 On the agent's machine (Node 20+):
 
 ```sh
 npm install --global @rply/cli
-rply join https://your-rply-server <code>
+rply join https://app.rply.sh <code>   # or your own server's URL
 ```
 
 Create the channel in the app (Add channel): it shows a setup prompt with a one-time agent code to paste to the agent.
 
-Or let the agent start: `rply init https://your-rply-server --name "SEO bot"` creates a channel and prints a one-time claim link (and a QR code in a terminal). Open it while signed in to add the channel to your account. Unclaimed channels are deleted after an hour.
+Or let the agent start: `rply init https://app.rply.sh --name "SEO bot"` creates a channel and prints a one-time claim link (and a QR code in a terminal). Open it while signed in to add the channel to your account. The link expires after an hour (`rply pair` prints a new one), and a channel nobody claims is deleted after 24 hours.
 
-### 3. Teach the agent
+## Teach the agent
 
 ```sh
 rply guide setup     # installs a background service that runs app scripts and wakes the agent when you write
@@ -92,7 +99,7 @@ rply guide --snippet >> CLAUDE.md   # or AGENTS.md
 If you are an AI agent and your human wants to talk to you through rply:
 
 1. Install the CLI: `npm install --global @rply/cli` (or use `npx @rply/cli`).
-2. Connect: `rply join <server-url> <code>` if they gave you an agent code, otherwise `rply init <server-url> --name "<your name>"` and give them the claim link it prints.
+2. Connect: `rply join <server-url> <code>` if they gave you an agent code, otherwise `rply init <server-url> --name "<your name>"` and give them the claim link it prints. Without a server of their own, use `https://app.rply.sh`.
 3. Run `rply guide setup` and follow it, then read `rply guide`.
 4. Add the output of `rply guide --snippet` to your `CLAUDE.md` / `AGENTS.md`.
 
@@ -133,3 +140,7 @@ npm test && npm run typecheck
 | `apps/site` | rply.sh website and docs (Astro + Starlight) |
 
 `CLAUDE.md` has the full design notes (architecture, API, data model, decisions).
+
+## License
+
+The server, web app, mobile app and website are licensed under [AGPL-3.0](LICENSE). The CLI ([`packages/cli`](packages/cli/LICENSE)) and the shared schema package ([`packages/schema`](packages/schema/LICENSE)) are MIT, so you can use and embed them anywhere.

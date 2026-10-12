@@ -29,5 +29,6 @@
   "overrides": {
     "react": "19.2.3",
     "react-dom": "19.2.3"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }

@@ -106,3 +106,7 @@ Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `pr
 - `RPLY_CHANNEL` picks a saved channel, like `--channel`.
 - `RPLY_CONFIG` sets the config path (default `~/.config/rply/config.json`).
 - `RPLY_NO_UPDATE_CHECK=1` turns off the daily update check.
+
+## License
+
+MIT

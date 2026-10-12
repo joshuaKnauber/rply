@@ -1,0 +1,102 @@
+---
+import { siClaude } from "simple-icons";
+import Icon from "../Icon.astro";
+
+const { entry } = Astro.locals.starlightRoute;
+const url = new URL(`${Astro.url.pathname.replace(/\/$/, "")}.md`, Astro.site).href;
+const markdown = `# ${entry.data.title}\n\n${entry.body ?? ""}`.trim();
+const ask = encodeURIComponent(`Read ${url} (and https://rply.sh/llms.txt for the rest of the docs) so you can help me with rply, then answer my questions about it.`);
+---
+
+<h1 id="_top">{entry.data.title}</h1>
+<div class="page-actions not-content print:hidden">
+  <button class="copy-page" data-markdown={markdown}>
+    <span class="labels">
+      <span class="label idle"><Icon name="copy" /> Copy page</span>
+      <span class="label done"><Icon name="check" /> Copied</span>
+    </span>
+  </button>
+  <a href={`https://chatgpt.com/?q=${ask}`} target="_blank" rel="noopener">
+    <img src="/logos/openai.svg" alt="" /> Open in ChatGPT <Icon name="external" />
+  </a>
+  <a href={`https://claude.ai/new?q=${ask}`} target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" fill="#D97757" aria-hidden="true"><path d={siClaude.path} /></svg> Open in Claude <Icon name="external" />
+  </a>
+</div>
+
+<style>
+  h1 {
+    margin-top: 1rem;
+    font-size: var(--sl-text-h1);
+    line-height: var(--sl-line-height-headings);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    color: var(--sl-color-white);
+  }
+  .page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .page-actions :is(a, button) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.875rem;
+    padding: 0 0.625rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-gray-2);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .page-actions :is(a, button):hover {
+    background: var(--rply-muted);
+    color: var(--sl-color-white);
+  }
+  .page-actions :global(svg),
+  .page-actions img {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+  .page-actions a :global(svg:last-child) {
+    width: 0.75rem;
+    height: 0.75rem;
+    color: var(--sl-color-gray-4);
+  }
+  :global([data-theme="dark"]) .page-actions img {
+    filter: invert(1);
+  }
+  .labels {
+    display: grid;
+  }
+  .label {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .done,
+  .copied .idle {
+    visibility: hidden;
+  }
+  .copied .done {
+    visibility: visible;
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>(".copy-page").forEach((button) =>
+    button.addEventListener("click", async () => {
+      button.classList.add("copied");
+      setTimeout(() => button.classList.remove("copied"), 2000);
+      await navigator.clipboard.writeText(button.dataset.markdown!);
+    }),
+  );
+</script>

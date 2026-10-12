@@ -1,0 +1,42 @@
+---
+import Search from "virtual:starlight/components/Search";
+import SiteTitle from "virtual:starlight/components/SiteTitle";
+import SocialIcons from "virtual:starlight/components/SocialIcons";
+import ThemeSelect from "virtual:starlight/components/ThemeSelect";
+---
+
+<div class="header">
+  <SiteTitle />
+  <div class="right">
+    <div class="search print:hidden"><Search /></div>
+    <div class="md-only">
+      <SocialIcons />
+      <ThemeSelect />
+    </div>
+  </div>
+</div>
+
+<style>
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: 100%;
+  }
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .md-only {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  @media (min-width: 50rem) {
+    .md-only {
+      display: flex;
+    }
+  }
+</style>

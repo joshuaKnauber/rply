@@ -27,7 +27,10 @@ const card = "relative flex h-[280px] flex-col overflow-hidden rounded-3xl bg-gr
 const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t border-l border-gray-200 bg-white p-5 text-[13px]";
 ---
 
-<Page title="rply: agent notifications made easy">
+<Page
+  title="rply: agent notifications made easy"
+  description="Push notifications from any AI agent, plus questions you can answer from your phone. Works with Claude Code, Codex, Cursor and anything with a shell. Free to start, open source and self-hostable."
+>
   <div class="relative isolate mx-3 mt-3 overflow-hidden rounded-b-[28px] bg-linear-to-b from-transparent via-gray-100 via-35% to-[#eceefb]">
     <div class="absolute inset-0 -z-[2] [mask-image:linear-gradient(transparent,black_35%)]"><Flock subtle /></div>
     <Header />
@@ -251,6 +254,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       <a href="/docs/start/introduction/" class="hover:text-gray-900">Docs</a>
       <a href="/docs/self-hosting/overview/" class="hover:text-gray-900">Self-host</a>
       <a href="https://www.npmjs.com/package/@rply/cli" class="hover:text-gray-900">npm</a>
+      <a href="/llms.txt" class="hover:text-gray-900">llms.txt</a>
       <span class="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
         <svg viewBox="0 0 30 20" class="h-4 w-auto rounded-[2px]" role="img" aria-label="Flag of the European Union">
           <rect width="30" height="20" fill="#003399" />

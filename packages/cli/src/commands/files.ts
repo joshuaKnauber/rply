@@ -9,7 +9,7 @@ import { printJson } from "../io.ts";
 const MIME: Record<string, string> = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
   ".pdf": "application/pdf", ".json": "application/json", ".csv": "text/csv", ".txt": "text/plain", ".md": "text/markdown",
-  ".html": "text/html", ".zip": "application/zip", ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".html": "text/html", ".zip": "application/zip", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 export const collect = (value: string, previous: string[]) => [...previous, value];

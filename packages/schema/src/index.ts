@@ -295,6 +295,7 @@ export type ServerInfo = {
 export type FileInfo = FileRef & { created_at: number };
 
 export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 
 export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
 export type ClaimPairingResponse = { channel: Channel; token: string };

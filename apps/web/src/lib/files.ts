@@ -14,11 +14,11 @@ async function fetchBlob(entry: StoredChannel, fileId: string) {
   return res.blob();
 }
 
-export const useFileUrl = (entry: StoredChannel | null, fileId: string) =>
+export const useFileUrl = (entry: StoredChannel | null, fileId: string, enabled = true) =>
   useQuery({
     queryKey: ["file", fileId],
     queryFn: async () => URL.createObjectURL(await fetchBlob(entry!, fileId)),
-    enabled: Boolean(entry),
+    enabled: Boolean(entry) && enabled,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
     retry: (count, err) => !(err instanceof ApiError && err.status < 500) && count < 2,

@@ -464,6 +464,10 @@ test("files: upload, attach, download with auth and safe headers, delete with th
   assert.equal(image.headers.get("content-type"), "image/png");
   assert.match(image.headers.get("content-disposition")!, /^inline/);
   assert.deepEqual([...new Uint8Array(await image.arrayBuffer())], [137, 80, 78, 71]);
+  const clip = await upload(a.agent, "demo.mp4", new Uint8Array([0, 0, 0, 24]), "video/mp4");
+  const video = await download(a.human, clip.json.file.file_id);
+  assert.equal(video.headers.get("content-type"), "video/mp4");
+  assert.match(video.headers.get("content-disposition")!, /^inline/);
   const unsafe = await download(a.human, svg.json.file.file_id);
   assert.equal(unsafe.headers.get("content-type"), "application/octet-stream");
   assert.match(unsafe.headers.get("content-disposition")!, /^attachment/);

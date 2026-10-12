@@ -70,13 +70,14 @@ const rows: Tile[][] = [
     rows.map((row, r) => (
       <ul
         class:list={[
-          "flex flex-wrap justify-center gap-3 md:gap-6",
+          "grid grid-cols-4 gap-3 sm:flex sm:flex-wrap sm:justify-center md:gap-6 ",
+          r === 2 && "max-sm:[&>li:nth-child(n+5)]:hidden",
           r === 2 && "pointer-events-none opacity-60 [mask-image:linear-gradient(black,transparent_85%)]",
         ]}
         aria-hidden={r === 2 ? "true" : undefined}
       >
         {row.map((t) => (
-          <li>
+          <li class="flex justify-center">
             <span
               class:list={[
                 "grid size-14 place-items-center rounded-[22%] ring-1 ring-black/5 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_10px_24px_-14px_rgb(0_0_0/0.35)] md:size-[72px]",

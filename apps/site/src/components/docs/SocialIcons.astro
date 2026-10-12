@@ -1,0 +1,26 @@
+---
+import { siGithub } from "simple-icons";
+---
+
+<a href="https://github.com/joshuaKnauber/rply" class="github" aria-label="rply on GitHub">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siGithub.path} /></svg>
+</a>
+
+<style>
+  .github {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: var(--sl-color-gray-3);
+  }
+  .github:hover {
+    background: var(--rply-muted);
+    color: var(--sl-color-white);
+  }
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+</style>

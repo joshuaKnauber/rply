@@ -1,0 +1,20 @@
+---
+import Icon from "./Icon.astro";
+import { hostedPrompt } from "./setup.ts";
+---
+
+<button class="hero-setup group btn btn-primary h-12 px-6 text-base" data-prompt={hostedPrompt}>
+  <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
+</button>
+
+<script>
+  import { flutter } from "./flutter.ts";
+  document.querySelectorAll<HTMLElement>(".hero-setup").forEach((button) => {
+    button.addEventListener("click", async () => {
+      flutter(button);
+      button.classList.add("copied");
+      setTimeout(() => button.classList.remove("copied"), 2000);
+      await navigator.clipboard.writeText(button.dataset.prompt!);
+    });
+  });
+</script>

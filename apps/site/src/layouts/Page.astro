@@ -1,25 +1,12 @@
 ---
-import Bird from "../components/Bird.astro";
-import "@fontsource-variable/inter";
+import "@fontsource-variable/inter/opsz.css";
+import "@fontsource-variable/geist-mono";
 import "../styles/global.css";
-import Button from "../components/Button.astro";
 
 interface Props {
   title: string;
 }
 const { title } = Astro.props;
-const nav = [
-  { href: "/docs/start/introduction/", label: "Docs" },
-  { href: "/#features", label: "Features" },
-  { href: "/#open-source", label: "Open source" },
-];
-const footerLinks = [
-  { href: "/docs/start/introduction/", label: "Docs" },
-  { href: "/self-host/", label: "Self-host" },
-  { href: "/compare/", label: "Compare" },
-  { href: "https://github.com/joshuaKnauber/rply", label: "GitHub" },
-  { href: "https://www.npmjs.com/package/@rply/cli", label: "npm" },
-];
 ---
 
 <html lang="en">
@@ -30,40 +17,6 @@ const footerLinks = [
     <title>{title}</title>
   </head>
   <body>
-    <div class="relative m-3 overflow-hidden rounded-[28px] bg-linear-to-b from-[#f7f7f5] via-[#f5f4f6] via-58% to-[#ebe9fb]">
-      <header class="grid grid-cols-[1fr_auto] items-center px-7 pt-7 sm:grid-cols-[1fr_auto_1fr]">
-        <a href="/" class="flex items-center gap-2.5 justify-self-start text-[21px] font-medium tracking-[-0.03em]">
-          <span class="grid size-[30px] place-items-center rounded-[9px] border border-accent-600 bg-linear-to-b from-accent-400 to-accent-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]">
-            <Bird class="w-[58%]" />
-          </span>
-          <span>rply<span class="text-muted">.sh</span></span>
-        </a>
-        <nav class="hidden gap-8 sm:flex">
-          {nav.map((item) => <a href={item.href} class="text-ui hover:text-accent-600">{item.label}</a>)}
-        </nav>
-        <Button href="https://app.rply.sh" class="justify-self-end">Go to app</Button>
-      </header>
-      <slot name="top" />
-    </div>
-    <main class="mx-auto max-w-5xl px-6">
-      <slot />
-    </main>
-    <footer class="bg-white">
-      <div class="mx-auto max-w-5xl px-6 pt-10 pb-8 font-mono text-caption tracking-[0.06em] uppercase">
-        <div class="flex justify-between gap-8">
-          <div class="flex flex-col gap-2">
-            <p>Pages</p>
-            {footerLinks.map((link) => <a href={link.href} class="text-muted hover:text-ink">{link.label}</a>)}
-          </div>
-          <span class="grid size-14 place-items-center rounded-2xl border border-accent-600 bg-linear-to-b from-accent-400 to-accent-500 text-white shadow-[inset_0_1.5px_0_rgb(255_255_255/0.35)]">
-            <Bird class="w-[58%]" />
-          </span>
-        </div>
-        <div class="mt-8 flex flex-wrap justify-between gap-4 border-t border-line pt-6 text-muted">
-          <p><span class="text-ink">rply.sh © 2026</span></p>
-          <p>Agent notifications made easy</p>
-        </div>
-      </div>
-    </footer>
+    <slot />
   </body>
 </html>

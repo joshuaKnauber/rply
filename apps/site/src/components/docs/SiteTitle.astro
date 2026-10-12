@@ -1,0 +1,48 @@
+---
+import Bird from "../Bird.astro";
+---
+
+<span class="site-title">
+  <a href="/" class="brand"><Bird class="bird" /> rply.sh</a>
+  <span class="slash" aria-hidden="true">/</span>
+  <a href="/docs/start/introduction/" class="section">Docs</a>
+</span>
+
+<style>
+  .site-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    white-space: nowrap;
+    font-size: 1.0625rem;
+    font-weight: 550;
+    letter-spacing: -0.02em;
+  }
+  a {
+    color: var(--sl-color-white);
+    text-decoration: none;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .bird {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--rply-brand);
+    translate: 0 1px;
+  }
+  .slash {
+    color: var(--sl-color-gray-5);
+    font-weight: 400;
+  }
+  .section {
+    color: var(--sl-color-gray-3);
+    font-weight: 500;
+  }
+  .section:hover {
+    color: var(--sl-color-white);
+  }
+</style>

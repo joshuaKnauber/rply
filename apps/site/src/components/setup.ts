@@ -5,7 +5,7 @@ export type Platform = {
   label: string;
   note: string;
   logo?: "exe" | "railway" | "fly" | "render" | "hetzner";
-  where: string;
+  where?: string;
   steps: Step[];
   caveat?: string;
 };
@@ -16,23 +16,21 @@ docker build -t rply .
 docker run -d --restart always -p 8080:8080 \\
   -v rply:/data -e RPLY_URL=https://rply.example.com rply`;
 
-export const platforms: Platform[] = [
-  {
-    key: "auto",
-    label: "Let your agent decide",
-    note: "Recommended",
-    where:
-      "If this machine can serve a public HTTPS URL (an exe.dev VM can), run the server here. If not, ask me where to deploy it and suggest Railway.",
-    steps: [
-      { text: "On an exe.dev VM, it runs the server right next to itself" },
-      { text: "Anywhere else, it asks you where to deploy and suggests Railway" },
-      { text: "Then you create your account, and it sends you a link to add its channel" },
-    ],
-  },
+export const hosted: Platform = {
+  key: "hosted",
+  label: "app.rply.sh",
+  note: "Free to start, nothing to deploy",
+  steps: [
+    { text: "Sign up at app.rply.sh" },
+    { text: "Create a channel. The app gives you a prompt to paste into your agent." },
+  ],
+};
+
+export const selfHosted: Platform[] = [
   {
     key: "exe",
     label: "exe.dev",
-    note: "Next to your agent",
+    note: "On your agent's VM",
     logo: "exe",
     where: "Run it with Docker on this exe.dev VM, then make port 8080 public with `ssh exe.dev share port <vm> 8080` and `ssh exe.dev share set-public <vm>`.",
     steps: [
@@ -43,7 +41,7 @@ export const platforms: Platform[] = [
   {
     key: "railway",
     label: "Railway",
-    note: "Easiest hosted",
+    note: "Easiest to deploy",
     logo: "railway",
     where: "Deploy it to Railway. Use the Railway CLI if it's installed, otherwise walk me through the dashboard.",
     steps: [
@@ -100,7 +98,16 @@ export const platforms: Platform[] = [
   },
 ];
 
-export const setupPrompt = (where: string) => `Set up rply (https://rply.sh) so you can send me updates and ask me questions.
+export const hostedPrompt = `Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
+
+1. Install the CLI: npm install --global @rply/cli
+2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
+   Show me the claim link it prints and wait until I've opened it and signed in.
+3. Run rply guide setup and follow it from step 3.`;
+
+export const promptFor = (p: Platform) => (p.where ? selfHostPrompt(p.where) : hostedPrompt);
+
+const selfHostPrompt = (where: string) => `Set up rply (https://rply.sh) so you can send me updates and ask me questions.
 
 1. Where the server runs: ${where}
 2. Deploy ${repo} with the Dockerfile in the repo. Keep /data on a persistent volume, set RPLY_URL to its public URL, and check that /health responds.

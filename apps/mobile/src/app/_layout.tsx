@@ -5,8 +5,8 @@ import { useColorScheme } from "react-native";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { loadStores, useChannels } from "@/lib/channels";
 import { loadTrustedKeys } from "@/lib/secrets";
+import { loadSessions } from "@/lib/sessions";
 import { SyncAll } from "@/lib/sync";
 
 SplashScreen.preventAutoHideAsync();
@@ -18,7 +18,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([loadStores(), loadTrustedKeys()]).finally(() => {
+    Promise.all([loadSessions(), loadTrustedKeys()]).finally(() => {
       setReady(true);
       SplashScreen.hideAsync();
     });
@@ -29,18 +29,14 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <QueryClientProvider client={queryClient}>
-        <Sync />
+        <SyncAll />
         <Stack>
           <Stack.Screen name="index" options={{ title: "rply" }} />
           <Stack.Screen name="channel/[id]" options={{ title: "" }} />
           <Stack.Screen name="add" options={{ title: "Add channel", presentation: "modal" }} />
-          <Stack.Screen name="owner" options={{ title: "Sign in as owner", presentation: "modal" }} />
+          <Stack.Screen name="account" options={{ title: "Account", presentation: "modal" }} />
         </Stack>
       </QueryClientProvider>
     </ThemeProvider>
   );
-}
-
-function Sync() {
-  return <SyncAll channels={useChannels()} />;
 }

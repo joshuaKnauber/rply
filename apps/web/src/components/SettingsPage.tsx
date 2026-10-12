@@ -1,8 +1,19 @@
-import { ArrowLeftIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeftIcon, KeyRoundIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { RadioGroup } from "radix-ui";
+import { toast } from "sonner";
 import { Link } from "wouter";
+import type { ApiKeysResponse, CreateApiKeyResponse } from "@rply/schema";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
+import { authClient, orThrow, signOut, useSession } from "@/lib/auth";
+import { formatTime } from "@/lib/format";
+import { useServerInfo } from "@/lib/queries";
+import { CommandBlock } from "./CommandBlock";
+import { confirmDialog } from "./ConfirmDialog";
 
 const themes = [
   { value: "system", label: "System", icon: MonitorIcon },
@@ -11,6 +22,7 @@ const themes = [
 ];
 
 export function SettingsPage() {
+  const info = useServerInfo();
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6">
@@ -23,9 +35,13 @@ export function SettingsPage() {
       </header>
       <div className="flex-1 overflow-y-auto px-6">
         <div className="mx-auto flex max-w-2xl flex-col divide-y py-6">
+          <Account />
           <Setting title="Theme" description="Follow your system, or pick light or dark.">
             <ThemePicker />
           </Setting>
+          <Password />
+          {info?.passkeys && <Passkeys />}
+          <ApiKeys />
         </div>
       </div>
     </div>
@@ -41,6 +57,162 @@ function Setting({ title, description, children }: { title: string; description:
       </div>
       {children}
     </section>
+  );
+}
+
+function Section({ title, description, action, children }: { title: string; description: string; action?: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4 py-6">
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="font-medium tracking-normal">{title}</h2>
+          <p className="text-muted-foreground text-sm">{description}</p>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Account() {
+  const { data } = useSession();
+  const queryClient = useQueryClient();
+  return (
+    <Setting title="Account" description={data?.user.email ?? ""}>
+      <Button variant="outline" onClick={() => signOut(() => queryClient.clear())}>
+        Sign out
+      </Button>
+    </Setting>
+  );
+}
+
+function Password() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const change = useMutation({
+    mutationFn: () => orThrow(authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: true })),
+    onSuccess: () => {
+      toast.success("Password changed. Your other devices were signed out.");
+      setOpen(false);
+      setCurrent("");
+      setNext("");
+    },
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    change.mutate();
+  };
+
+  return (
+    <Section
+      title="Password"
+      description="Changing it signs you out on your other devices."
+      action={!open && <Button variant="outline" onClick={() => setOpen(true)}>Change</Button>}
+    >
+      {open && (
+        <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
+          <Input type="password" autoComplete="current-password" placeholder="Current password" required value={current} onChange={(e) => setCurrent(e.target.value)} className="h-9" />
+          <Input type="password" autoComplete="new-password" placeholder="New password, at least 8 characters" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} className="h-9" />
+          {change.error && <p className="text-destructive text-sm">{change.error.message}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" disabled={change.isPending}>Save</Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
+    </Section>
+  );
+}
+
+function Passkeys() {
+  const queryClient = useQueryClient();
+  const { data: passkeys } = useQuery({ queryKey: ["passkeys"], queryFn: async () => (await orThrow(authClient.passkey.listUserPasskeys())) ?? [] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["passkeys"] });
+  const add = useMutation({
+    mutationFn: () => orThrow(authClient.passkey.addPasskey()),
+    onSuccess: () => (refresh(), toast.success("Passkey added")),
+    onError: (err) => toast.error(err.message),
+  });
+  const remove = async (id: string) => {
+    const ok = await confirmDialog({ title: "Remove this passkey?", description: "You can't sign in with it anymore.", action: "Remove", destructive: true });
+    if (!ok) return;
+    await orThrow(authClient.passkey.deletePasskey({ id })).then(refresh, (err: Error) => toast.error(err.message));
+  };
+
+  return (
+    <Section
+      title="Passkeys"
+      description="Sign in with your fingerprint, face or device PIN instead of a password."
+      action={<Button variant="outline" disabled={add.isPending} onClick={() => add.mutate()}>Add passkey</Button>}
+    >
+      {passkeys && passkeys.length > 0 && (
+        <ul className="flex flex-col gap-1.5 text-sm">
+          {passkeys.map((p) => (
+            <li key={p.id} className="group/row flex items-center gap-2.5">
+              <KeyRoundIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="truncate">{p.name ?? "Passkey"}</span>
+              <span className="text-muted-foreground ml-auto text-xs group-hover/row:hidden">Added {formatTime(new Date(p.createdAt).getTime())}</span>
+              <Button size="xs" variant="ghost" className="text-muted-foreground -mr-2 ml-auto hidden group-hover/row:flex" onClick={() => remove(p.id)}>
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+function ApiKeys() {
+  const queryClient = useQueryClient();
+  const [label, setLabel] = useState("");
+  const { data: keys = [] } = useQuery({ queryKey: ["api-keys"], queryFn: () => api<ApiKeysResponse>("/api-keys").then((r) => r.keys) });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+  const create = useMutation({
+    mutationFn: () => api<CreateApiKeyResponse>("/api-keys", { body: { label: label.trim() } }),
+    onSuccess: () => (setLabel(""), refresh()),
+  });
+  const remove = async (id: string, name: string) => {
+    const ok = await confirmDialog({ title: `Delete "${name}"?`, description: "Anything using this key can't create channels anymore.", action: "Delete", destructive: true });
+    if (!ok) return;
+    await api(`/api-keys/${id}`, { method: "DELETE" }).then(refresh, (err: Error) => toast.error(err.message));
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate();
+  };
+
+  return (
+    <Section title="API keys" description="Let scripts and CI create channels in your account without a claim link: rply init --api-key <key>.">
+      <form onSubmit={submit} className="flex max-w-sm gap-2">
+        <Input placeholder="Label, e.g. CI" value={label} onChange={(e) => setLabel(e.target.value)} className="h-9" aria-label="Key label" />
+        <Button type="submit" variant="outline" size="lg" disabled={!label.trim() || create.isPending}>
+          Create
+        </Button>
+      </form>
+      {create.data && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-muted-foreground text-sm">Copy the key now. It isn't shown again.</p>
+          <CommandBlock text={create.data.token} />
+        </div>
+      )}
+      {keys.length > 0 && (
+        <ul className="flex flex-col gap-1.5 text-sm">
+          {keys.map((k) => (
+            <li key={k.id} className="group/row flex items-center gap-2.5">
+              <KeyRoundIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="truncate">{k.label}</span>
+              <span className="text-muted-foreground ml-auto text-xs group-hover/row:hidden">Created {formatTime(k.created_at)}</span>
+              <Button size="xs" variant="ghost" className="text-muted-foreground -mr-2 ml-auto hidden group-hover/row:flex" onClick={() => remove(k.id, k.label)}>
+                Delete
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }
 

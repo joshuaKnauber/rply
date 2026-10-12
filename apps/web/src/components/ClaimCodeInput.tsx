@@ -1,17 +1,25 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon } from "lucide-react";
 import { useLocation } from "wouter";
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
-import { claimPairing, parsePairingInput } from "@/lib/pairing";
+import { channelsKey } from "@/lib/channels";
+import { claimChannel, parseCodeInput } from "@/lib/onboarding";
 
 const LENGTH = 8;
 const clean = (text: string) => text.toUpperCase().replace(/[^0-9A-Z]/g, "");
 
-export function PairingCodeInput({ autoFocus }: { autoFocus?: boolean }) {
+export function ClaimCodeInput({ autoFocus }: { autoFocus?: boolean }) {
   const [code, setCode] = useState("");
   const [, navigate] = useLocation();
-  const claim = useMutation({ mutationFn: claimPairing, onSuccess: (channel) => navigate(`/c/${channel.id}`) });
+  const queryClient = useQueryClient();
+  const claim = useMutation({
+    mutationFn: claimChannel,
+    onSuccess: async (channel) => {
+      await queryClient.invalidateQueries({ queryKey: channelsKey });
+      navigate(`/c/${channel.id}`);
+    },
+  });
 
   const slot = (index: number) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(claim.error)} className="size-10 font-mono text-base" />;
 
@@ -23,7 +31,7 @@ export function PairingCodeInput({ autoFocus }: { autoFocus?: boolean }) {
           maxLength={LENGTH}
           value={code}
           pattern="^[0-9A-Za-z]*$"
-          pasteTransformer={(text) => clean(parsePairingInput(text)).slice(0, LENGTH)}
+          pasteTransformer={(text) => clean(parseCodeInput(text)).slice(0, LENGTH)}
           onChange={(value) => {
             setCode(clean(value));
             claim.reset();

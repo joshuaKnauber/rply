@@ -4,7 +4,7 @@ import type { Channel, CreateChannelResponse, JoinChannelResponse, Pairing } fro
 import { CliError, createClient } from "../client.ts";
 import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from "../config.ts";
 import { connect, json, requested } from "../context.ts";
-import { printJson, printPairing } from "../io.ts";
+import { claimUrl, printClaim, printJson } from "../io.ts";
 
 const nextSteps = "\nNext: run `rply guide setup` and follow it to finish setting up this machine.";
 
@@ -28,23 +28,25 @@ function saveChannel(key: string, server: string, token: string, channel: Channe
 export function registerSetup(program: Command) {
   program
     .command("init")
-    .description("create a channel on a server and store its agent token")
+    .description("create a channel on a server and store its agent token; your human claims it with the printed link")
     .argument("<server-url>", "your rply server, e.g. https://rply.example.com")
     .option("--name <name>", "channel name shown in the app", hostname())
     .option("--agent-name <name>", "name of this agent in the app", hostname())
-    .addOption(new Option("--server-token <token>", "needed if the server sets RPLY_ADMIN_TOKEN").env("RPLY_SERVER_TOKEN"))
+    .addOption(new Option("--api-key <key>", "an API key from the app's settings: the channel goes straight into that account, no claim link").env("RPLY_API_KEY"))
     .option("--force", "replace a local channel with the same name")
     .addHelpText("after", "\nThe channel is stored under --channel <name> if given, otherwise under a slug of --name.\nThe first channel becomes the default.")
-    .action(async (serverUrl: string, opts: { name: string; agentName: string; serverToken?: string; force?: boolean }) => {
+    .action(async (serverUrl: string, opts: { name: string; agentName: string; apiKey?: string; force?: boolean }) => {
       const key = requested() ?? channelKey(opts.name);
       checkFree(key, opts.force);
       const server = normalizeServer(serverUrl);
-      const res = await createClient(server, opts.serverToken).request<CreateChannelResponse>("POST", "/channels", { name: opts.name, label: opts.agentName });
+      const res = await createClient(server, opts.apiKey).request<CreateChannelResponse>("POST", "/channels", { name: opts.name, label: opts.agentName });
       const isDefault = saveChannel(key, server, res.agent_token, res.channel);
 
-      if (json()) return printJson({ key, default: isDefault, channel: res.channel, pairing: { ...res.pairing, url: `${server}/pair?c=${res.pairing.code}` } });
+      const claim = res.claim && { ...res.claim, url: claimUrl(server, res.claim.code) };
+      if (json()) return printJson({ key, default: isDefault, channel: res.channel, claim });
       console.log(`Created channel "${res.channel.name}" on ${server}, saved as "${key}"${isDefault ? " (default)" : ` (use --channel ${key})`}\n`);
-      await printPairing(server, res.pairing.code, res.pairing.expires_at);
+      if (res.claim) await printClaim(server, res.claim.code, res.claim.expires_at);
+      else console.log("It's in the account the API key belongs to.");
       console.log(nextSteps);
     });
 
@@ -70,12 +72,12 @@ export function registerSetup(program: Command) {
 
   program
     .command("pair")
-    .description("create a one-time code to pair another device")
+    .description("print a new claim link while no account has claimed this channel yet")
     .action(async () => {
       const { config, client } = connect();
-      const pairing = await client.request<Pairing>("POST", "/pairings");
-      if (json()) return printJson({ ...pairing, url: `${config.server}/pair?c=${pairing.code}` });
-      await printPairing(config.server, pairing.code, pairing.expires_at);
+      const claim = await client.request<Pairing>("POST", "/pairings");
+      if (json()) return printJson({ ...claim, url: claimUrl(config.server, claim.code) });
+      await printClaim(config.server, claim.code, claim.expires_at);
     });
 
   program

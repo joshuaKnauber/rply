@@ -1,47 +1,106 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { syncAdminToken } from "../src/auth.ts";
+import { sweepUnclaimed } from "../src/routes/channels.ts";
 import { delay, setup } from "./helpers.ts";
 
 const choice = (id = "choice") => ({ type: "choice", id, options: [{ label: "Yes" }, { label: "No" }] });
 
-test("pairing codes are single use and accept sloppy input", async () => {
-  const { request } = await setup();
-  const { json } = await request("POST", "/channels", { body: { name: "seo" } });
-  const sloppy = json.pairing.code.toLowerCase().replace("-", " ");
-
-  const first = await request("POST", "/pairings/claim", { body: { code: sloppy } });
-  assert.equal(first.status, 201);
-  assert.match(first.json.token, /^rply_h_/);
-  assert.equal((await request("POST", "/pairings/claim", { body: { code: json.pairing.code } })).status, 404);
+test("the first user sets the server up, then registration follows the server's mode", async () => {
+  const { request, signUp } = await setup({ accounts: { registration: "invite" } });
+  assert.equal((await request("GET", "/info")).json.needs_setup, true);
+  const first = await signUp("owner@example.com");
+  assert.equal(first.status, 200);
+  assert.ok(first.token);
+  const info = (await request("GET", "/info")).json;
+  assert.equal(info.needs_setup, false);
+  assert.equal(info.registration, "invite");
+  assert.equal(info.email, false);
+  assert.equal((await signUp("someone@example.com")).status, 403);
+  assert.equal((await request("GET", "/channels")).status, 401);
+  assert.deepEqual((await request("GET", "/channels", { token: first.token! })).json.channels, []);
 });
 
-test("devices lists the channel's paired human tokens and marks the caller", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+test("cookie sessions only accept writes from the server's own origin", async () => {
+  const { app } = await setup();
+  const signUp = await app.request("http://rply.test/v1/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://rply.test" },
+    body: JSON.stringify({ email: "me@example.com", password: "correct horse", name: "me" }),
+  });
+  const cookie = signUp.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+  assert.match(cookie, /rply\.session_token=/);
+  const create = (origin?: string) =>
+    app.request("http://rply.test/v1/channels", { method: "POST", headers: { cookie, "content-type": "text/plain", ...(origin && { origin }) }, body: JSON.stringify({ name: "x" }) });
+  assert.equal((await create("https://evil.example")).status, 403);
+  assert.equal((await create("null")).status, 403);
+  assert.equal((await create("http://rply.test")).status, 201);
+  assert.equal((await app.request("http://rply.test/v1/channels", { headers: { cookie } })).status, 200);
+});
 
-  const { json } = await request("GET", "/devices", { token: human });
-  assert.equal(json.devices.length, 1);
-  assert.equal(json.devices[0].current, true);
-  assert.ok(json.devices[0].last_seen_at);
-  await delay(5);
-  assert.equal((await request("GET", "/devices", { token: human })).json.devices[0].last_seen_at, json.devices[0].last_seen_at);
-  assert.equal((await request("GET", "/devices", { token: agent })).json.devices[0].current, false);
+test("a channel created by an agent is claimed once, with sloppy input, and then belongs to the account", async () => {
+  const { request, signUp } = await setup();
+  const { json } = await request("POST", "/channels", { body: { name: "seo", label: "box-1" } });
+  assert.match(json.agent_token, /^rply_a_/);
+  const agent = json.agent_token;
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { text: "before the claim" } } })).status, 201);
 
-  const pairing = await request("POST", "/pairings", { token: human });
-  assert.equal(pairing.status, 201);
-  assert.equal((await request("POST", "/pairings/claim", { body: { code: pairing.json.code, label: "Phone" } })).status, 201);
-  assert.equal((await request("GET", "/devices", { token: human })).json.devices.length, 2);
+  const again = await request("POST", "/pairings", { token: agent });
+  assert.equal(again.status, 201);
+  const user = (await signUp()).token!;
+  assert.equal((await request("POST", "/channels/claim", { body: { code: again.json.code } })).status, 401);
+  const sloppy = json.claim.code.toLowerCase().replace("-", " ");
+  const claimed = await request("POST", "/channels/claim", { token: user, body: { code: sloppy } });
+  assert.equal(claimed.status, 201);
+  assert.equal(claimed.json.channel.role, "owner");
+  assert.equal((await request("POST", "/channels/claim", { token: user, body: { code: again.json.code } })).status, 409);
+  assert.equal((await request("POST", "/pairings", { token: agent })).status, 409);
+
+  const listed = (await request("GET", "/channels", { token: user })).json.channels;
+  assert.deepEqual(listed.map((c: any) => [c.name, c.role, c.read_seq]), [["seo", "owner", 0]]);
+  const thread = await request("GET", "/messages", { token: user, headers: { "x-rply-channel": json.channel.id } });
+  assert.deepEqual(thread.json.messages.map((m: any) => m.body.text), ["before the claim"]);
+});
+
+test("unclaimed channels are removed once their claim codes expire", async () => {
+  const { request, deps, db } = await setup();
+  const { json } = await request("POST", "/channels", { body: { name: "seo" } });
+  await db.updateTable("channels").set({ created_at: 0 }).execute();
+  await sweepUnclaimed(deps);
+  assert.equal((await request("GET", "/channel", { token: json.agent_token })).status, 200);
+  await db.updateTable("pairing_codes").set({ expires_at: 0 }).execute();
+  await sweepUnclaimed(deps);
+  assert.equal((await request("GET", "/channel", { token: json.agent_token })).status, 401);
+});
+
+test("anonymous channel creation is rate limited, API keys create owned channels", async () => {
+  const { request, signUp } = await setup();
+  const ip = { "x-forwarded-for": "203.0.113.7" };
+  for (let i = 0; i < 20; i++) assert.equal((await request("POST", "/channels", { body: { name: `c${i}` }, headers: ip })).status, 201);
+  assert.equal((await request("POST", "/channels", { body: { name: "one too many" }, headers: ip })).status, 429);
+
+  const user = (await signUp()).token!;
+  const key = await request("POST", "/api-keys", { token: user, body: { label: "CI" } });
+  assert.equal(key.status, 201);
+  assert.match(key.json.token, /^rply_k_/);
+  const created = await request("POST", "/channels", { token: key.json.token, body: { name: "ci" }, headers: ip });
+  assert.equal(created.status, 201);
+  assert.equal(created.json.claim, null);
+  assert.deepEqual((await request("GET", "/channels", { token: user })).json.channels.map((c: any) => c.name), ["ci"]);
+
+  assert.deepEqual((await request("GET", "/api-keys", { token: user })).json.keys.map((k: any) => k.label), ["CI"]);
+  assert.equal((await request("DELETE", `/api-keys/${key.json.key.id}`, { token: user })).status, 204);
+  assert.equal((await request("POST", "/channels", { token: key.json.token, body: { name: "after" }, headers: ip })).status, 429);
 });
 
 test("a channel created in the app gets its agent through a single-use agent code", async () => {
-  const { request } = await setup();
-  const created = await request("POST", "/channels", { body: { name: "Web", as: "human", label: "Chrome on macOS" } });
+  const { request, signUp } = await setup();
+  const user = (await signUp()).token!;
+  const created = await request("POST", "/channels", { token: user, body: { name: "Web" } });
   assert.equal(created.status, 201);
-  const { token: human, agent_code } = created.json;
-  assert.match(human, /^rply_h_/);
+  assert.equal(created.json.channel.role, "owner");
+  const { agent_code } = created.json;
 
-  assert.equal((await request("POST", "/pairings/claim", { body: { code: agent_code.code } })).status, 404);
+  assert.equal((await request("POST", "/channels/claim", { token: user, body: { code: agent_code.code } })).status, 404);
   const joined = await request("POST", "/agents/join", { body: { code: agent_code.code, label: "box-1" } });
   assert.equal(joined.status, 201);
   assert.equal(joined.json.channel.id, created.json.channel.id);
@@ -49,16 +108,48 @@ test("a channel created in the app gets its agent through a single-use agent cod
 
   const agent = joined.json.agent_token;
   assert.equal((await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } })).status, 201);
-  const { json } = await request("GET", "/agents", { token: human });
+  const { json } = await request("GET", "/agents", { token: user, headers: { "x-rply-channel": created.json.channel.id } });
   assert.deepEqual(json.agents.map((a: any) => [a.label, a.current]), [["box-1", false]]);
 });
 
-test("the human can add more agents and revoke agents and devices", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+test("human requests need a channel the user belongs to", async () => {
+  const { request, ownedChannel, signUp } = await setup();
+  const { channel, human } = await ownedChannel();
+  const stranger = (await signUp()).token!;
+  assert.equal((await request("GET", "/messages", { token: human, headers: { "x-rply-channel": "" } })).status, 400);
+  assert.equal((await request("GET", "/messages", { token: stranger, headers: { "x-rply-channel": channel.id } })).status, 404);
+  assert.equal((await request("GET", "/messages", { token: "nonsense", headers: { "x-rply-channel": channel.id } })).status, 401);
+});
 
-  assert.equal((await request("POST", "/pairings", { token: agent, body: { role: "agent" } })).status, 403);
-  const code = (await request("POST", "/pairings", { token: human, body: { role: "agent" } })).json.code;
+test("read positions only move forward", async () => {
+  const { request, ownedChannel } = await setup();
+  const { human } = await ownedChannel();
+  assert.equal((await request("PUT", "/channel/read", { token: human, body: { seq: 7 } })).status, 204);
+  assert.equal((await request("PUT", "/channel/read", { token: human, body: { seq: 3 } })).status, 204);
+  assert.equal((await request("GET", "/channels", { token: human })).json.channels[0].read_seq, 7);
+});
+
+test("app storage is kept per user and channel", async () => {
+  const { request, ownedChannel, signUp } = await setup();
+  const { human, agent } = await ownedChannel();
+  assert.deepEqual((await request("GET", "/storage/dash", { token: human })).json, { value: null });
+  assert.equal((await request("PUT", "/storage/dash", { token: human, body: { value: { tab: "logs" } } })).status, 204);
+  assert.equal((await request("PUT", "/storage/dash", { token: human, body: { value: { tab: "runs" } } })).status, 204);
+  assert.deepEqual((await request("GET", "/storage/dash", { token: human })).json, { value: { tab: "runs" } });
+  await request("PUT", "/storage/msg1", { token: human, body: { value: [1, 2] } });
+  assert.deepEqual((await request("GET", "/storage", { token: human })).json, { values: { dash: { tab: "runs" }, msg1: [1, 2] } });
+  assert.equal((await request("GET", "/storage/dash", { token: agent })).status, 403);
+  assert.equal((await request("PUT", "/storage/dash", { token: human, body: { value: "x".repeat(300_000) } })).status, 413);
+
+  const other = await ownedChannel("other", (await signUp()).token!);
+  assert.deepEqual((await request("GET", "/storage/dash", { token: other.human })).json, { value: null });
+});
+
+test("the owner can add more agents and revoke them", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
   const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
 
   assert.equal((await request("PATCH", "/agent", { token: human, body: { label: "x" } })).status, 403);
@@ -73,15 +164,11 @@ test("the human can add more agents and revoke agents and devices", async () => 
   assert.equal((await request("DELETE", `/agents/${agents[0].id}`, { token: human })).status, 204);
   assert.equal((await request("GET", "/channel", { token: agent })).status, 401);
   assert.equal((await request("GET", "/channel", { token: second })).status, 200);
-
-  const device = (await request("GET", "/devices", { token: human })).json.devices[0].id;
-  assert.equal((await request("DELETE", `/devices/${device}`, { token: human })).status, 204);
-  assert.equal((await request("GET", "/channel", { token: human })).status, 401);
 });
 
 test("a question is answered once and the agent's wait returns the answer", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
 
   const ask = await request("POST", "/messages", { token: agent, body: { body: { text: "Publish?", blocks: [choice()] } } });
   assert.deepEqual(ask.json.message.ask, { status: "open", expires_at: null, answer_id: null });
@@ -102,8 +189,8 @@ test("a question is answered once and the agent's wait returns the answer", asyn
 });
 
 test("several questions in one message are answered together", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const blocks = [choice("publish"), { type: "text_input", id: "slug", label: "Slug" }, { type: "toggle", id: "blog", label: "Blog?" }];
   const ask = await request("POST", "/messages", { token: agent, body: { body: { text: "New page", blocks } } });
 
@@ -116,8 +203,8 @@ test("several questions in one message are answered together", async () => {
 });
 
 test("questions expire and can be cancelled", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
 
   const expiring = await request("POST", "/messages", {
     token: agent,
@@ -139,8 +226,8 @@ test("questions expire and can be cancelled", async () => {
 });
 
 test("blocks: unknown types pass, invalid known types and duplicate input ids fail", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent } = await ownedChannel();
   const post = (body: unknown) => request("POST", "/messages", { token: agent, body: { body } });
 
   const unknown = await post({ blocks: [{ type: "hologram", id: "h", depth: 3 }] });
@@ -155,8 +242,8 @@ test("blocks: unknown types pass, invalid known types and duplicate input ids fa
 });
 
 test("inbox marks messages seen, the agent can acknowledge progress", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const sent = await request("POST", "/messages", { token: human, body: { body: { text: "add project X" } } });
   assert.equal(sent.json.message.state, null);
 
@@ -175,16 +262,16 @@ test("inbox marks messages seen, the agent can acknowledge progress", async () =
 });
 
 test("agents edit their messages and edits reach sync", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const msg = await request("POST", "/messages", {
     token: agent,
     body: { body: { text: "Deploying", blocks: [{ type: "progress", id: "p", value: 1, max: 10 }] } },
   });
   const id = msg.json.message.id;
-  const initial = await request("POST", "/sync", { body: { tokens: [human] } });
+  const initial = await request("POST", "/sync", { token: human, body: {} });
 
-  const waiting = request("POST", "/sync", { body: { tokens: [human], cursor: initial.json.cursor, wait: 5 } });
+  const waiting = request("POST", "/sync", { token: human, body: { cursor: initial.json.cursor, wait: 5 } });
   await delay(50);
   const patched = await request("PATCH", `/messages/${id}`, { token: agent, body: { text: "Deploying…", block_patches: [{ id: "p", value: 7 }] } });
   assert.equal(patched.json.message.body.blocks[0].value, 7);
@@ -201,8 +288,8 @@ test("agents edit their messages and edits reach sync", async () => {
 });
 
 test("pinned messages are managed by key, kept out of the thread and removable", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
 
   await request("PUT", "/pins/status", {
     token: agent,
@@ -219,17 +306,17 @@ test("pinned messages are managed by key, kept out of the thread and removable",
   assert.equal(pins[0].body.blocks[0].value, 42);
   assert.equal((await request("GET", "/messages", { token: human })).json.messages.length, 0);
 
-  const initial = await request("POST", "/sync", { body: { tokens: [human] } });
+  const initial = await request("POST", "/sync", { token: human, body: {} });
   assert.equal((await request("DELETE", "/pins/todo", { token: agent })).status, 204);
-  const synced = await request("POST", "/sync", { body: { tokens: [human], cursor: initial.json.cursor } });
+  const synced = await request("POST", "/sync", { token: human, body: { cursor: initial.json.cursor } });
   assert.equal(synced.json.messages[0].pin, "todo");
   assert.ok(synced.json.messages[0].deleted_at);
   assert.deepEqual((await request("GET", "/pins", { token: human })).json.messages.map((m: any) => m.pin), ["status"]);
 });
 
 test("agents delete their own messages, which also withdraws questions", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const ask = await request("POST", "/messages", { token: agent, body: { body: { text: "Oops", blocks: [choice()] } } });
   const id = ask.json.message.id;
   const mine = await request("POST", "/messages", { token: human, body: { body: { text: "hi" } } });
@@ -242,70 +329,53 @@ test("agents delete their own messages, which also withdraws questions", async (
   assert.equal((await request("GET", "/asks", { token: agent })).json.messages.length, 0);
 });
 
-test("sync covers several channels and reports revoked tokens", async () => {
-  const { request, pairedChannel } = await setup();
-  const a = await pairedChannel("a");
-  const b = await pairedChannel("b");
+test("sync covers all of the user's channels and wakes when the channel list changes", async () => {
+  const { request, ownedChannel } = await setup();
+  const a = await ownedChannel("a");
+  const b = await ownedChannel("b", a.human);
 
-  const initial = await request("POST", "/sync", { body: { tokens: [a.human, b.human, "rply_h_gone"] } });
-  assert.deepEqual(initial.json.revoked, ["rply_h_gone"]);
+  const initial = await request("POST", "/sync", { token: a.human, body: {} });
   assert.equal(initial.json.messages.length, 0);
+  assert.deepEqual(initial.json.channels.sort(), [a.channel.id, b.channel.id].sort());
 
-  const waiting = request("POST", "/sync", { body: { tokens: [a.human, b.human], cursor: initial.json.cursor, wait: 5 } });
+  const waiting = request("POST", "/sync", { token: a.human, body: { cursor: initial.json.cursor, wait: 5 } });
   await delay(50);
   await request("POST", "/messages", { token: b.agent, body: { body: { text: "from b" } } });
   assert.deepEqual((await waiting).json.messages.map((m: any) => m.body.text), ["from b"]);
-});
 
-test("channel creation requires the admin token once set", async () => {
-  const { db, request } = await setup();
-  await syncAdminToken(db, "secret");
-  assert.equal((await request("GET", "/info")).json.server_token_required, true);
-  assert.equal((await request("POST", "/channels", { body: { name: "x" } })).status, 401);
-  assert.equal((await request("POST", "/channels", { token: "secret", body: { name: "x" } })).status, 201);
-  await syncAdminToken(db, undefined);
-  assert.equal((await request("GET", "/info")).json.server_token_required, false);
-});
-
-test("the admin token sees and talks to every channel", async () => {
-  const { db, request, pairedChannel } = await setup();
-  const a = await pairedChannel("a");
-  const b = await pairedChannel("b");
-  assert.equal((await request("GET", "/admin/channels", { token: "secret" })).status, 401);
-  await syncAdminToken(db, "secret");
-  assert.deepEqual((await request("GET", "/admin/channels", { token: "secret" })).json.channels.map((c: any) => c.name), ["a", "b"]);
-
-  const asAdmin = (method: string, path: string, channel: string, body?: unknown) =>
-    request(method, path, { token: "secret", body, headers: { "x-rply-channel": channel } });
-  await request("POST", "/messages", { token: b.agent, body: { body: { text: "from b" } } });
-  assert.deepEqual((await asAdmin("GET", "/messages", b.channel.id)).json.messages.map((m: any) => m.body.text), ["from b"]);
-  assert.equal((await asAdmin("POST", "/messages", a.channel.id, { body: { text: "hi a" } })).json.message.sender, "human");
-  assert.equal((await asAdmin("PUT", "/pins/status", a.channel.id, { body: { blocks: [] } })).status, 403);
-
-  const initial = await request("POST", "/sync", { token: "secret", body: { tokens: [] } });
-  const waiting = request("POST", "/sync", { token: "secret", body: { tokens: [], cursor: initial.json.cursor, wait: 5 } });
+  const cursor = (await request("POST", "/sync", { token: a.human, body: {} })).json.cursor;
+  const listChange = request("POST", "/sync", { token: a.human, body: { cursor, wait: 5 } });
   await delay(50);
-  await request("POST", "/messages", { token: a.agent, body: { body: { text: "for admin" } } });
-  assert.deepEqual((await waiting).json.messages.map((m: any) => m.body.text), ["for admin"]);
+  const started = Date.now();
+  await request("POST", "/channels", { token: a.human, body: { name: "c" } });
+  const changed = await listChange;
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(changed.json.channels.length, 3);
 });
 
-test("the owner can delete a channel, which revokes everyone in it", async () => {
-  const { db, request, pairedChannel } = await setup();
-  const { channel, agent, human } = await pairedChannel();
+test("only the owner deletes a channel, which removes it for everyone", async () => {
+  const { db, request, ownedChannel, signUp } = await setup();
+  const { channel, agent, human } = await ownedChannel();
   await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } });
-  await syncAdminToken(db, "secret");
-  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: human })).status, 401);
-  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: "secret" })).status, 204);
-  assert.equal((await request("DELETE", `/admin/channels/${channel.id}`, { token: "secret" })).status, 404);
+  const member = await signUp();
+  await db.insertInto("channel_members").values({ channel_id: channel.id, user_id: member.json.user.id, role: "member", created_at: Date.now() }).execute();
+  const asMember = { token: member.token!, headers: { "x-rply-channel": channel.id } };
+  assert.equal((await request("GET", "/messages", asMember)).status, 200);
+  assert.equal((await request("DELETE", "/channel", asMember)).status, 403);
+  assert.equal((await request("POST", "/pairings", asMember)).status, 403);
+
+  assert.equal((await request("DELETE", "/channel", { token: agent })).status, 403);
+  assert.equal((await request("DELETE", "/channel", { token: human })).status, 204);
+  assert.equal((await request("DELETE", "/channel", { token: human })).status, 404);
   assert.equal((await request("GET", "/messages", { token: agent })).status, 401);
-  assert.deepEqual((await request("POST", "/sync", { body: { tokens: [human] } })).json.revoked, [human]);
+  assert.deepEqual((await request("POST", "/sync", { token: member.token!, body: {} })).json.channels, []);
   const { count } = await db.selectFrom("messages").select((eb) => eb.fn.countAll<number>().as("count")).executeTakeFirstOrThrow();
   assert.equal(Number(count), 0);
 });
 
 test("embeds send events that reach the agent's inbox without being answers", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const dashboard = await request("POST", "/messages", {
     token: agent,
     body: { body: { blocks: [{ type: "html", id: "dash", html: "<button onclick=\"rply.send('x')\">x</button>" }] } },
@@ -329,19 +399,19 @@ test("embeds send events that reach the agent's inbox without being answers", as
 });
 
 test("the human can unpin a message, which moves it into the thread", async () => {
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const pinned = await request("PUT", "/pins/status", { token: agent, body: { body: { text: "Overview" } } });
   const id = pinned.json.message.id;
 
-  const initial = await request("POST", "/sync", { body: { tokens: [human] } });
+  const initial = await request("POST", "/sync", { token: human, body: {} });
   const unpinned = await request("POST", `/messages/${id}/unpin`, { token: human });
   assert.equal(unpinned.json.message.pin, null);
   assert.equal((await request("POST", `/messages/${id}/unpin`, { token: human })).status, 400);
 
   assert.equal((await request("GET", "/pins", { token: human })).json.messages.length, 0);
   assert.deepEqual((await request("GET", "/messages", { token: human })).json.messages.map((m: any) => m.body.text), ["Overview"]);
-  const synced = await request("POST", "/sync", { body: { tokens: [human], cursor: initial.json.cursor } });
+  const synced = await request("POST", "/sync", { token: human, body: { cursor: initial.json.cursor } });
   assert.equal(synced.json.messages[0].pin, null);
 
   const patch = await request("PATCH", "/pins/status", { token: agent, body: { text: "x" } });
@@ -352,8 +422,8 @@ test("the human can unpin a message, which moves it into the thread", async () =
 
 test("secrets travel sealed to the agent's key and are deleted after delivery", async () => {
   const { generateKeyPair, open, seal } = await import("@rply/schema/crypto");
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const keys = generateKeyPair();
 
   const request_ = { name: "OPENAI_API_KEY", target: "/srv/app/.env", mode: "env", reason: "keyword research" };
@@ -367,13 +437,13 @@ test("secrets travel sealed to the agent's key and are deleted after delivery", 
   const id = created.json.id;
   assert.equal(created.json.message.body.blocks[0].status, "open");
 
-  const { channel } = (await request("GET", "/channel", { token: human })).json;
-  assert.equal(channel.public_key, keys.publicKey);
+  const publicKey = created.json.message.body.blocks[0].public_key;
+  assert.equal(publicKey, keys.publicKey);
 
   const waiting = request("GET", `/secrets/${id}?wait=5`, { token: agent });
   await delay(50);
   assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: agent, body: { ciphertext: "x" } })).status, 403);
-  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: human, body: { ciphertext: seal("sk-123", channel.public_key) } })).status, 204);
+  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: human, body: { ciphertext: seal("sk-123", publicKey) } })).status, 204);
   const got = (await waiting).json;
   assert.equal(got.status, "provided");
   assert.equal(open(got.ciphertext, keys.secretKey), "sk-123");
@@ -390,8 +460,8 @@ test("secrets travel sealed to the agent's key and are deleted after delivery", 
 
 test("each secret request carries the key of the agent that asked", async () => {
   const { generateKeyPair } = await import("@rply/schema/crypto");
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   const code = (await request("POST", "/pairings", { token: human, body: { role: "agent" } })).json.code;
   const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
   const [a, b] = [generateKeyPair().publicKey, generateKeyPair().publicKey];
@@ -407,8 +477,8 @@ test("each secret request carries the key of the agent that asked", async () => 
 
 test("secret requests can be declined, cancelled, expire, and can't be faked", async () => {
   const { generateKeyPair } = await import("@rply/schema/crypto");
-  const { request, pairedChannel } = await setup();
-  const { agent, human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
   await request("PUT", "/channel/key", { token: agent, body: { public_key: generateKeyPair().publicKey } });
   const create = (extra = {}) => request("POST", "/secrets", { token: agent, body: { name: "TOKEN", target: "/tmp/.env", mode: "env", ...extra } }).then((r) => r.json);
 
@@ -442,9 +512,9 @@ test("files: upload, attach, download with auth and safe headers, delete with th
   const { createDirectoryStore } = await import("../src/files/store.ts");
   const dir = await mkdtemp(join(tmpdir(), "rply-files-"));
   const files = { store: createDirectoryStore(dir), maxSize: 1024, totalLimit: 2500, retentionMs: null };
-  const { request, pairedChannel, upload, download, deps } = await setup({ files });
-  const a = await pairedChannel("a");
-  const b = await pairedChannel("b");
+  const { request, ownedChannel, upload, download, deps } = await setup({ files });
+  const a = await ownedChannel("a");
+  const b = await ownedChannel("b");
 
   assert.deepEqual((await request("GET", "/info")).json.files, { enabled: true, max_size: 1024 });
   const png = await upload(a.agent, "chart.png", new Uint8Array([137, 80, 78, 71]), "image/png");
@@ -475,7 +545,7 @@ test("files: upload, attach, download with auth and safe headers, delete with th
   assert.match(unsafe.headers.get("content-disposition")!, /^attachment/);
   assert.equal(unsafe.headers.get("x-content-type-options"), "nosniff");
   assert.equal((await download(b.human, png.json.file.file_id)).status, 404);
-  assert.equal((await download("rply_h_nope", png.json.file.file_id)).status, 401);
+  assert.equal((await download("nope", png.json.file.file_id)).status, 401);
 
   const fromHuman = await upload(a.human, "brief.pdf", "%PDF", "application/pdf");
   const attachment = { file_id: fromHuman.json.file.file_id, name: "brief.pdf", mime: "application/pdf", size: 4 };
@@ -496,8 +566,8 @@ test("files: upload, attach, download with auth and safe headers, delete with th
 });
 
 test("files are refused when the server has them turned off", async () => {
-  const { request, pairedChannel, upload } = await setup();
-  const { agent } = await pairedChannel();
+  const { request, ownedChannel, upload } = await setup();
+  const { agent } = await ownedChannel();
   assert.deepEqual((await request("GET", "/info")).json.files, { enabled: false, max_size: 0 });
   assert.equal((await upload(agent, "a.txt", "a")).status, 404);
   assert.equal((await request("POST", "/messages", { token: agent, body: { body: { blocks: [{ type: "image", file_id: "x" }] } } })).status, 400);
@@ -510,15 +580,15 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
     if (failWith) throw Object.assign(new Error("gone"), { statusCode: failWith });
     sent.push({ endpoint: target.endpoint, payload: JSON.parse(payload) });
   };
-  const { db, request, pairedChannel } = await setup({ pushSend });
-  const a = await pairedChannel("SEO bot");
-  const b = await pairedChannel("Shop agent");
+  const { db, request, ownedChannel } = await setup({ pushSend });
+  const a = await ownedChannel("SEO bot");
+  const b = await ownedChannel("Shop agent");
   const sub = (endpoint: string) => ({ endpoint, keys: { p256dh: "BKey", auth: "auth" } });
   const flush = () => delay(20);
 
   assert.ok((await request("GET", "/info")).json.push.public_key);
-  assert.equal((await request("PUT", "/push/subscription", { body: { subscription: sub("https://push.example/none"), tokens: ["rply_h_bad"] } })).status, 400);
-  assert.equal((await request("PUT", "/push/subscription", { body: { subscription: sub("https://push.example/1"), tokens: [a.human] } })).status, 200);
+  assert.equal((await request("PUT", "/push/subscription", { body: { subscription: sub("https://push.example/none") } })).status, 401);
+  assert.equal((await request("PUT", "/push/subscription", { token: a.human, body: { subscription: sub("https://push.example/1") } })).status, 204);
 
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "Publish?", blocks: [choice()] } } });
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "quiet" }, silent: true } });
@@ -528,25 +598,23 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
   assert.deepEqual(sent.map((s) => s.payload), [{ title: "SEO bot", body: "❓ Publish?", url: `/c/${a.channel.id}`, tag: a.channel.id }]);
 
   sent.length = 0;
-  await request("POST", "/sync", { body: { tokens: [a.human], viewing: a.channel.id, push_endpoint: "https://push.example/1" } });
+  await request("POST", "/sync", { token: a.human, body: { viewing: a.channel.id, push_endpoint: "https://push.example/1" } });
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "while viewing" } } });
   await flush();
   assert.equal(sent.length, 0);
-  await request("POST", "/sync", { body: { tokens: [a.human], viewing: null, push_endpoint: "https://push.example/1" } });
+  await request("POST", "/sync", { token: a.human, body: { viewing: null, push_endpoint: "https://push.example/1" } });
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "tab hidden" } } });
   await flush();
   assert.equal(sent[0]?.payload.body, "tab hidden");
 
-  await syncAdminToken(db, "secret");
-  await request("PUT", "/push/subscription", { token: "secret", body: { subscription: sub("https://push.example/owner"), tokens: [] } });
-  await syncAdminToken(db, "secret");
+  await request("PUT", "/push/subscription", { token: b.human, body: { subscription: sub("https://push.example/b") } });
   sent.length = 0;
-  await request("POST", "/messages", { token: b.agent, body: { body: { text: "for the owner" } } });
+  await request("POST", "/messages", { token: b.agent, body: { body: { text: "for b's owner" } } });
   await flush();
-  assert.deepEqual(sent.map((s) => s.endpoint), ["https://push.example/owner"]);
+  assert.deepEqual(sent.map((s) => s.endpoint), ["https://push.example/b"]);
 
   failWith = 410;
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "gone" } } });
   await flush();
-  assert.equal((await db.selectFrom("push_subscriptions").select("endpoint").execute()).length, 0);
+  assert.deepEqual((await db.selectFrom("push_subscriptions").select("endpoint").execute()).map((r) => r.endpoint), ["https://push.example/b"]);
 });

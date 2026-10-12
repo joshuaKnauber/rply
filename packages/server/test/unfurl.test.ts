@@ -25,8 +25,8 @@ test("previews read open graph tags and fall back to title and favicon", () => {
 });
 
 test("unfurl refuses private addresses and non-http URLs", async () => {
-  const { request, pairedChannel } = await setup();
-  const { human } = await pairedChannel();
+  const { request, ownedChannel } = await setup();
+  const { human } = await ownedChannel();
   assert.equal((await request("GET", "/unfurl?url=javascript:alert(1)", { token: human })).status, 400);
   assert.equal((await request("GET", "/unfurl?url=https://example.com")).status, 401);
   for (const url of ["http://127.0.0.1:8080/", "http://localhost/", "http://192.168.1.1/", "http://[::1]/", "http://169.254.169.254/latest"]) {

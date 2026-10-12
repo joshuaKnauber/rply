@@ -11,7 +11,7 @@ function usePreview(url: string) {
   return useQuery({
     queryKey: ["unfurl", url],
     queryFn: () => api<LinkPreview>(`/unfurl?url=${encodeURIComponent(url)}`, auth(entry!)),
-    enabled: Boolean(entry && !entry.revoked),
+    enabled: Boolean(entry),
     staleTime: Infinity,
     retry: false,
   }).data;

@@ -1,17 +1,20 @@
 import { HTTPException } from "hono/http-exception";
 import type { z } from "zod";
-import type { Sender } from "@rply/schema";
+import type { ChannelRole, Sender } from "@rply/schema";
+import type { Accounts } from "./accounts.ts";
 import type { DB } from "./db/index.ts";
 import type { ChannelRow } from "./db/schema.ts";
 import type { FilesConfig } from "./files/config.ts";
 import type { Notifier } from "./notifier.ts";
 import type { Push } from "./push/index.ts";
 
-export type Deps = { db: DB; notifier: Notifier; files?: FilesConfig | null; push?: Push | null };
+export type Deps = { db: DB; notifier: Notifier; accounts: Accounts; files?: FilesConfig | null; push?: Push | null };
 
-export type Auth = { channel: ChannelRow; sender: Sender; deviceId?: string; agentId?: string };
+export type Auth = { channel: ChannelRow; sender: Sender; agentId?: string; userId?: string; role?: ChannelRole };
 
-export type AppEnv = { Variables: { auth: Auth } };
+export type User = { id: string; email: string; name: string };
+
+export type AppEnv = { Variables: { auth: Auth; user: User } };
 
 export function parse<T extends z.ZodType>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data);

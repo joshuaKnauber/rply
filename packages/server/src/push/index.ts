@@ -30,9 +30,9 @@ export async function createPush(db: DB, opts: { env?: NodeJS.ProcessEnv; send?:
   const targets = async (channelId: string) => {
     const rows = await db
       .selectFrom("push_subscriptions as s")
-      .leftJoin("human_tokens as h", "h.id", "s.human_token_id")
+      .innerJoin("channel_members as m", "m.user_id", "s.user_id")
       .select(["s.endpoint", "s.p256dh", "s.auth"])
-      .where((eb) => eb.or([eb.and([eb("h.channel_id", "=", channelId), eb("h.revoked_at", "is", null)]), eb("s.api_key_id", "is not", null)]))
+      .where("m.channel_id", "=", channelId)
       .execute();
     return [...new Map(rows.map((r) => [r.endpoint, r])).values()];
   };

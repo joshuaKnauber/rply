@@ -7,8 +7,7 @@
 - [x] Secrets sharing
 - [x] Status page rework
 - [ ] "App" support
-- [ ] Accounts
-  - Rethink the per-device localStorage approach: paired channels, read positions, app storage and owner sign-in live per browser today, and owner mode vs paired mode behave differently (e.g. remove vs delete). Accounts should give one synced channel list and settings across devices.
+- [x] Accounts (see TODO-hosted.md; invites and account deletion are still open)
 - [ ] Clearer concepts for channels, auth, etc
 - [ ] Mobile builds
 - [ ] Mobile improvements + notifications

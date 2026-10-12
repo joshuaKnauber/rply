@@ -1,82 +1,128 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
-  ClaimPairingRequest,
+  ClaimChannelRequest,
   CreateChannelRequest,
-  CreatePairingRequest,
+  JoinChannelRequest,
   PublicKeyRequest,
+  ReadRequest,
   RenameAgentRequest,
   type AgentsResponse,
-  type ClaimPairingResponse,
-  type CreateChannelAsHumanResponse,
+  type ChannelsResponse,
+  type ClaimChannelResponse,
   type CreateChannelResponse,
-  type DevicesResponse,
+  type CreateOwnedChannelResponse,
   type JoinChannelResponse,
   type Pairing,
   type Sender,
   type ServerInfo,
 } from "@rply/schema";
-import { requireAuth, requireServerToken, serverTokenRequired } from "../auth.ts";
-import { parse, type AppEnv, type Deps } from "../context.ts";
+import { apiKeyOwner, requireAuth, requireUser } from "../auth.ts";
+import { bearer, parse, type AppEnv, type Deps } from "../context.ts";
 import type { Serves } from "../serves.ts";
 import type { DB } from "../db/index.ts";
-import { toChannel } from "../serialize.ts";
+import { toChannel, toChannelEntry } from "../serialize.ts";
 import { createPairingCode, createToken, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
 const PAIRING_TTL_MS = 60 * 60 * 1000;
+const ANONYMOUS_CHANNELS_PER_HOUR = 20;
+
+export const userKey = (userId: string) => `user:${userId}`;
 
 export function channelRoutes(deps: Deps, serves: Serves) {
-  const { db } = deps;
-  const human = requireAuth(deps, "human");
+  const { db, accounts } = deps;
+  const user = requireUser(deps);
+  const owner = requireAuth(deps, "owner");
+  const allowAnonymous = rateLimiter(ANONYMOUS_CHANNELS_PER_HOUR, 60 * 60 * 1000);
+
+  const memberChannels = (userId: string) =>
+    db
+      .selectFrom("channel_members as m")
+      .innerJoin("channels", "channels.id", "m.channel_id")
+      .selectAll("channels")
+      .select(["m.role", "m.read_seq"])
+      .where("m.user_id", "=", userId)
+      .orderBy("channels.created_at", "asc");
+
+  const addMember = async (channelId: string, userId: string) => {
+    await db.insertInto("channel_members").values({ channel_id: channelId, user_id: userId, role: "owner", created_at: now() }).execute();
+    deps.notifier.notify(userKey(userId));
+    return toChannelEntry((await memberChannels(userId).where("channels.id", "=", channelId).executeTakeFirstOrThrow()));
+  };
+
+  const createChannel = async (name: string) => {
+    const channel = { id: randomId(), name, e2e: 0, created_at: now() };
+    await db.insertInto("channels").values(channel).execute();
+    return channel;
+  };
 
   return new Hono<AppEnv>()
     .get("/info", async (c) => {
       const info: ServerInfo = {
-        server_token_required: await serverTokenRequired(db),
+        needs_setup: !(await accounts.hasUsers()),
+        ...accounts.info,
         files: { enabled: Boolean(deps.files), max_size: deps.files?.maxSize ?? 0 },
         push: deps.push ? { public_key: deps.push.publicKey } : null,
       };
       return c.json(info);
     })
+    .get("/channels", user, async (c) => {
+      const res: ChannelsResponse = { channels: (await memberChannels(c.var.user.id).execute()).map(toChannelEntry) };
+      return c.json(res);
+    })
     .post("/channels", async (c) => {
-      await requireServerToken(db, c.req.header("authorization"));
       const req = parse(CreateChannelRequest, await c.req.json());
+      const keyOwner = await apiKeyOwner(db, bearer(c.req.header("authorization")));
+      const signedIn = keyOwner ? null : await accounts.user(c.req.raw.headers);
 
-      const channel = {
-        id: randomId(),
-        name: req.name,
-        // legacy column, agents live in agent_tokens now
-        agent_token_hash: hashToken(createToken("a")),
-        agent_public_key: null,
-        e2e: 0,
-        owner_id: null,
-        created_at: now(),
-      };
-      await db.insertInto("channels").values(channel).execute();
-
-      if (req.as === "human") {
-        const res: CreateChannelAsHumanResponse = {
-          channel: toChannel(channel),
-          token: await addHumanToken(db, channel.id, req.label),
-          agent_code: await createPairing(db, channel.id, "agent"),
-        };
+      if (signedIn) {
+        const channel = await createChannel(req.name);
+        const res: CreateOwnedChannelResponse = { channel: await addMember(channel.id, signedIn.id), agent_code: await createPairing(db, channel.id, "agent") };
         return c.json(res, 201);
       }
+      if (!keyOwner && !allowAnonymous(c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "direct")) {
+        throw new HTTPException(429, { message: "Too many new channels, try again later or use an API key (--api-key)" });
+      }
+      const channel = await createChannel(req.name);
+      if (keyOwner) await addMember(channel.id, keyOwner);
       const res: CreateChannelResponse = {
         channel: toChannel(channel),
         agent_token: await addAgentToken(db, channel.id, req.label),
-        pairing: await createPairing(db, channel.id, "human"),
+        claim: keyOwner ? null : await createPairing(db, channel.id, "human"),
       };
       return c.json(res, 201);
     })
+    .post("/channels/claim", user, async (c) => {
+      const { code } = parse(ClaimChannelRequest, await c.req.json());
+      const channelId = await usePairing(db, code, "human");
+      if (await isClaimed(db, channelId)) throw new HTTPException(409, { message: "This channel already belongs to an account" });
+      const res: ClaimChannelResponse = { channel: await addMember(channelId, c.var.user.id) };
+      return c.json(res, 201);
+    })
     .get("/channel", requireAuth(deps), (c) => c.json({ channel: toChannel(c.var.auth.channel) }))
-    .get("/devices", requireAuth(deps), async (c) => {
-      const rows = await activeTokens(db, "human_tokens", c.var.auth.channel.id);
-      const res: DevicesResponse = { devices: rows.map((d) => ({ ...d, current: d.id === c.var.auth.deviceId })) };
-      return c.json(res);
+    .delete("/channel", owner, async (c) => {
+      await deleteChannel(deps, c.var.auth.channel.id);
+      return c.body(null, 204);
+    })
+    .put("/channel/read", requireAuth(deps, "human"), async (c) => {
+      const { seq } = parse(ReadRequest, await c.req.json());
+      await db
+        .updateTable("channel_members")
+        .set({ read_seq: seq })
+        .where("channel_id", "=", c.var.auth.channel.id)
+        .where("user_id", "=", c.var.auth.userId!)
+        .where("read_seq", "<", seq)
+        .execute();
+      return c.body(null, 204);
     })
     .get("/agents", requireAuth(deps), async (c) => {
-      const rows = await activeTokens(db, "agent_tokens", c.var.auth.channel.id);
+      const rows = await db
+        .selectFrom("agent_tokens")
+        .select(["id", "label", "created_at", "last_seen_at"])
+        .where("channel_id", "=", c.var.auth.channel.id)
+        .where("revoked_at", "is", null)
+        .orderBy("created_at")
+        .execute();
       const res: AgentsResponse = {
         agents: rows.map((a) => {
           const serve = serves.online(a.id);
@@ -85,8 +131,17 @@ export function channelRoutes(deps: Deps, serves: Serves) {
       };
       return c.json(res);
     })
-    .delete("/devices/:id", human, (c) => revoke(db, "human_tokens", c.var.auth.channel.id, c.req.param("id")).then(() => c.body(null, 204)))
-    .delete("/agents/:id", human, (c) => revoke(db, "agent_tokens", c.var.auth.channel.id, c.req.param("id")).then(() => c.body(null, 204)))
+    .delete("/agents/:id", owner, async (c) => {
+      const res = await db
+        .updateTable("agent_tokens")
+        .set({ revoked_at: now() })
+        .where("id", "=", c.req.param("id"))
+        .where("channel_id", "=", c.var.auth.channel.id)
+        .where("revoked_at", "is", null)
+        .executeTakeFirst();
+      if (!res.numUpdatedRows) throw new HTTPException(404, { message: "Not found" });
+      return c.body(null, 204);
+    })
     .patch("/agent", requireAuth(deps, "agent"), async (c) => {
       const { label } = parse(RenameAgentRequest, await c.req.json());
       await db.updateTable("agent_tokens").set({ label }).where("id", "=", c.var.auth.agentId!).execute();
@@ -95,28 +150,77 @@ export function channelRoutes(deps: Deps, serves: Serves) {
     .put("/channel/key", requireAuth(deps, "agent"), async (c) => {
       const { public_key } = parse(PublicKeyRequest, await c.req.json());
       await db.updateTable("agent_tokens").set({ public_key }).where("id", "=", c.var.auth.agentId!).execute();
-      await db.updateTable("channels").set({ agent_public_key: public_key }).where("id", "=", c.var.auth.channel.id).execute();
-      return c.json({ channel: toChannel({ ...c.var.auth.channel, agent_public_key: public_key }) });
+      return c.json({ channel: toChannel(c.var.auth.channel) });
     })
+    // agents get a new claim link while their channel has no owner, owners get an agent code
     .post("/pairings", requireAuth(deps), async (c) => {
-      const { role } = parse(CreatePairingRequest, await c.req.json().catch(() => ({})));
-      if (role === "agent" && c.var.auth.sender !== "human") throw new HTTPException(403, { message: "Only the human can invite agents" });
-      return c.json(await createPairing(db, c.var.auth.channel.id, role), 201);
-    })
-    .post("/pairings/claim", async (c) => {
-      const { code, label } = parse(ClaimPairingRequest, await c.req.json());
-      const channelId = await usePairing(db, code, "human");
-      const token = await addHumanToken(db, channelId, label);
-      const res: ClaimPairingResponse = { channel: toChannel(await loadChannel(db, channelId)), token };
-      return c.json(res, 201);
+      const { channel, sender, role } = c.var.auth;
+      if (sender === "agent") {
+        if (await isClaimed(db, channel.id)) throw new HTTPException(409, { message: "This channel already belongs to an account" });
+        return c.json(await createPairing(db, channel.id, "human"), 201);
+      }
+      if (role !== "owner") throw new HTTPException(403, { message: "Only the channel's owner can add agents" });
+      return c.json(await createPairing(db, channel.id, "agent"), 201);
     })
     .post("/agents/join", async (c) => {
-      const { code, label } = parse(ClaimPairingRequest, await c.req.json());
+      const { code, label } = parse(JoinChannelRequest, await c.req.json());
       const channelId = await usePairing(db, code, "agent");
       const token = await addAgentToken(db, channelId, label);
-      const res: JoinChannelResponse = { channel: toChannel(await loadChannel(db, channelId)), agent_token: token };
+      const res: JoinChannelResponse = { channel: toChannel(await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirstOrThrow()), agent_token: token };
       return c.json(res, 201);
     });
+}
+
+const isClaimed = async (db: DB, channelId: string) =>
+  Boolean(await db.selectFrom("channel_members").select("user_id").where("channel_id", "=", channelId).limit(1).executeTakeFirst());
+
+export async function deleteChannel(deps: Deps, channelId: string) {
+  const { db } = deps;
+  const members = await db.selectFrom("channel_members").select("user_id").where("channel_id", "=", channelId).execute();
+  const files = await db.selectFrom("files").select("id").where("channel_id", "=", channelId).where("deleted_at", "is", null).execute();
+  await Promise.all(files.map((f) => deps.files?.store.remove(f.id)));
+  await db.deleteFrom("channels").where("id", "=", channelId).execute();
+  deps.notifier.notify(channelId);
+  for (const m of members) deps.notifier.notify(userKey(m.user_id));
+}
+
+// channels created by `rply init` disappear when nobody claimed them before their last claim code expired
+export async function sweepUnclaimed(deps: Deps) {
+  const rows = await deps.db
+    .selectFrom("channels")
+    .select("id")
+    .where("created_at", "<", now() - PAIRING_TTL_MS)
+    .where((eb) =>
+      eb.and([
+        eb.not(eb.exists(eb.selectFrom("channel_members").select("user_id").whereRef("channel_members.channel_id", "=", "channels.id"))),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom("pairing_codes")
+              .select("code_hash")
+              .whereRef("pairing_codes.channel_id", "=", "channels.id")
+              .where("pairing_codes.role", "=", "human")
+              .where("pairing_codes.used_at", "is", null)
+              .where("pairing_codes.expires_at", ">", now()),
+          ),
+        ),
+      ]),
+    )
+    .execute();
+  for (const row of rows) await deleteChannel(deps, row.id);
+}
+
+function rateLimiter(max: number, windowMs: number) {
+  const hits = new Map<string, number[]>();
+  return (key: string) => {
+    const cutoff = Date.now() - windowMs;
+    const recent = (hits.get(key) ?? []).filter((t) => t > cutoff);
+    if (recent.length >= max) return false;
+    hits.delete(key);
+    hits.set(key, [...recent, Date.now()]);
+    if (hits.size > 10_000) hits.delete(hits.keys().next().value!);
+    return true;
+  };
 }
 
 async function createPairing(db: DB, channelId: string, role: Sender): Promise<Pairing> {
@@ -139,17 +243,8 @@ async function usePairing(db: DB, code: string, role: Sender) {
     .where("expires_at", ">", now())
     .returning("channel_id")
     .executeTakeFirst();
-  if (!pairing) throw new HTTPException(404, { message: role === "agent" ? "Invalid or expired agent code" : "Invalid or expired pairing code" });
+  if (!pairing) throw new HTTPException(404, { message: role === "agent" ? "Invalid or expired agent code" : "Invalid or expired claim code" });
   return pairing.channel_id;
-}
-
-async function addHumanToken(db: DB, channelId: string, label?: string) {
-  const token = createToken("h");
-  await db
-    .insertInto("human_tokens")
-    .values({ id: randomId(), channel_id: channelId, token_hash: hashToken(token), label: label ?? null, created_at: now(), last_seen_at: null, revoked_at: null })
-    .execute();
-  return token;
 }
 
 async function addAgentToken(db: DB, channelId: string, label?: string) {
@@ -160,25 +255,3 @@ async function addAgentToken(db: DB, channelId: string, label?: string) {
     .execute();
   return token;
 }
-
-const activeTokens = (db: DB, table: "human_tokens" | "agent_tokens", channelId: string) =>
-  db
-    .selectFrom(table)
-    .select(["id", "label", "created_at", "last_seen_at"])
-    .where("channel_id", "=", channelId)
-    .where("revoked_at", "is", null)
-    .orderBy("created_at")
-    .execute();
-
-async function revoke(db: DB, table: "human_tokens" | "agent_tokens", channelId: string, id: string) {
-  const res = await db
-    .updateTable(table)
-    .set({ revoked_at: now() })
-    .where("id", "=", id)
-    .where("channel_id", "=", channelId)
-    .where("revoked_at", "is", null)
-    .executeTakeFirst();
-  if (!res.numUpdatedRows) throw new HTTPException(404, { message: "Not found" });
-}
-
-const loadChannel = (db: DB, id: string) => db.selectFrom("channels").selectAll().where("id", "=", id).executeTakeFirstOrThrow();

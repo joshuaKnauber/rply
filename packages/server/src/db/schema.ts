@@ -1,9 +1,8 @@
 import type { Generated, Selectable } from "kysely";
-import type { AskStatus, MessageState, Sender } from "@rply/schema";
+import type { AskStatus, ChannelRole, MessageState, Sender } from "@rply/schema";
 
 export interface Database {
   channels: ChannelsTable;
-  human_tokens: HumanTokensTable;
   agent_tokens: AgentTokensTable;
   pairing_codes: PairingCodesTable;
   api_keys: ApiKeysTable;
@@ -14,26 +13,38 @@ export interface Database {
   files: FilesTable;
   settings: SettingsTable;
   push_subscriptions: PushSubscriptionsTable;
+  user: UserTable;
+  channel_members: ChannelMembersTable;
+  app_storage: AppStorageTable;
+}
+
+interface UserTable {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface ChannelMembersTable {
+  channel_id: string;
+  user_id: string;
+  role: ChannelRole;
+  read_seq: Generated<number>;
+  created_at: number;
+}
+
+interface AppStorageTable {
+  user_id: string;
+  channel_id: string;
+  app_key: string;
+  value: string;
+  updated_at: number;
 }
 
 interface ChannelsTable {
   id: string;
   name: string;
-  agent_token_hash: string;
-  agent_public_key: string | null;
   e2e: number;
-  owner_id: string | null;
   created_at: number;
-}
-
-interface HumanTokensTable {
-  id: string;
-  channel_id: string;
-  token_hash: string;
-  label: string | null;
-  created_at: number;
-  last_seen_at: number | null;
-  revoked_at: number | null;
 }
 
 interface AgentTokensTable {
@@ -50,16 +61,16 @@ interface AgentTokensTable {
 interface PairingCodesTable {
   code_hash: string;
   channel_id: string;
-  role: Generated<Sender>;
+  role: Sender;
   expires_at: number;
   used_at: number | null;
 }
 
 interface ApiKeysTable {
   id: string;
+  user_id: string;
   token_hash: string;
-  owner_id: string | null;
-  label: string | null;
+  label: string;
   created_at: number;
 }
 
@@ -103,7 +114,7 @@ interface SecretRequestsTable {
   mode: "env" | "file";
   status: "open" | "provided" | "delivered" | "declined" | "cancelled";
   ciphertext: string | null;
-  public_key: string | null;
+  public_key: string;
   expires_at: number | null;
   created_at: number;
   closed_at: number | null;
@@ -131,8 +142,7 @@ interface PushSubscriptionsTable {
   endpoint: string;
   p256dh: string;
   auth: string;
-  human_token_id: string | null;
-  api_key_id: string | null;
+  user_id: string;
   created_at: number;
 }
 

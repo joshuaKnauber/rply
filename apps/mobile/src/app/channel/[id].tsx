@@ -9,7 +9,7 @@ import { Composer } from "@/components/Composer";
 import { HtmlBlock } from "@/components/HtmlBlock";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
-import { markRead, removeChannel, useChannels, type StoredChannel } from "@/lib/channels";
+import { auth, channelsKey, markRead, useChannels, type ServerChannel } from "@/lib/channels";
 import { ChannelContext, MessageContext } from "@/lib/channel-context";
 import { appTitle, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
@@ -23,21 +23,15 @@ export default function ChannelScreen() {
 
   if (!entry) return <Text className="p-6 text-neutral-500">Channel not found.</Text>;
 
-  const remove = () =>
-    Alert.alert(`Remove "${entry.channel.name}"?`, "It stays on the server. You can pair again later.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => (removeChannel(entry.channel.id), router.back()) },
-    ]);
-
   const deleteChannel = () =>
-    Alert.alert(`Delete "${entry.channel.name}"?`, "This deletes the channel with all its messages, files and apps from the server. Its agents and devices lose access. This can't be undone.", [
+    Alert.alert(`Delete "${entry.channel.name}"?`, "This deletes the channel with all its messages, files and apps for everyone. Its agents lose access. This can't be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: () =>
-          api(entry.server, `/admin/channels/${entry.channel.id}`, { token: entry.token, method: "DELETE" })
-            .then(() => queryClient.invalidateQueries({ queryKey: ["admin-channels"] }))
+          api(entry.server, "/channel", { ...auth(entry), method: "DELETE" })
+            .then(() => queryClient.invalidateQueries({ queryKey: channelsKey(entry.server) }))
             .then(() => router.back())
             .catch((err: Error) => Alert.alert("Couldn't delete", err.message)),
       },
@@ -48,11 +42,12 @@ export default function ChannelScreen() {
       <Stack.Screen
         options={{
           title: entry.channel.name,
-          headerRight: () => (
-            <Pressable onPress={entry.admin ? deleteChannel : remove}>
-              <Text className="text-red-600">{entry.admin ? "Delete" : "Remove"}</Text>
-            </Pressable>
-          ),
+          headerRight: () =>
+            entry.channel.role === "owner" ? (
+              <Pressable onPress={deleteChannel}>
+                <Text className="text-red-600">Delete</Text>
+              </Pressable>
+            ) : null,
         }}
       />
       <ChannelContext.Provider value={entry}>
@@ -62,7 +57,7 @@ export default function ChannelScreen() {
   );
 }
 
-function Body({ entry, tab, setTab }: { entry: StoredChannel; tab: string | null; setTab: (tab: string | null) => void }) {
+function Body({ entry, tab, setTab }: { entry: ServerChannel; tab: string | null; setTab: (tab: string | null) => void }) {
   const { data: pins = [] } = usePins(entry);
   const apps = pins.filter(isApp);
   const app = apps.find((m) => m.pin === tab);
@@ -93,20 +88,18 @@ function Body({ entry, tab, setTab }: { entry: StoredChannel; tab: string | null
   );
 }
 
-function AppView({ entry, app }: { entry: StoredChannel; app: Message }) {
+function AppView({ entry, app }: { entry: ServerChannel; app: Message }) {
   const send = useSendMessage(entry);
   const body = app.enc ? null : app.body;
   const blocks = body && "blocks" in body ? (body.blocks ?? []) : [];
   const only = blocks.length === 1 && !body?.text && blocks[0]!.type === "html" ? (blocks[0] as BlockOf<"html">) : undefined;
-  const onEvent = entry.revoked
-    ? undefined
-    : (blockId: string | null, value: unknown, label?: string) =>
-        send.mutate({ reply_to: app.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
+  const onEvent = (blockId: string | null, value: unknown, label?: string) =>
+    send.mutate({ reply_to: app.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
 
   return (
     <MessageContext.Provider value={app}>
       {only ? (
-        <HtmlBlock key={app.id} block={only} fill onSend={onEvent && ((value, label) => onEvent(only.id ?? null, value, label))} />
+        <HtmlBlock key={app.id} block={only} fill onSend={(value, label) => onEvent(only.id ?? null, value, label)} />
       ) : (
         <ScrollView className="flex-1" contentContainerClassName="gap-3 p-4">
           {!body && <Text className="italic text-neutral-500">Encrypted</Text>}
@@ -118,7 +111,7 @@ function AppView({ entry, app }: { entry: StoredChannel; app: Message }) {
   );
 }
 
-function Pinned({ entry, pins }: { entry: StoredChannel; pins: Message[] }) {
+function Pinned({ entry, pins }: { entry: ServerChannel; pins: Message[] }) {
   const send = useSendMessage(entry);
   const unpin = useUnpin(entry);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -141,15 +134,13 @@ function Pinned({ entry, pins }: { entry: StoredChannel; pins: Message[] }) {
               </Text>
               <Text className="text-xs text-neutral-500">{formatTime(message.updated_at ?? message.created_at)}</Text>
               <Text className="text-neutral-500">{expanded ? "▾" : "▸"}</Text>
-              {!entry.revoked && (
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => unpin.mutate(message.id, { onError: (err) => Alert.alert("Couldn't unpin", err.message) })}
-                  className="ml-1 rounded-md px-1.5 py-0.5"
-                >
-                  <Text className="text-xs font-medium text-neutral-500">Unpin</Text>
-                </Pressable>
-              )}
+              <Pressable
+                hitSlop={8}
+                onPress={() => unpin.mutate(message.id, { onError: (err) => Alert.alert("Couldn't unpin", err.message) })}
+                className="ml-1 rounded-md px-1.5 py-0.5"
+              >
+                <Text className="text-xs font-medium text-neutral-500">Unpin</Text>
+              </Pressable>
             </Pressable>
             {expanded && (
               <View className="gap-3 px-3 pb-3">
@@ -160,7 +151,7 @@ function Pinned({ entry, pins }: { entry: StoredChannel; pins: Message[] }) {
                     <MessageBlocks
                       blocks={body.blocks}
                       status={null}
-                      onEvent={entry.revoked ? undefined : (blockId, value, label) => send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } })}
+                      onEvent={(blockId, value, label) => send.mutate({ reply_to: message.id, body: { event: { block_id: blockId, value: value as never, label } } })}
                     />
                   </MessageContext.Provider>
                 ) : null}
@@ -174,7 +165,7 @@ function Pinned({ entry, pins }: { entry: StoredChannel; pins: Message[] }) {
   );
 }
 
-function Thread({ entry }: { entry: StoredChannel }) {
+function Thread({ entry }: { entry: ServerChannel }) {
   const { data: messages = [], isPending, error } = useMessages(entry);
   const send = useSendMessage(entry);
   const list = useRef<FlatList<Message>>(null);
@@ -183,10 +174,11 @@ function Thread({ entry }: { entry: StoredChannel }) {
   const visible = messages.filter((m) => !isAnswer(m));
   const waiting = visible.filter(isWaiting);
 
+  const queryClient = useQueryClient();
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
-    if (lastSeq) markRead(entry.channel.id, lastSeq);
-  }, [lastSeq, entry.channel.id]);
+    if (lastSeq) markRead(queryClient, entry, lastSeq);
+  }, [lastSeq, entry, queryClient]);
 
   const answer = (message: Message) => (answers: Answers) =>
     send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
@@ -212,8 +204,8 @@ function Thread({ entry }: { entry: StoredChannel }) {
             <MessageView
               message={item}
               submitted={item.ask?.answer_id ? answersById.get(item.ask.answer_id) : undefined}
-              onAnswer={entry.revoked ? undefined : answer(item)}
-              onEvent={entry.revoked ? undefined : sendEvent(item)}
+              onAnswer={answer(item)}
+              onEvent={sendEvent(item)}
             />
           )
         }
@@ -228,18 +220,16 @@ function Thread({ entry }: { entry: StoredChannel }) {
           </Text>
         </Pressable>
       )}
-      {!entry.revoked && (
-        <Composer
-          entry={entry}
-          disabled={send.isPending}
-          onSend={(text, attachments) =>
-            send.mutate(
-              { body: { ...(text ? { text } : {}), ...(attachments.length ? { attachments } : {}) } },
-              { onError: (err) => Alert.alert("Couldn't send", err.message) },
-            )
-          }
-        />
-      )}
+      <Composer
+        entry={entry}
+        disabled={send.isPending}
+        onSend={(text, attachments) =>
+          send.mutate(
+            { body: { ...(text ? { text } : {}), ...(attachments.length ? { attachments } : {}) } },
+            { onError: (err) => Alert.alert("Couldn't send", err.message) },
+          )
+        }
+      />
     </View>
   );
 }

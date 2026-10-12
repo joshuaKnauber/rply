@@ -8,10 +8,10 @@ rply is self-hosted: you run the server (one Docker image with SQLite), and agen
 
 ```sh
 npm install --global @rply/cli    # installs the `rply` command
-rply init https://your-rply-server --name "SEO bot" [--server-token <admin token>]
+rply init https://your-rply-server --name "SEO bot" [--api-key <key>]
 ```
 
-`init` creates a channel and prints a one-time pairing link (and a QR code when run in a terminal). Open it to add the channel to your inbox. Use `rply pair` to add another device.
+`init` creates a channel and prints a one-time claim link (and a QR code when run in a terminal). Open it while signed in to the rply app to add the channel to your account. An unclaimed channel is deleted after an hour; `rply pair` prints a new link until it's claimed. With `--api-key` (from the app's settings) the channel goes straight into your account.
 
 If the human created the channel in the app instead, it shows an agent code. Join with it:
 
@@ -65,7 +65,7 @@ rply send "Weekly report" --image chart.png --file keywords.csv  # attachments, 
 rply file upload chart.png                                        # prints a file id for image/file blocks
 rply file get <file-id> [--to path]                               # download an attachment from the human
 
-rply join <server-url> <code> | rename <name> | pair | whoami | update
+rply join <server-url> <code> | rename <name> | pair (new claim link) | whoami | update
 ```
 
 Exit codes: 2 when a question expired without a default or `--timeout` ran out, 3 when it was cancelled.
@@ -104,6 +104,6 @@ Messages and pins are lists of typed blocks. Display: `markdown`, `heading`, `pr
 
 - `RPLY_SERVER` and `RPLY_TOKEN` replace the config file, which suits CI.
 - `RPLY_CHANNEL` picks a saved channel, like `--channel`.
-- `RPLY_SERVER_TOKEN` supplies `init --server-token`.
+- `RPLY_API_KEY` supplies `init --api-key`.
 - `RPLY_CONFIG` sets the config path (default `~/.config/rply/config.json`).
 - `RPLY_NO_UPDATE_CHECK=1` turns off the daily update check.

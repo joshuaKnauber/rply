@@ -1,84 +1,58 @@
 import { useEffect } from "react";
-import * as Device from "expo-device";
-import { useQueries } from "@tanstack/react-query";
-import type { Channel, ClaimPairingResponse } from "@rply/schema";
+import { useQueries, type QueryClient } from "@tanstack/react-query";
+import type { ChannelEntry, ChannelsResponse, ClaimChannelResponse, CreateOwnedChannelResponse } from "@rply/schema";
 import { api, ApiError, normalizeServer } from "./api";
-import { createStore } from "./store";
+import { forgetSession, getSessions, useSessions, type Session } from "./sessions";
 
-export type StoredChannel = {
-  server: string;
-  channel: Channel;
-  token: string;
-  revoked?: boolean;
-  admin?: boolean;
-};
+export type ServerChannel = { server: string; token: string; channel: ChannelEntry };
 
-type OwnerSession = { server: string; token: string };
+export const channelsKey = (server: string) => ["channels", server];
 
-const paired = createStore<StoredChannel[]>("rply.channels", []);
-const owners = createStore<OwnerSession[]>("rply.owners", []);
-const readSeqs = createStore<Record<string, number>>("rply.read", {});
+export const auth = (entry: ServerChannel) => ({ token: entry.token, channel: entry.channel.id });
 
-export const loadStores = () => Promise.all([paired.load(), owners.load(), readSeqs.load()]);
-
-export const auth = (entry: StoredChannel) => ({ token: entry.token, channel: entry.admin ? entry.channel.id : undefined });
-
-export function parsePairing(input: string, serverInput: string) {
-  const trimmed = input.trim();
-  try {
-    const url = new URL(trimmed);
-    const code = url.searchParams.get("c");
-    if (code) return { server: url.origin, code };
-  } catch {}
-  if (!serverInput.trim()) throw new Error("Enter the server URL, or paste the full pairing link");
-  return { server: normalizeServer(serverInput), code: trimmed };
-}
-
-export async function claimPairing(input: string, serverInput: string) {
-  const { server, code } = parsePairing(input, serverInput);
-  const res = await api<ClaimPairingResponse>(server, "/pairings/claim", {
-    body: { code, label: Device.deviceName ?? Device.modelName ?? "Phone" },
-  });
-  paired.update((all) => [...all.filter((c) => c.channel.id !== res.channel.id), { server, channel: res.channel, token: res.token }]);
-  return res.channel;
-}
-
-export const removeChannel = (id: string) => paired.update((all) => all.filter((c) => c.channel.id !== id));
-
-export const markRevoked = (tokens: string[]) =>
-  paired.update((all) => all.map((c) => (tokens.includes(c.token) ? { ...c, revoked: true } : c)));
-
-export const useReadSeqs = readSeqs.use;
-export const markRead = (id: string, seq: number) =>
-  readSeqs.update((all) => ((all[id] ?? 0) >= seq ? all : { ...all, [id]: seq }));
-
-export const useOwners = owners.use;
-export async function signInAsOwner(serverInput: string, token: string) {
-  const server = normalizeServer(serverInput);
-  await api(server, "/admin/channels", { token });
-  owners.update((all) => [...all.filter((o) => o.server !== server), { server, token }]);
-}
-export const signOutOwner = (server: string) => owners.update((all) => all.filter((o) => o.server !== server));
-
-export function useChannels(): StoredChannel[] {
-  const pairedChannels = paired.use();
-  const sessions = useOwners();
+export function useChannels(): ServerChannel[] {
+  const sessions = useSessions();
   const results = useQueries({
-    queries: sessions.map((session) => ({
-      queryKey: ["admin-channels", session.server, session.token],
-      queryFn: () => api<{ channels: Channel[] }>(session.server, "/admin/channels", { token: session.token }).then((r) => r.channels),
-      refetchInterval: 15_000,
+    queries: sessions.map((s) => ({
+      queryKey: channelsKey(s.server),
+      queryFn: () => api<ChannelsResponse>(s.server, "/channels", { token: s.token }).then((r) => r.channels),
+      staleTime: Infinity,
     })),
   });
 
-  const unauthorized = sessions.filter((_, i) => results[i]?.error instanceof ApiError && (results[i].error as ApiError).status === 401);
+  const expired = sessions.filter((_, i) => results[i]?.error instanceof ApiError && (results[i].error as ApiError).status === 401);
   useEffect(() => {
-    unauthorized.forEach((s) => signOutOwner(s.server));
-  }, [unauthorized.map((s) => s.server).join(",")]);
+    expired.forEach((s) => forgetSession(s.server));
+  }, [expired.map((s) => s.server).join(",")]);
 
-  const ownerServers = new Set(sessions.map((s) => s.server));
-  const ownerChannels = sessions.flatMap((session, i) =>
-    (results[i]?.data ?? []).map((channel): StoredChannel => ({ server: session.server, channel, token: session.token, admin: true })),
+  return sessions.flatMap((s, i) => (results[i]?.data ?? []).map((channel) => ({ server: s.server, token: s.token, channel })));
+}
+
+export function markRead(queryClient: QueryClient, entry: ServerChannel, seq: number) {
+  if (seq <= entry.channel.read_seq) return;
+  queryClient.setQueryData<ChannelEntry[]>(channelsKey(entry.server), (all = []) =>
+    all.map((c) => (c.id === entry.channel.id ? { ...c, read_seq: Math.max(c.read_seq, seq) } : c)),
   );
-  return [...pairedChannels.filter((c) => !ownerServers.has(c.server)), ...ownerChannels];
+  api(entry.server, "/channel/read", { ...auth(entry), method: "PUT", body: { seq } }).catch(() => undefined);
+}
+
+export async function createChannel(session: Session, name: string) {
+  const res = await api<CreateOwnedChannelResponse>(session.server, "/channels", { token: session.token, body: { name } });
+  return { entry: { server: session.server, token: session.token, channel: res.channel }, code: res.agent_code };
+}
+
+// a claim link names its server; a bare code goes to the server picked in the form
+export async function claimChannel(input: string, fallback: Session | undefined) {
+  const trimmed = input.trim();
+  let server = fallback?.server;
+  let code = trimmed;
+  try {
+    const url = new URL(trimmed);
+    server = normalizeServer(url.origin);
+    code = url.searchParams.get("c") ?? "";
+  } catch {}
+  const session = getSessions().find((s) => s.server === server);
+  if (!session) throw new Error(`Sign in to ${server ?? "the agent's server"} first, under Account.`);
+  const res = await api<ClaimChannelResponse>(session.server, "/channels/claim", { token: session.token, body: { code } });
+  return { server: session.server, token: session.token, channel: res.channel } satisfies ServerChannel;
 }

@@ -14,7 +14,7 @@ const repo = "https://github.com/joshuaKnauber/rply";
 const dockerRun = `git clone ${repo} && cd rply
 docker build -t rply .
 docker run -d --restart always -p 8080:8080 \\
-  -v rply:/data -e RPLY_ADMIN_TOKEN=<secret> rply`;
+  -v rply:/data -e RPLY_URL=https://rply.example.com rply`;
 
 export const platforms: Platform[] = [
   {
@@ -26,7 +26,7 @@ export const platforms: Platform[] = [
     steps: [
       { text: "On an exe.dev VM, it runs the server right next to itself" },
       { text: "Anywhere else, it asks you where to deploy and suggests Railway" },
-      { text: "Then it connects itself and sends you the pairing link" },
+      { text: "Then you create your account, and it sends you a link to add its channel" },
     ],
   },
   {
@@ -49,7 +49,7 @@ export const platforms: Platform[] = [
     steps: [
       { text: `New project, deploy from GitHub: joshuaKnauber/rply` },
       { text: "Add a volume mounted at /data" },
-      { text: "Set RPLY_ADMIN_TOKEN, then generate a domain" },
+      { text: "Generate a domain and set RPLY_URL to it" },
     ],
   },
   {
@@ -60,7 +60,7 @@ export const platforms: Platform[] = [
     where: "Deploy it to Fly.io with flyctl: one machine, a volume mounted at /data.",
     steps: [
       { text: "Create the app from the repo", code: `git clone ${repo} && cd rply\nfly launch --no-deploy` },
-      { text: "Add a volume and the admin token", code: "fly volumes create rply_data --size 1\nfly secrets set RPLY_ADMIN_TOKEN=<secret>" },
+      { text: "Add a volume and the public URL", code: "fly volumes create rply_data --size 1\nfly secrets set RPLY_URL=https://<app>.fly.dev" },
       { text: "Mount it at /data in fly.toml", code: '[mounts]\n  source = "rply_data"\n  destination = "/data"' },
       { text: "Deploy", code: "fly deploy" },
     ],
@@ -74,7 +74,7 @@ export const platforms: Platform[] = [
     steps: [
       { text: "New web service from joshuaKnauber/rply, runtime Docker" },
       { text: "Add a persistent disk at /data (paid instance)" },
-      { text: "Set RPLY_ADMIN_TOKEN as an environment variable" },
+      { text: "Set RPLY_URL to the service URL" },
     ],
   },
   {
@@ -103,8 +103,9 @@ export const platforms: Platform[] = [
 export const setupPrompt = (where: string) => `Set up rply (https://rply.sh) so you can send me updates and ask me questions.
 
 1. Where the server runs: ${where}
-2. Deploy ${repo} with the Dockerfile in the repo. Keep /data on a persistent volume, set RPLY_ADMIN_TOKEN to a random secret, and check that /health responds.
-3. Install the CLI: npm install --global @rply/cli
-4. Create a channel: rply init <server-url> --name "<a name for you>" --server-token <admin token>
-   Show me the pairing link it prints and wait until I've opened it.
-5. Run rply guide setup and follow it from step 3.`;
+2. Deploy ${repo} with the Dockerfile in the repo. Keep /data on a persistent volume, set RPLY_URL to its public URL, and check that /health responds.
+3. Send me the server URL and wait until I've opened it and created my account (the first account owns the server).
+4. Install the CLI: npm install --global @rply/cli
+5. Create a channel: rply init <server-url> --name "<a name for you>"
+   Show me the claim link it prints and wait until I've opened it.
+6. Run rply guide setup and follow it from step 3.`;

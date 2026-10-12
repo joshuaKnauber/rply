@@ -2,16 +2,16 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import type { FileInfo } from "@rply/schema";
 import { ApiError } from "./api";
-import { auth, type StoredChannel } from "./channels";
+import { auth, type ServerChannel } from "./channels";
 
-export const fileHeaders = (entry: StoredChannel) => {
+export const fileHeaders = (entry: ServerChannel) => {
   const { token, channel } = auth(entry);
-  return { authorization: `Bearer ${token}`, ...(channel ? { "x-rply-channel": channel } : {}) };
+  return { authorization: `Bearer ${token}`, "x-rply-channel": channel };
 };
 
-export const fileUrl = (entry: StoredChannel, fileId: string) => `${entry.server}/v1/files/${fileId}`;
+export const fileUrl = (entry: ServerChannel, fileId: string) => `${entry.server}/v1/files/${fileId}`;
 
-export async function uploadFile(entry: StoredChannel, picked: { uri: string; name: string; mime?: string | null }): Promise<FileInfo> {
+export async function uploadFile(entry: ServerChannel, picked: { uri: string; name: string; mime?: string | null }): Promise<FileInfo> {
   const blob = await (await fetch(picked.uri)).blob();
   const res = await fetch(`${entry.server}/v1/files?name=${encodeURIComponent(picked.name)}`, {
     method: "POST",
@@ -23,7 +23,7 @@ export async function uploadFile(entry: StoredChannel, picked: { uri: string; na
   return body.file;
 }
 
-export async function openFile(entry: StoredChannel, fileId: string, name: string) {
+export async function openFile(entry: ServerChannel, fileId: string, name: string) {
   const dir = new Directory(Paths.cache, "rply-files", fileId);
   dir.create({ intermediates: true, idempotent: true });
   const file = await File.downloadFileAsync(fileUrl(entry, fileId), new File(dir, name), { headers: fileHeaders(entry), idempotent: true });

@@ -1,39 +1,42 @@
-import { Platform } from "react-native";
-import { Directory, File, Paths } from "expo-file-system";
-import type { CallResponse } from "@rply/schema";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
+import type { CallResponse, StorageListResponse } from "@rply/schema";
 import { api } from "./api";
-import { auth, type StoredChannel } from "./channels";
+import { auth, type ServerChannel } from "./channels";
 
 const MAX_STORAGE = 256 * 1024;
 
 type CallRequest = { message_id: string; block_id: string | null; name: string; args: unknown; agent: boolean };
 
-export async function callCommand(entry: StoredChannel, req: CallRequest, signal: AbortSignal) {
+export async function callCommand(entry: ServerChannel, req: CallRequest, signal: AbortSignal) {
   let res = await api<CallResponse>(entry.server, "/calls", { ...auth(entry), body: { ...req, wait: 25 }, signal });
   while (res.status === "pending") res = await api<CallResponse>(entry.server, `/calls/${res.id}?wait=30`, { ...auth(entry), signal });
   if (res.status === "error") throw new Error(res.error);
   return res.result;
 }
 
-const storageName = (channelId: string, key: string) => `${channelId}.${key}.json`;
-const storageFile = (channelId: string, key: string) => new File(new Directory(Paths.document, "rply-apps"), storageName(channelId, key));
+const storageKey = (entry: ServerChannel | null) => ["storage", entry?.channel.id];
 
-export function loadAppStorage(channelId: string, key: string): Record<string, unknown> {
-  try {
-    if (Platform.OS === "web") return JSON.parse(localStorage.getItem(`rply.app.${storageName(channelId, key)}`) ?? "{}");
-    const file = storageFile(channelId, key);
-    return file.exists ? JSON.parse(file.textSync()) : {};
-  } catch {
-    return {};
-  }
-}
+// rply.storage values of every app and html block in the channel, keyed by pin key or message id
+export const useAppStorage = (entry: ServerChannel | null) =>
+  useQuery({
+    queryKey: storageKey(entry),
+    queryFn: () => api<StorageListResponse>(entry!.server, "/storage", auth(entry!)).then((r) => r.values),
+    enabled: Boolean(entry),
+    staleTime: Infinity,
+  });
 
-export function saveAppStorage(channelId: string, key: string, values: Record<string, unknown>) {
-  const raw = JSON.stringify(values);
-  if (raw.length > MAX_STORAGE) return;
-  if (Platform.OS === "web") return localStorage.setItem(`rply.app.${storageName(channelId, key)}`, raw);
-  const file = storageFile(channelId, key);
-  file.parentDirectory.create({ intermediates: true, idempotent: true });
-  if (!file.exists) file.create();
-  file.write(raw);
+const pending = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function saveAppStorage(queryClient: QueryClient, entry: ServerChannel, key: string, values: Record<string, unknown>) {
+  if (JSON.stringify(values).length > MAX_STORAGE) return;
+  queryClient.setQueryData<Record<string, unknown>>(storageKey(entry), (all = {}) => ({ ...all, [key]: { ...values } }));
+  const id = `${entry.channel.id}/${key}`;
+  clearTimeout(pending.get(id));
+  pending.set(
+    id,
+    setTimeout(() => {
+      pending.delete(id);
+      api(entry.server, `/storage/${encodeURIComponent(key)}`, { ...auth(entry), method: "PUT", body: { value: values } }).catch(() => undefined);
+    }, 500),
+  );
 }

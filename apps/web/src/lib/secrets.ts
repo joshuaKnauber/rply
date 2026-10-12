@@ -1,7 +1,7 @@
-import type { BlockOf, Channel } from "@rply/schema";
+import type { BlockOf, ChannelEntry } from "@rply/schema";
 import { keyFingerprint, seal } from "@rply/schema/crypto";
 import { api } from "./api";
-import { auth, type StoredChannel } from "./channels";
+import { auth } from "./channels";
 import { createStore } from "./store";
 
 const trusted = createStore<Record<string, string | string[]>>("rply.keys", {});
@@ -19,18 +19,12 @@ export class KeyChangedError extends Error {
   }
 }
 
-export const fetchPublicKey = (entry: StoredChannel) =>
-  api<{ channel: Channel }>("/channel", auth(entry)).then(({ channel }) => {
-    if (!channel.public_key) throw new Error("This agent hasn't set up a key yet");
-    return channel.public_key;
-  });
-
-export async function provideSecret(entry: StoredChannel, block: BlockOf<"secret">, value: string, acceptNewKey = false) {
-  const publicKey = block.public_key ?? (await fetchPublicKey(entry));
-  const known = knownKeys(entry.channel.id);
+export async function provideSecret(entry: ChannelEntry, block: BlockOf<"secret">, value: string, acceptNewKey = false) {
+  const publicKey = block.public_key;
+  const known = knownKeys(entry.id);
   if (known.length && !known.includes(publicKey) && !acceptNewKey) throw new KeyChangedError(known.at(-1)!, publicKey);
-  if (!known.includes(publicKey)) trusted.update((all) => ({ ...all, [entry.channel.id]: [...known, publicKey] }));
+  if (!known.includes(publicKey)) trusted.update((all) => ({ ...all, [entry.id]: [...known, publicKey] }));
   await api(`/secrets/${block.id}/fulfil`, { ...auth(entry), body: { ciphertext: seal(value, publicKey) } });
 }
 
-export const declineSecret = (entry: StoredChannel, secretId: string) => api(`/secrets/${secretId}/decline`, { ...auth(entry), method: "POST" });
+export const declineSecret = (entry: ChannelEntry, secretId: string) => api(`/secrets/${secretId}/decline`, { ...auth(entry), method: "POST" });

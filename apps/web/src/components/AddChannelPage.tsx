@@ -3,21 +3,21 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon, CheckIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
-import type { Pairing } from "@rply/schema";
+import type { Pairing, ChannelEntry } from "@rply/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAdminToken, type StoredChannel } from "@/lib/channels";
+import { channelsKey } from "@/lib/channels";
 import { formatTime } from "@/lib/format";
-import { createChannel, initPrompt } from "@/lib/pairing";
-import { useAgents, useServerInfo } from "@/lib/queries";
+import { createChannel, initPrompt } from "@/lib/onboarding";
+import { useAgents } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { MethodPicker, type Method } from "./MethodPicker";
 import { CommandBlock } from "./CommandBlock";
 import { JoinInstructions } from "./JoinInstructions";
-import { PairingCodeInput } from "./PairingCodeInput";
+import { ClaimCodeInput } from "./ClaimCodeInput";
 
 export function AddChannelPage({ first }: { first?: boolean }) {
-  const [method, setMethod] = useState<Method>("agent");
+  const [method, setMethod] = useState<Method>("here");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6">
@@ -48,38 +48,33 @@ export function AddChannelPage({ first }: { first?: boolean }) {
 }
 
 function FromAgent() {
-  const info = useServerInfo();
-  const tokenFlag = info?.server_token_required ? " --server-token <admin token>" : "";
   return (
     <ol>
       <Step n={1} title="Give the agent this prompt">
-        <CommandBlock text={initPrompt(tokenFlag)} wrap />
-        {tokenFlag && (
-          <p className="text-muted-foreground text-sm">
-            Replace <code className="font-mono">&lt;admin token&gt;</code> with the server's <code className="font-mono">RPLY_ADMIN_TOKEN</code>.
-          </p>
-        )}
+        <CommandBlock text={initPrompt()} wrap />
       </Step>
-      <Step n={2} title="Pair this browser" last>
-        <p className="text-muted-foreground text-sm">Enter the code the agent gives you, or open its link. Codes from rply pair or another device work too.</p>
-        <PairingCodeInput />
+      <Step n={2} title="Add the channel to your account" last>
+        <p className="text-muted-foreground text-sm">Open the claim link the agent gives you, or enter its code. rply pair prints a new one while the channel is unclaimed.</p>
+        <ClaimCodeInput />
       </Step>
     </ol>
   );
 }
 
 function FromHere() {
-  const info = useServerInfo();
-  const admin = useAdminToken();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [name, setName] = useState("");
   const create = useMutation({
-    mutationFn: () => createChannel(name.trim(), admin),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-channels"] }),
+    mutationFn: () => createChannel(name.trim()),
+    onSuccess: ({ channel }) => {
+      // the first-channel page only shows while there are none, /add keeps this page up for the agent code
+      navigate("/add");
+      queryClient.setQueryData<ChannelEntry[]>(channelsKey, (all = []) => [...all, channel]);
+    },
   });
-  const blocked = Boolean(info?.server_token_required && !admin);
 
-  if (create.data) return <WaitForAgent entry={create.data.entry} code={create.data.code} />;
+  if (create.data) return <WaitForAgent entry={create.data.channel} code={create.data.agent_code} />;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -90,12 +85,11 @@ function FromHere() {
     <ol>
       <Step n={1} title="Name the channel">
         <form onSubmit={submit} className="flex gap-2">
-          <Input autoFocus placeholder="SEO bot" className="h-9" value={name} onChange={(e) => setName(e.target.value)} disabled={blocked} aria-label="Channel name" />
-          <Button type="submit" size="lg" disabled={!name.trim() || blocked || create.isPending}>
+          <Input autoFocus placeholder="SEO bot" className="h-9" value={name} onChange={(e) => setName(e.target.value)} aria-label="Channel name" />
+          <Button type="submit" size="lg" disabled={!name.trim() || create.isPending}>
             Create
           </Button>
         </form>
-        {blocked && <p className="text-muted-foreground text-sm">Creating channels needs the admin token. Sign in as owner with the key icon in the sidebar.</p>}
         {create.error && <p className="text-destructive text-sm">{create.error.message}</p>}
       </Step>
       <Step n={2} title="Give the agent a code" upcoming>
@@ -106,20 +100,20 @@ function FromHere() {
   );
 }
 
-function WaitForAgent({ entry, code }: { entry: StoredChannel; code: Pairing }) {
+function WaitForAgent({ entry, code }: { entry: ChannelEntry; code: Pairing }) {
   const [, navigate] = useLocation();
   const { data: agents = [] } = useAgents(entry, 2000);
   const joined = agents.length > 0;
 
   useEffect(() => {
     if (!joined) return;
-    toast.success(`An agent joined "${entry.channel.name}"`);
-    navigate(`/c/${entry.channel.id}`);
+    toast.success(`An agent joined "${entry.name}"`);
+    navigate(`/c/${entry.id}`);
   }, [joined, entry, navigate]);
 
   return (
     <ol>
-      <Step n={1} title={`Created "${entry.channel.name}"`} done />
+      <Step n={1} title={`Created "${entry.name}"`} done />
       <Step n={2} title="Give the agent a code">
         <p className="text-muted-foreground text-sm">Paste this prompt to the agent. It installs rply, joins and sets itself up. The code works once and expires at {formatTime(code.expires_at)}.</p>
         <JoinInstructions code={code.code} />
@@ -131,7 +125,7 @@ function WaitForAgent({ entry, code }: { entry: StoredChannel; code: Pairing }) 
             The channel opens when it joins.
           </span>
           <Button asChild variant="ghost" className="-mr-2">
-            <Link href={`/c/${entry.channel.id}`}>Open now</Link>
+            <Link href={`/c/${entry.id}`}>Open now</Link>
           </Button>
         </div>
       </Step>

@@ -22,7 +22,7 @@ export function SecretBlock({ block }: { block: BlockOf<"secret"> }) {
   const status = secretStatus(block);
   const [value, setValue] = useState("");
   const [visible, setVisible] = useState(false);
-  const open = status === "open" && entry && !entry.revoked;
+  const open = status === "open" && entry;
 
   const provide = useMutation({
     mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block, value, acceptNewKey),

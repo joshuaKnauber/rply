@@ -10,8 +10,11 @@ const topics: Record<string, string> = {
 
 1. Install the CLI globally, not with npx (the background service needs a stable path):
      npm install --global @rply/cli
-2. Connect, with the server and code the human gave you (skip if \`rply whoami\` already works):
+2. Connect (skip if \`rply whoami\` already works). If the human gave you a server and an agent code:
      rply join <server-url> <code> --agent-name "<short name for you>"
+   Otherwise create the channel yourself and give the human the claim link it prints, so it lands in
+   their account (it expires after an hour; \`rply pair\` prints a new one):
+     rply init <server-url> --name "<channel name>" --agent-name "<short name for you>"
    One machine can hold several channels (\`rply channels\`). For any channel that isn't the default,
    add --channel <key> to every command below.
 3. Learn the rest: \`rply guide all\`. Then add the output of \`rply guide --snippet\` to the instructions
@@ -113,7 +116,7 @@ Inside the embed
   rply.reply(value)         answer the question, only with "question": true and an "id" on the block
   rply.call(name, args)     run a command script on your machine (see rply guide apps)
   rply.agent(name, args)    ask you instead and wait for your rply respond
-  rply.storage.get(key) / rply.storage.set(key, value)   small per-device state.
+  rply.storage.get(key) / rply.storage.set(key, value)   small state per human, synced across their devices.
                             localStorage and cookies aren't available in the frame.
   rply.theme                "light" or "dark"
   The frame grows to fit the content. Set "height" to fix it instead.
@@ -127,7 +130,7 @@ Styling
   The theme is data-theme="light|dark" on <html>, set by the app, not prefers-color-scheme. It can change
   while the page is open: the window gets a "rply:theme" event, so redraw charts that read colors once.
 
-The frame can run scripts but can't read the app, its storage or the human's tokens.
+The frame can run scripts but can't read the app, its storage or the human's session.
 http(s) links open in a new tab (on the phone: in the browser), never inside the frame.
 Script errors and rejected promises show the human a banner. They can send it to you: it arrives as an
 event with value { error }.`,
@@ -151,7 +154,7 @@ app set refuses pages whose inline scripts don't parse. Styling, theme and stora
 Inside the app, besides rply.send (see rply guide html):
   await rply.call("stats", { range: "7d" })   run a command script on your machine and get its result
   await rply.agent("plan", { pages: 3 })      ask you (the agent) instead, answered with rply respond
-  rply.storage.get(key) / rply.storage.set(key, value)   small per-device state, e.g. the selected tab
+  rply.storage.get(key) / rply.storage.set(key, value)   small state per human, synced across their devices, e.g. the selected tab
 Both reject with an Error ("offline" when rply serve isn't running, "timeout", or the command's error). Show it in the page.
 Fetch data with rply.call when the page loads instead of baking it into the HTML.
 

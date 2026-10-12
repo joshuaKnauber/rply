@@ -109,7 +109,7 @@ const blockSchemas = {
     reason: z.string().optional(),
     status: z.enum(["open", "provided", "delivered", "declined", "cancelled"]),
     expires_at: z.number().nullable(),
-    public_key: z.string().optional(),
+    public_key: z.string(),
   }),
 };
 
@@ -197,11 +197,14 @@ export const BlockPatch = z.looseObject({ id: elementId });
 export const CreateChannelRequest = z.object({
   name: z.string().min(1).max(100),
   label: z.string().max(100).optional(),
-  as: z.enum(["agent", "human"]).default("agent"),
 });
 export const RenameAgentRequest = z.object({ label: z.string().trim().min(1).max(100) });
 export const CreatePairingRequest = z.object({ role: z.enum(["agent", "human"]).default("human") });
-export const ClaimPairingRequest = z.object({ code: z.string().min(1).max(32), label: z.string().max(100).optional() });
+export const JoinChannelRequest = z.object({ code: z.string().min(1).max(32), label: z.string().max(100).optional() });
+export const ClaimChannelRequest = z.object({ code: z.string().min(1).max(32) });
+export const ReadRequest = z.object({ seq: z.number().int().min(0) });
+export const StorageRequest = z.object({ value: Json });
+export const CreateApiKeyRequest = z.object({ label: z.string().trim().min(1).max(100) });
 export const PostMessageRequest = z.intersection(
   Payload,
   z.object({
@@ -244,7 +247,6 @@ export const CallResultRequest = z.union([z.object({ error: z.string().max(2000)
 
 export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
 export const SyncRequest = z.object({
-  tokens: z.array(z.string()).max(200),
   cursor: z.string().optional(),
   wait: z.number().min(0).max(60).optional(),
   viewing: z.string().max(64).nullable().optional(),
@@ -256,7 +258,6 @@ export const PushSubscriptionRequest = z.object({
     endpoint: z.url().max(2000),
     keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
   }),
-  tokens: z.array(z.string()).max(200),
 });
 export const PushUnsubscribeRequest = z.object({ endpoint: z.string().max(2000) });
 
@@ -264,7 +265,7 @@ export type Sender = "agent" | "human";
 export type AskStatus = "open" | "answered" | "expired" | "cancelled";
 export type MessageState = "seen" | "working" | "done";
 
-export type Channel = { id: string; name: string; e2e: boolean; public_key: string | null; created_at: number };
+export type Channel = { id: string; name: string; e2e: boolean; created_at: number };
 
 export type Ask = { status: AskStatus; expires_at: number | null; answer_id: string | null };
 
@@ -286,8 +287,13 @@ export type Pairing = { code: string; expires_at: number };
 
 export type Participant = { id: string; label: string | null; created_at: number; last_seen_at: number | null; current: boolean };
 
+export type Registration = "open" | "invite" | "closed";
+
 export type ServerInfo = {
-  server_token_required: boolean;
+  needs_setup: boolean;
+  registration: Registration;
+  email: boolean;
+  passkeys: boolean;
   files: { enabled: boolean; max_size: number };
   push: { public_key: string } | null;
 };
@@ -297,12 +303,19 @@ export type FileInfo = FileRef & { created_at: number };
 export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 
-export type CreateChannelResponse = { channel: Channel; agent_token: string; pairing: Pairing };
-export type ClaimPairingResponse = { channel: Channel; token: string };
-export type DevicesResponse = { devices: Participant[] };
+export type ChannelRole = "owner" | "member";
+export type ChannelEntry = Channel & { role: ChannelRole; read_seq: number };
+export type ChannelsResponse = { channels: ChannelEntry[] };
+export type CreateChannelResponse = { channel: Channel; agent_token: string; claim: Pairing | null };
+export type ClaimChannelResponse = { channel: ChannelEntry };
+export type StorageResponse = { value: unknown };
+export type StorageListResponse = { values: Record<string, unknown> };
+export type ApiKey = { id: string; label: string; created_at: number };
+export type ApiKeysResponse = { keys: ApiKey[] };
+export type CreateApiKeyResponse = { key: ApiKey; token: string };
 export type AgentParticipant = Participant & { serve: { commands: string[]; wakes: boolean } | null };
 export type AgentsResponse = { agents: AgentParticipant[] };
-export type CreateChannelAsHumanResponse = { channel: Channel; token: string; agent_code: Pairing };
+export type CreateOwnedChannelResponse = { channel: ChannelEntry; agent_code: Pairing };
 export type JoinChannelResponse = { channel: Channel; agent_token: string };
 export type MessagesResponse = { messages: Message[]; cursor: number };
 export type AskResponse = { message: Message; answer: Message | null };
@@ -315,5 +328,5 @@ export type CallResponse =
   | { id: string; status: "error"; error: string }
   | { id: string; status: "pending" };
 export type LinkPreview = { url: string; title: string | null; description: string | null; image: string | null; icon: string | null; site: string | null };
-export type SyncResponse = { cursor: string; messages: Message[]; revoked: string[] };
+export type SyncResponse = { cursor: string; messages: Message[]; channels: string[] };
 export * from "./helpers.ts";

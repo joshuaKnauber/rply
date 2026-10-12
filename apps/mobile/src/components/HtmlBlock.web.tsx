@@ -12,9 +12,10 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
   const scheme = useColorScheme();
   const bridge = useEmbedBridge(block, (data) => frame.current?.contentWindow?.postMessage(data, "*"));
   const srcDoc = useMemo(
-    () => embedDocument(block, "parent", scheme === "dark" ? "dark" : "light", { storage: bridge.loadStorage(), fill }),
+    () => (bridge.ready ? embedDocument(block, "parent", scheme === "dark" ? "dark" : "light", { storage: bridge.loadStorage(), fill }) : ""),
+    // stored values only seed the page when it loads, later saves come from the page itself
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [block.html, block.height, scheme, fill],
+    [block.html, block.height, scheme, fill, bridge.ready],
   );
 
   useLayoutEffect(() => {
@@ -29,7 +30,7 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     return () => window.removeEventListener("message", listener);
   }, [block.height, fill, onReply, onSend, bridge]);
 
-  const iframe = (
+  const iframe = !bridge.ready ? null : (
     <iframe
       ref={frame}
       title={block.label ?? "Embedded content"}

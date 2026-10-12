@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { api } from "./api";
-import { useAdminToken, type StoredChannel } from "./channels";
 import { createStore } from "./store";
 
 const endpoint = createStore<string | null>("rply.push", null);
@@ -17,12 +16,9 @@ const keyBytes = (base64Url: string) => {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 };
 
-const tokensOf = (channels: StoredChannel[]) => channels.filter((c) => !c.revoked && !c.admin).map((c) => c.token);
+const save = (subscription: PushSubscription) => api("/push/subscription", { method: "PUT", body: { subscription: subscription.toJSON() } });
 
-const save = (subscription: PushSubscription, channels: StoredChannel[], admin: string | null) =>
-  api("/push/subscription", { method: "PUT", token: admin ?? undefined, body: { subscription: subscription.toJSON(), tokens: tokensOf(channels) } });
-
-export async function enablePush(publicKey: string, channels: StoredChannel[], admin: string | null) {
+export async function enablePush(publicKey: string) {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("Notifications are blocked for this site. Allow them in the browser's site settings.");
   const registration = await navigator.serviceWorker.register("/sw.js");
@@ -34,7 +30,7 @@ export async function enablePush(publicKey: string, channels: StoredChannel[], a
       if (err.name === "AbortError") throw new Error("This browser has no push service. Try Chrome, Firefox, Edge or Safari.");
       throw err;
     });
-  await save(subscription, channels, admin);
+  await save(subscription);
   endpoint.update(() => subscription.endpoint);
 }
 
@@ -47,18 +43,16 @@ export async function disablePush() {
   endpoint.update(() => null);
 }
 
-export function usePushSync(channels: StoredChannel[]) {
+// re-registers this browser's subscription for whoever is signed in
+export function usePushSync(userId: string) {
   const current = usePushEndpoint();
-  const admin = useAdminToken();
-  const key = `${tokensOf(channels).join(",")}|${admin ?? ""}`;
 
   useEffect(() => {
     if (!current || !pushSupported()) return;
     (async () => {
       const subscription = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
       if (!subscription || Notification.permission !== "granted") return endpoint.update(() => null);
-      await save(subscription, channels, admin).catch(() => undefined);
+      await save(subscription).catch(() => undefined);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, key]);
+  }, [current, userId]);
 }

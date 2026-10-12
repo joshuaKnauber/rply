@@ -4,8 +4,8 @@ import { RadioGroup } from "radix-ui";
 export type Method = "agent" | "here";
 
 const methods = [
-  { value: "agent", icon: TerminalIcon, title: "On the agent's machine", description: "Run rply init, then pair this browser." },
-  { value: "here", icon: MonitorIcon, title: "In this browser", description: "Create it here, then give the agent a setup prompt." },
+  { value: "here", icon: MonitorIcon, title: "Here", description: "Create it here, then give the agent a setup prompt." },
+  { value: "agent", icon: TerminalIcon, title: "From the agent", description: "The agent runs rply init and gives you a link to claim the channel." },
 ] as const;
 
 export function MethodPicker({ value, onChange }: { value: Method; onChange: (value: Method) => void }) {

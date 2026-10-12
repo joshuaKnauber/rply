@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
 import { CheckCheckIcon, CircleDotIcon, CornerDownRightIcon, EyeIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { Answers, Message, MessageState } from "@rply/schema";
+import type { Answers, Message, MessageState, ChannelEntry } from "@rply/schema";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { markRead, type StoredChannel } from "@/lib/channels";
+import { markRead } from "@/lib/channels";
 import { MessageContext } from "@/lib/channel-context";
 import { eventLabel, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
@@ -14,7 +15,7 @@ import { AttachmentList } from "./blocks/Attachments";
 import { MessageBlocks } from "./blocks/MessageBlocks";
 import { Composer } from "./Composer";
 
-export function Thread({ entry }: { entry: StoredChannel }) {
+export function Thread({ entry }: { entry: ChannelEntry }) {
   const { data: messages = [], isPending, error } = useMessages(entry);
   const send = useSendMessage(entry);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -24,10 +25,11 @@ export function Thread({ entry }: { entry: StoredChannel }) {
   const answersById = useMemo(() => new Map(messages.filter(isAnswer).map((m) => [m.id, (m.body as { answers: Answers }).answers])), [messages]);
   const visible = messages.filter((m) => !isAnswer(m));
 
+  const queryClient = useQueryClient();
   const lastSeq = messages.at(-1)?.seq;
   useEffect(() => {
-    if (lastSeq) markRead(entry.channel.id, lastSeq);
-  }, [lastSeq, entry.channel.id]);
+    if (lastSeq) markRead(queryClient, entry, lastSeq);
+  }, [lastSeq, entry, queryClient]);
 
   const lastVisible = visible.at(-1)?.id;
   const scrollToBottom = () => {
@@ -65,32 +67,30 @@ export function Thread({ entry }: { entry: StoredChannel }) {
               <MessageView
                 key={message.id}
                 message={message}
-                agentName={entry.channel.name}
+                agentName={entry.name}
                 submitted={message.ask?.answer_id ? answersById.get(message.ask.answer_id) : undefined}
-                onAnswer={entry.revoked ? undefined : answer(message)}
-                onEvent={entry.revoked ? undefined : sendEvent(message)}
+                onAnswer={answer(message)}
+                onEvent={sendEvent(message)}
               />
             ),
           )}
         </div>
       </div>
-      {!entry.revoked && (
-        <Composer
-          disabled={send.isPending}
-          onSend={(text, attachments) => {
-            atBottom.current = true;
-            send.mutate(
-              { body: { ...(text && { text }), ...(attachments.length && { attachments }) } },
-              { onError: (err) => toast.error(err.message) },
-            );
-          }}
-        />
-      )}
+      <Composer
+        disabled={send.isPending}
+        onSend={(text, attachments) => {
+          atBottom.current = true;
+          send.mutate(
+            { body: { ...(text && { text }), ...(attachments.length && { attachments }) } },
+            { onError: (err) => toast.error(err.message) },
+          );
+        }}
+      />
     </div>
   );
 }
 
-export function WaitingIndicator({ entry }: { entry: StoredChannel }) {
+export function WaitingIndicator({ entry }: { entry: ChannelEntry }) {
   const { data: messages = [] } = useMessages(entry);
   const waiting = messages.filter((m) => !isAnswer(m) && isWaiting(m));
   if (waiting.length === 0) return null;

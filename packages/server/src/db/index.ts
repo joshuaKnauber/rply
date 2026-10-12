@@ -7,17 +7,9 @@ import { isPostgres } from "./dialect.ts";
 import { nodeSqlite } from "./node-sqlite.ts";
 import type { Database } from "./schema.ts";
 import * as m0001 from "./migrations/0001_init.ts";
-import * as m0002 from "./migrations/0002_secrets.ts";
-import * as m0003 from "./migrations/0003_files.ts";
-import * as m0004 from "./migrations/0004_push.ts";
-import * as m0005 from "./migrations/0005_agents.ts";
 
 const migrations: Record<string, Migration> = {
   "0001_init": m0001,
-  "0002_secrets": m0002,
-  "0003_files": m0003,
-  "0004_push": m0004,
-  "0005_agents": m0005,
 };
 
 export type DB = Kysely<Database>;
@@ -26,6 +18,8 @@ pg.types.setTypeParser(pg.types.builtins.INT8, Number);
 pg.types.setTypeParser(pg.types.builtins.NUMERIC, Number);
 
 export const isPostgresUrl = (target: string) => /^postgres(ql)?:\/\//.test(target);
+
+export const databaseFromEnv = (env: NodeJS.ProcessEnv) => env.RPLY_DATABASE_URL ?? env.RPLY_DB ?? "rply.db";
 
 export async function openDatabase(target: string): Promise<DB> {
   if (isPostgresUrl(target)) {
@@ -44,6 +38,10 @@ export async function openDatabase(target: string): Promise<DB> {
 async function migrate(db: DB, backup: (version: string) => void) {
   const migrationTableSchema = isPostgres(db) ? (await sql<{ schema: string }>`select current_schema() as schema`.execute(db)).rows[0]!.schema : undefined;
   const migrator = new Migrator({ db, migrationTableSchema, provider: { getMigrations: async () => migrations } });
+  const recorded = await sql<{ name: string }>`select name from kysely_migration`.execute(db).then((r) => r.rows.map((m) => m.name), () => []);
+  if (recorded.some((name) => !(name in migrations))) {
+    throw new Error("This database was created before the migrations were reset on 2026-10-12. Delete it (and the files folder next to it) and start again.");
+  }
   const all = await migrator.getMigrations();
   const executed = all.filter((m) => m.executedAt);
   if (executed.length === all.length) return;

@@ -24,12 +24,15 @@ export function readJson(source: string): unknown {
   }
 }
 
-export async function printPairing(server: string, code: string, expiresAt: number) {
-  const url = `${server}/pair?c=${code}`;
+export const claimUrl = (server: string, code: string) => `${server}/claim?c=${code}`;
+
+export async function printClaim(server: string, code: string, expiresAt: number) {
+  const url = claimUrl(server, code);
   const minutes = Math.round((expiresAt - Date.now()) / 60_000);
-  console.log(`Pair a device within ${minutes} minutes (single use):`);
+  console.log(`Give your human this link to add the channel to their rply account (within ${minutes} minutes, single use):`);
   console.log(`  ${url}`);
-  console.log(`  or enter code ${code} in the app`);
+  console.log(`  or they enter code ${code} under Add channel > From the agent`);
+  console.log("Until it's claimed the channel belongs to nobody, and it's deleted if nobody claims it in time (rply pair makes a new link).");
   if (process.stdout.isTTY) console.log("\n" + (await QRCode.toString(url, { type: "terminal", small: true })));
 }
 

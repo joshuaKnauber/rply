@@ -10,4 +10,5 @@ Outline only, copy comes later.
 
 - What you run: one container + SQLite
 - Requirements, ports, volume
-- Who can create channels (`RPLY_ADMIN_TOKEN`)
+- Accounts: the first one owns the server, `RPLY_REGISTRATION` for everyone after
+- Email (optional) and `reset-password` without it

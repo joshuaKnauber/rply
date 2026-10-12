@@ -9,4 +9,4 @@ Outline only, copy comes later.
 :::
 
 - One-click template (later), manual setup
-- Volume at `/data`, admin token, domain
+- Volume at `/data`, domain, `RPLY_URL`

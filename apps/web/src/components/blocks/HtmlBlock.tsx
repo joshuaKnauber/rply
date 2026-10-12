@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { embedDocument, type BlockOf, type EmbedTheme } from "@rply/schema";
-import { callCommand, loadAppStorage, saveAppStorage } from "@/lib/apps";
+import { callCommand, saveAppStorage, useAppStorage } from "@/lib/apps";
 import { useChannelEntry, useMessage } from "@/lib/channel-context";
 
 type Props = { block: BlockOf<"html">; fill?: boolean; onReply?: (value: unknown) => void; onSend?: (value: unknown, label?: string) => void };
@@ -16,7 +17,8 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
   const theme: EmbedTheme = useTheme().resolvedTheme === "dark" ? "dark" : "light";
   const entry = useChannelEntry();
   const message = useMessage();
-  const channelId = entry?.channel.id;
+  const queryClient = useQueryClient();
+  const { data: storedValues, isPending: storageLoading } = useAppStorage(entry);
   const storageKey = message?.pin ?? message?.id;
   const storage = useRef<Record<string, unknown>>({});
   const unmounted = useRef(new AbortController());
@@ -28,11 +30,15 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     return () => controller.abort();
   }, []);
 
+  const ready = !entry || !storageLoading;
   const srcDoc = useMemo(() => {
-    storage.current = channelId && storageKey ? loadAppStorage(channelId, storageKey) : {};
+    if (!ready) return "";
+    const stored = storageKey ? storedValues?.[storageKey] : undefined;
+    storage.current = stored && typeof stored === "object" ? { ...(stored as Record<string, unknown>) } : {};
     return embedDocument(block, "parent", currentTheme(), { storage: storage.current, fill });
+    // stored values only seed the page when it loads, later saves come from the page itself
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [block.html, block.height, fill, channelId, storageKey]);
+  }, [block.html, block.height, fill, entry?.id, storageKey, ready]);
 
   useLayoutEffect(() => {
     const post = (data: unknown) => frame.current?.contentWindow?.postMessage(data, "*");
@@ -43,13 +49,13 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
       if (data.rply === "reply") onReply?.(data.value);
       if (data.rply === "send") onSend?.(data.value, typeof data.label === "string" ? data.label : undefined);
       if (data.rply === "error") setError(String(data.message).slice(0, 500));
-      if (data.rply === "storage" && channelId && storageKey && typeof data.key === "string") {
+      if (data.rply === "storage" && entry && storageKey && typeof data.key === "string") {
         if (data.value === undefined) delete storage.current[data.key];
         else storage.current[data.key] = data.value;
-        saveAppStorage(channelId, storageKey, storage.current);
+        saveAppStorage(queryClient, entry, storageKey, storage.current);
       }
       if (data.rply === "call") {
-        if (!entry || entry.revoked || !message) return post({ rply: "result", id: data.id, error: "Calls aren't available here" });
+        if (!entry || !message) return post({ rply: "result", id: data.id, error: "Calls aren't available here" });
         const req = { message_id: message.id, block_id: block.id ?? null, name: String(data.name), args: data.args ?? null, agent: data.agent === true };
         callCommand(entry, req, unmounted.current.signal).then(
           (result) => post({ rply: "result", id: data.id, result }),
@@ -59,7 +65,7 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     };
     window.addEventListener("message", listener);
     return () => window.removeEventListener("message", listener);
-  }, [block.height, block.id, fill, onReply, onSend, entry, message, channelId, storageKey]);
+  }, [block.height, block.id, fill, onReply, onSend, entry, message, storageKey, queryClient]);
 
   useEffect(() => {
     frame.current?.contentWindow?.postMessage({ rply: "theme", theme }, "*");
@@ -75,7 +81,9 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
     />
   );
 
-  const iframe = (
+  const iframe = !ready ? (
+    <div style={fill ? undefined : { height }} className={fill ? "size-full" : "w-full"} />
+  ) : (
     <iframe
       ref={frame}
       title={block.label ?? "Embedded content"}

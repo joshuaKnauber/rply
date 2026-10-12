@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { joinPrompt } from "@/lib/pairing";
+import { joinPrompt } from "@/lib/onboarding";
 import { CommandBlock } from "./CommandBlock";
 
 export function JoinInstructions({ code }: { code: string }) {

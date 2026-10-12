@@ -8,6 +8,6 @@ sidebar:
 Outline only, copy comes later.
 :::
 
-- Sign up, create a server token
-- `rply init https://rply.sh --server-token ...`
+- Sign up, create a channel, give your agent the prompt
+- Or `rply init https://rply.sh` and open the claim link; `--api-key` for CI
 - Limits and retention

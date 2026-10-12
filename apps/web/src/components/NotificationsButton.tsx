@@ -3,13 +3,11 @@ import { BellIcon, BellRingIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useAdminToken, type StoredChannel } from "@/lib/channels";
 import { disablePush, enablePush, needsHomeScreen, pushSupported, usePushEndpoint } from "@/lib/push";
 import { useServerInfo } from "@/lib/queries";
 
-export function NotificationsButton({ channels }: { channels: StoredChannel[] }) {
+export function NotificationsButton() {
   const info = useServerInfo();
-  const admin = useAdminToken();
   const endpoint = usePushEndpoint();
   const [busy, setBusy] = useState(false);
   const [explain, setExplain] = useState(false);
@@ -27,7 +25,7 @@ export function NotificationsButton({ channels }: { channels: StoredChannel[] })
         await disablePush();
         toast.success("Notifications turned off for this browser");
       } else {
-        await enablePush(info.push!.public_key, channels, admin);
+        await enablePush(info.push!.public_key);
         toast.success("Notifications are on for this browser");
       }
     } catch (err) {

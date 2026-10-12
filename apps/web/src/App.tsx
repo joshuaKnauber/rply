@@ -1,35 +1,49 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
+import { AddChannelPage } from "@/components/AddChannelPage";
+import { AuthPage, ResetPasswordPage } from "@/components/AuthPage";
 import { ChannelList } from "@/components/ChannelList";
 import { ChannelView } from "@/components/ChannelView";
-import { PairPage } from "@/components/PairPage";
-import { AddChannelPage } from "@/components/AddChannelPage";
+import { ClaimPage } from "@/components/ClaimPage";
 import { SettingsPage } from "@/components/SettingsPage";
+import { useSession } from "@/lib/auth";
 import { useChannels } from "@/lib/channels";
 import { registerServiceWorker, usePushSync } from "@/lib/push";
 import { useSync } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
 export function App() {
+  const session = useSession();
   return (
     <Switch>
-      <Route path="/pair" component={PairPage} />
-      <Route component={Inbox} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route>
+        {session.isPending ? null : !session.data ? (
+          <AuthPage />
+        ) : (
+          <Switch>
+            <Route path="/claim" component={ClaimPage} />
+            <Route>
+              <Inbox userId={session.data.user.id} />
+            </Route>
+          </Switch>
+        )}
+      </Route>
     </Switch>
   );
 }
 
-function Inbox() {
-  const channels = useChannels();
+function Inbox({ userId }: { userId: string }) {
+  const { data: channels = [], isPending } = useChannels();
   const [, chat] = useRoute("/c/:id");
   const [, app] = useRoute("/c/:id/a/:key");
-  const active = channels.find((c) => c.channel.id === (chat ?? app)?.id);
+  const active = channels.find((c) => c.id === (chat ?? app)?.id);
   const [adding] = useRoute("/add");
   const [settings] = useRoute("/settings");
   const showMain = Boolean(active) || adding || settings || channels.length === 0;
   const [, navigate] = useLocation();
-  useSync(channels, active?.channel.id);
-  usePushSync(channels);
+  useSync(active?.id);
+  usePushSync(userId);
 
   useEffect(() => {
     registerServiceWorker();
@@ -41,19 +55,16 @@ function Inbox() {
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, [navigate]);
 
+  if (isPending) return null;
+
   return (
     <div className="flex h-full">
       <aside className={cn("bg-sidebar w-full md:flex md:w-72 md:shrink-0 md:border-r", showMain ? "hidden" : "flex")}>
-        <ChannelList channels={channels} activeId={active?.channel.id} activeApp={app?.key} adding={adding} settings={settings} />
+        <ChannelList channels={channels} activeId={active?.id} activeApp={app?.key} adding={adding} settings={settings} />
       </aside>
-      <main
-        className={cn(
-          "min-w-0 flex-1 flex-col",
-          showMain ? "flex" : "hidden md:flex",
-        )}
-      >
+      <main className={cn("min-w-0 flex-1 flex-col", showMain ? "flex" : "hidden md:flex")}>
         {active ? (
-          <ChannelView key={active.channel.id} entry={active} appKey={app?.key} />
+          <ChannelView key={active.id} entry={active} appKey={app?.key} />
         ) : settings ? (
           <SettingsPage />
         ) : adding || channels.length === 0 ? (

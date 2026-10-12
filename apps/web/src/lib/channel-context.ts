@@ -1,8 +1,7 @@
 import { createContext, useContext } from "react";
-import type { Message } from "@rply/schema";
-import type { StoredChannel } from "./channels";
+import type { ChannelEntry, Message } from "@rply/schema";
 
-export const ChannelContext = createContext<StoredChannel | null>(null);
+export const ChannelContext = createContext<ChannelEntry | null>(null);
 export const useChannelEntry = () => useContext(ChannelContext);
 
 export const MessageContext = createContext<Message | null>(null);

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDownIcon, PinOffIcon } from "lucide-react";
-import { isApp, type Message } from "@rply/schema";
-import type { StoredChannel } from "@/lib/channels";
+import { isApp, type Message, type ChannelEntry } from "@rply/schema";
 import { MessageContext } from "@/lib/channel-context";
 import { formatTime } from "@/lib/format";
 import { toast } from "sonner";
@@ -11,7 +10,7 @@ import { Markdown } from "./blocks/Markdown";
 import { Button } from "@/components/ui/button";
 import { MessageBlocks } from "./blocks/MessageBlocks";
 
-export function PinnedMessages({ entry }: { entry: StoredChannel }) {
+export function PinnedMessages({ entry }: { entry: ChannelEntry }) {
   const { data: pins = [] } = usePins(entry);
   const send = useSendMessage(entry);
   const unpin = useUnpin(entry);
@@ -25,8 +24,8 @@ export function PinnedMessages({ entry }: { entry: StoredChannel }) {
     <Pinned
       key={message.id}
       message={message}
-      onEvent={entry.revoked ? undefined : onEvent(message)}
-      onUnpin={entry.revoked ? undefined : () => unpin.mutate(message.id, { onError: (err) => toast.error(err.message) })}
+      onEvent={onEvent(message)}
+      onUnpin={() => unpin.mutate(message.id, { onError: (err) => toast.error(err.message) })}
     />
   ));
 }

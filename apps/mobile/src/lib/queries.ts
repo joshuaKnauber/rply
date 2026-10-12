@@ -1,32 +1,30 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { HumanMessageBody, Message, MessagesResponse } from "@rply/schema";
 import { api } from "./api";
-import { auth, type StoredChannel } from "./channels";
+import { auth, type ServerChannel } from "./channels";
 
 export const messagesKey = (channelId: string) => ["messages", channelId];
 export const pinsKey = (channelId: string) => ["pins", channelId];
 
-const fetchMessages = (entry: StoredChannel) =>
+const fetchMessages = (entry: ServerChannel) =>
   api<MessagesResponse>(entry.server, "/messages?limit=200", auth(entry)).then((r) => r.messages);
 
-const messagesQuery = (entry: StoredChannel) => ({
+const messagesQuery = (entry: ServerChannel) => ({
   queryKey: messagesKey(entry.channel.id),
   queryFn: () => fetchMessages(entry),
   staleTime: Infinity,
-  enabled: !entry.revoked,
 });
 
-export const useMessages = (entry: StoredChannel) => useQuery(messagesQuery(entry));
+export const useMessages = (entry: ServerChannel) => useQuery(messagesQuery(entry));
 
-export const useAllMessages = (entries: StoredChannel[]) => useQueries({ queries: entries.map(messagesQuery) });
+export const useAllMessages = (entries: ServerChannel[]) => useQueries({ queries: entries.map(messagesQuery) });
 
-export const usePins = (entry: StoredChannel) =>
+export const usePins = (entry: ServerChannel) =>
   useQuery({
     queryKey: pinsKey(entry.channel.id),
     queryFn: () => api<{ messages: Message[] }>(entry.server, "/pins", auth(entry)).then((r) => r.messages),
     staleTime: Infinity,
-    enabled: !entry.revoked,
-  });
+    });
 
 function upsert(queryClient: QueryClient, key: string[], incoming: Message[], belongs: (m: Message) => boolean) {
   if (!queryClient.getQueryData(key)) {
@@ -51,7 +49,7 @@ export function applySynced(queryClient: QueryClient, messages: Message[]) {
   }
 }
 
-export function useUnpin(entry: StoredChannel) {
+export function useUnpin(entry: ServerChannel) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api<{ message: Message }>(entry.server, `/messages/${id}/unpin`, { ...auth(entry), method: "POST" }).then((r) => r.message),
@@ -59,7 +57,7 @@ export function useUnpin(entry: StoredChannel) {
   });
 }
 
-export function useSendMessage(entry: StoredChannel) {
+export function useSendMessage(entry: ServerChannel) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (req: { body: HumanMessageBody; reply_to?: string }) =>

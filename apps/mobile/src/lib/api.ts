@@ -20,7 +20,7 @@ export async function api<T>(server: string, path: string, opts: Options = {}): 
     signal: opts.signal,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(json.error ?? `Request failed (${res.status})`, res.status);
+  if (!res.ok) throw new ApiError(json.error ?? json.message ?? `Request failed (${res.status})`, res.status);
   return json as T;
 }
 

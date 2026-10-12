@@ -26,12 +26,12 @@ rply is agent-agnostic and not a session mirror: it doesn't control or host your
 
 ```
 agent machine                    your server                 you
-rply CLI  ── agent token ──▶  rply server (Docker,  ◀── human token ──  web / mobile app
+rply CLI  ── agent token ──▶  rply server (Docker,  ◀── your account ──  web / mobile app
                               SQLite, serves web app)
 ```
 
-- One **channel** per agent (or per project). There are no user accounts: a channel has agent tokens (CLI) and human tokens (one per paired device).
-- Pairing uses one-time codes, so no long-lived token ever ends up in the agent's output.
+- One **channel** per agent (or per project). Agents hold agent tokens (CLI); you sign in to your account on every device and see all your channels there.
+- Agents join and channels get claimed with one-time codes, so no long-lived credential ever ends up in the agent's output.
 
 ## Setup
 
@@ -42,19 +42,23 @@ The server is one container with an SQLite database. Keep `/data` on a volume.
 ```sh
 git clone https://github.com/joshuaKnauber/rply && cd rply
 docker build -t rply .
-docker run -d -p 8080:8080 -v rply-data:/data -e RPLY_ADMIN_TOKEN=<random secret> rply
+docker run -d -p 8080:8080 -v rply-data:/data -e RPLY_URL=https://rply.example.com rply
 ```
 
-Put it behind HTTPS (Caddy, Railway, exe.dev's proxy, …). Run one replica only. On Railway, `.railway/railway.ts` defines the service, healthcheck and `/data` volume; set `RPLY_ADMIN_TOKEN` in the dashboard and generate a domain.
+Put it behind HTTPS (Caddy, Railway, exe.dev's proxy, …). Run one replica only. On Railway, `.railway/railway.ts` defines the service, healthcheck and `/data` volume; generate a domain and set `RPLY_URL` to it in the dashboard.
 
-Open the server URL in a browser to get the web app. With an admin token set, you can sign in with it there to see every channel.
+Open the server URL in a browser and create your account: the first person to register owns the server. After that, registration follows `RPLY_REGISTRATION`. Without email configured, reset a forgotten password on the server with `docker exec <container> node packages/server/src/reset-password.ts <email>`, which prints a new one.
 
 | Variable | Default | |
 |---|---|---|
 | `PORT` | `8080` | |
 | `RPLY_DB` | `/data/rply.db` in Docker | SQLite file |
 | `RPLY_DATABASE_URL` | unset | `postgres://…` to use Postgres instead of SQLite. Files then need `RPLY_FILES_DIR` or S3. |
-| `RPLY_ADMIN_TOKEN` | unset | If set, creating channels needs it (`--server-token`). Unset means anyone who can reach the server can create channels. |
+| `RPLY_URL` | unset | The server's public URL. Needed for passkeys and email (links point there). |
+| `RPLY_REGISTRATION` | `invite` | Who can create an account after the first one: `open`, `invite` (nobody until invites exist) or `closed` |
+| `RPLY_RESEND_API_KEY` + `RPLY_EMAIL_FROM` | unset | Turns on email: verification, password reset and sign-in links (via [Resend](https://resend.com)) |
+| `RPLY_AUTH_SECRET` | generated | Signs sessions. Generated on first start and kept in the database unless set. |
+| `RPLY_TRUSTED_ORIGINS` | unset | Comma-separated origins allowed to call the sign-in routes from another site, e.g. the Expo web build in development |
 | `RPLY_FILES` | on | `off` disables attachments |
 | `RPLY_FILES_DIR` | `files/` next to the SQLite file | or use S3: `RPLY_S3_BUCKET`, `RPLY_S3_ENDPOINT`, `RPLY_S3_ACCESS_KEY_ID`, `RPLY_S3_SECRET_ACCESS_KEY`, `RPLY_S3_REGION` |
 | `RPLY_FILES_MAX_SIZE` / `RPLY_FILES_TOTAL_LIMIT` / `RPLY_FILES_RETENTION` | `25MB` / `5GB` / off | e.g. `RPLY_FILES_RETENTION=30d` |
@@ -66,12 +70,12 @@ On the agent's machine (Node 20+):
 
 ```sh
 npm install --global @rply/cli
-rply init https://your-rply-server --name "SEO bot" --server-token <admin token>
+rply join https://your-rply-server <code>
 ```
 
-`init` creates the channel and prints a one-time pairing link (and a QR code in a terminal). Open it on your phone or laptop to add the channel to your inbox. `rply pair` makes a link for another device.
+Create the channel in the app (Add channel): it shows a setup prompt with a one-time agent code to paste to the agent.
 
-Or create the channel in the web app: it shows an agent code, and the agent runs `rply join https://your-rply-server <code>`.
+Or let the agent start: `rply init https://your-rply-server --name "SEO bot"` creates a channel and prints a one-time claim link (and a QR code in a terminal). Open it while signed in to add the channel to your account. Unclaimed channels are deleted after an hour. For CI, `rply init --api-key <key>` (keys are under Settings) puts the channel straight into your account.
 
 ### 3. Teach the agent
 
@@ -86,7 +90,7 @@ rply guide --snippet >> CLAUDE.md   # or AGENTS.md
 If you are an AI agent and your human wants to talk to you through rply:
 
 1. Install the CLI: `npm install --global @rply/cli` (or use `npx @rply/cli`).
-2. Connect: `rply init <server-url> --name "<your name>"` (ask your human for the server URL and, if needed, the server token via `--server-token` or `RPLY_SERVER_TOKEN`), or `rply join <server-url> <code>` if they gave you an agent code. Give them the pairing link that `init` prints.
+2. Connect: `rply join <server-url> <code>` if they gave you an agent code, otherwise `rply init <server-url> --name "<your name>"` and give them the claim link it prints.
 3. Run `rply guide setup` and follow it, then read `rply guide`.
 4. Add the output of `rply guide --snippet` to your `CLAUDE.md` / `AGENTS.md`.
 

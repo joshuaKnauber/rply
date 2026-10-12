@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { CheckIcon, EyeIcon, EyeOffIcon, KeyRoundIcon, ShieldAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { secretStatus } from "@rply/schema/helpers";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useChannelEntry } from "@/lib/channel-context";
-import { declineSecret, fetchPublicKey, KeyChangedError, provideSecret } from "@/lib/secrets";
+import { declineSecret, KeyChangedError, provideSecret } from "@/lib/secrets";
 
 const statusLabel: Record<Exclude<SecretStatus, "open">, string> = {
   provided: "Provided, waiting for the agent to write it",
@@ -26,16 +26,9 @@ export function SecretBlock({ block }: { block: BlockOf<"secret"> }) {
   const [value, setValue] = useState("");
   const [visible, setVisible] = useState(false);
   const [keyChange, setKeyChange] = useState<KeyChangedError | null>(null);
-  const open = status === "open" && entry && !entry.revoked;
+  const open = status === "open" && entry;
 
-  const { data: fetchedKey } = useQuery({
-    queryKey: ["public-key", entry?.channel.id],
-    queryFn: () => fetchPublicKey(entry!),
-    enabled: Boolean(open) && !block.public_key,
-    staleTime: 60_000,
-  });
-
-  const publicKey = block.public_key ?? fetchedKey;
+  const publicKey = block.public_key;
   const provide = useMutation({
     mutationFn: (acceptNewKey: boolean) => provideSecret(entry!, block, value, acceptNewKey),
     onSuccess: () => {

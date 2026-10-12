@@ -5,13 +5,13 @@ import * as ImagePicker from "expo-image-picker";
 import { useQuery } from "@tanstack/react-query";
 import type { FileRef, ServerInfo } from "@rply/schema";
 import { api } from "@/lib/api";
-import type { StoredChannel } from "@/lib/channels";
+import type { ServerChannel } from "@/lib/channels";
 import { uploadFile } from "@/lib/files";
 
 type Pending = { key: string; name: string; file?: FileRef };
 type Picked = { uri: string; name: string; mime?: string | null };
 
-export function Composer({ entry, disabled, onSend }: { entry: StoredChannel; disabled?: boolean; onSend: (text: string, attachments: FileRef[]) => void }) {
+export function Composer({ entry, disabled, onSend }: { entry: ServerChannel; disabled?: boolean; onSend: (text: string, attachments: FileRef[]) => void }) {
   const { data: info } = useQuery({ queryKey: ["info", entry.server], queryFn: () => api<ServerInfo>(entry.server, "/info"), staleTime: Infinity });
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Pending[]>([]);

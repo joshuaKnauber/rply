@@ -1,29 +1,39 @@
-import type { CallResponse } from "@rply/schema";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
+import type { CallResponse, ChannelEntry, StorageListResponse } from "@rply/schema";
 import { api } from "./api";
-import { auth, type StoredChannel } from "./channels";
+import { auth } from "./channels";
 
 const MAX_STORAGE = 256 * 1024;
 
 type CallRequest = { message_id: string; block_id: string | null; name: string; args: unknown; agent: boolean };
 
-export async function callCommand(entry: StoredChannel, req: CallRequest, signal: AbortSignal) {
+export async function callCommand(entry: ChannelEntry, req: CallRequest, signal: AbortSignal) {
   let res = await api<CallResponse>("/calls", { ...auth(entry), body: { ...req, wait: 25 }, signal });
   while (res.status === "pending") res = await api<CallResponse>(`/calls/${res.id}?wait=30`, { ...auth(entry), signal });
   if (res.status === "error") throw new Error(res.error);
   return res.result;
 }
 
-const storageKey = (channelId: string, key: string) => `rply.app.${channelId}.${key}`;
+// rply.storage values of every app and html block in the channel, keyed by pin key or message id
+const storageKey = (entry: ChannelEntry | null) => ["storage", entry?.id];
 
-export function loadAppStorage(channelId: string, key: string): Record<string, unknown> {
-  try {
-    return JSON.parse(localStorage.getItem(storageKey(channelId, key)) ?? "{}");
-  } catch {
-    return {};
-  }
-}
+export const useAppStorage = (entry: ChannelEntry | null) =>
+  useQuery({
+    queryKey: storageKey(entry),
+    queryFn: () => api<StorageListResponse>("/storage", auth(entry!)).then((r) => r.values),
+    enabled: Boolean(entry),
+    staleTime: Infinity,
+  });
 
-export function saveAppStorage(channelId: string, key: string, values: Record<string, unknown>) {
-  const raw = JSON.stringify(values);
-  if (raw.length <= MAX_STORAGE) localStorage.setItem(storageKey(channelId, key), raw);
+const pending = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function saveAppStorage(queryClient: QueryClient, entry: ChannelEntry, key: string, values: Record<string, unknown>) {
+  if (JSON.stringify(values).length > MAX_STORAGE) return;
+  queryClient.setQueryData<Record<string, unknown>>(storageKey(entry), (all = {}) => ({ ...all, [key]: { ...values } }));
+  const id = `${entry.id}/${key}`;
+  clearTimeout(pending.get(id));
+  pending.set(id, setTimeout(() => {
+    pending.delete(id);
+    api(`/storage/${encodeURIComponent(key)}`, { ...auth(entry), method: "PUT", body: { value: values } }).catch(() => undefined);
+  }, 500));
 }

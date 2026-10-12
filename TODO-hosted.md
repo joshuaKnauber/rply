@@ -65,14 +65,45 @@ Assumptions per active channel:
   - Durable Object duration without hibernation is the problem: ~$4/channel/month.
 
 ## Accounts and ownership
-- [ ] Accounts with magic link and/or passkeys (better-auth or hand-rolled), plus sessions as bearer tokens so the CORS `*` setup stays safe.
-- [ ] Channels get `owner_id`. Creating a channel requires being signed in (web) or an account API key (CLI, the `api_keys` table already has `owner_id`).
-- [ ] Account sync replaces the admin sign-in: `/v1/sync` with a session covers all owned channels, one synced channel list across devices. This also resolves the localStorage note in `TODO.md` (owner vs paired mode, remove vs delete).
-- [ ] Decide what happens to pairing on hosted: keep device pairing for sharing a channel with someone without an account, or require accounts for all humans.
-- [ ] The CLI needs no login for the common path: the app creates the channel and the agent runs `rply join <code>`. `rply init` on hosted needs an API key (`--server-token`) or a device-code login (`rply login`).
-- [ ] Default server: `rply join <code>` and `init` without a URL point at rply.sh. Self-hosters keep passing their URL.
-- [ ] Mobile app: sign in to rply.sh as an option next to per-server pairing.
-- [ ] Account deletion (deletes channels, files, tokens, push subscriptions) and data export.
+Decided 2026-10-12. Accounts on every server, self-hosted included, modelled on Plausible CE. They replace human tokens, device pairing, owner mode and the admin token.
+
+### Sign-in
+- better-auth on our Kysely instance (SQLite and Postgres). Its tables go into our own numbered migrations.
+- Email + password as the baseline, passkeys as an option. Magic link, email verification and password reset only when email is configured (`RPLY_EMAIL_*`, Resend or SMTP; rply.sh configures it).
+- Without email: a server command resets a password (`docker exec … reset-password <email>`).
+- The first user to register owns the instance. After that `RPLY_REGISTRATION=invite|open|closed` (`invite` by default, `open` on rply.sh). The instance owner only sees their own channels.
+- Web: better-auth's httpOnly session cookie (same origin, `SameSite=Lax`), so no token in localStorage. Mobile: bearer sessions via better-auth's Expo plugin in SecureStore, one per server. CORS `*` stays for bearer requests.
+
+### Data
+- `channel_members (user_id, channel_id, role owner|member)`; channels without a member are unclaimed.
+- Read positions are `channel_members.read_seq`, so unread counts match across devices.
+- `app_storage (user_id, channel_id, app_key, value, updated_at)`, primary key on the first three, value max 256 KB, cascades with user and channel. `app_key` is the pin key or the message id. Clients load it with the app and write it debounced; per user, not shared (shared data is the agent's, fetched with `rply.call`).
+- `api_keys.owner_id` set: per-user API keys created in settings.
+- Push subscriptions belong to a session/user instead of human tokens.
+- Stays on the device on purpose: E2E channel keys and the trusted secret keys (`rply.keys`), since both protect against the server; plus the theme.
+- Removed: `human_tokens`, human pairing codes, `/pair?c=`, owner mode, `rply.admin`, `RPLY_ADMIN_TOKEN`, "Remove from this browser". Existing data doesn't need migrating; servers are set up again.
+
+### Flows
+- **App first (main path):** sign in → New channel → you're the owner → the app shows the prompt with a one-time agent code (1h) → `rply join <server> <code>` → `rply guide setup`. The channel shows "Waiting for an agent" until one joins. "Add an agent" issues new codes (second agent, lost config).
+- **Agent first:** `rply init <server> --name ..` creates an unclaimed channel and prints a claim link (QR in a TTY). Opening it signed in (or after registering) adds the channel to the account. The agent can post meanwhile. Unclaimed channels are deleted after 1 hour; creation is rate-limited per IP. `rply pair` reprints the claim link while unclaimed.
+- **Headless (CI):** `rply init --api-key rply_k_…` creates the channel owned by that key's user.
+- **Another device:** just sign in.
+- **Sharing (later, schema ready):** the owner creates an invite link; the invitee signs in or registers through it even when registration is invite-only and becomes a `member` (read and reply; only owners delete the channel or manage agents).
+- **Agents:** unchanged, `rply_a_` tokens, no login, `--channel` for several channels per machine.
+
+### Build steps
+- [x] Server: better-auth with migrations for its tables plus `channel_members` (with `read_seq`, no separate reads table) and `app_storage`; registration modes; optional email (Resend); reset-password command.
+- [x] Server: session auth on the human routes (`X-Rply-Channel`), `/v1/sync` over the user's channels, claim links + unclaimed expiry + rate limit, API keys, push per user, origin check for cookie writes; removed human tokens, device pairing and admin routes.
+- [ ] SMTP as a second email option for self-hosters.
+- [x] Web: sign in/register (first-run owner setup), claim page, channel list and read positions from the server, app storage via the API, settings (password, passkeys, API keys, sign out); only the push endpoint, trusted secret keys and theme stay in localStorage.
+- [x] CLI: `init` prints the claim link, `--api-key`, `pair` reprints the claim link, guide and onboarding prompt updated.
+- [x] Mobile: rply.sh by default with "Use another server", sign in, sessions per server; device pairing dropped. Email + password only (no passkeys or magic links in the app yet).
+- [x] Docs: CLAUDE.md sections 8 and 11, README, site outlines and setup prompts.
+- [ ] Invites: channel members and registration through an invite link (`RPLY_REGISTRATION=invite` acts as closed until then).
+- [ ] Passkeys and sign-in links in the mobile app.
+- [ ] Convert the Railway SQLite database by hand once the clients are done (keep its data): create the new tables, move channels to the owner's account, drop the old columns/tables, and leave `kysely_migration` with only `0001_init`.
+- [ ] Default server: `rply join <code>` and `init` without a URL point at rply.sh.
+- [ ] Account deletion (deletes owned channels, files, push subscriptions) and data export.
 
 ## Database (Postgres)
 - [x] Postgres dialect next to SQLite, picked by env (`RPLY_DATABASE_URL`).
@@ -122,7 +153,7 @@ Assumptions per active channel:
 - [ ] Decide whether E2E is the default on rply.sh ("we can't read your agents' messages"). Its costs are listed in CLAUDE.md section 8: no curl, no server-side validation, no remote MCP, generic push text.
 - [ ] The web app's code is served by us, so on hosted "the server can capture secrets as they're typed" means "rply.sh can". Say so plainly in the security docs.
 - [ ] Security headers on the app (CSP for the web app itself, HSTS), on top of what files already send.
-- [ ] Secrets in env only (admin token, VAPID, R2 keys, DB URL); rotate the admin token story into an internal admin role.
+- [ ] Secrets in env only (`RPLY_AUTH_SECRET`, VAPID, R2 keys, DB URL); an internal admin role for rply.sh operators (the instance owner is just the first user).
 - [ ] Privacy policy, terms, legal notice where required, a DPA for business users. List subprocessors (PlanetScale, Cloudflare, the host, the email provider, Expo).
 
 ## Ops

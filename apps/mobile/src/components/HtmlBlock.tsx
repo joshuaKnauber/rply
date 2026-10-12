@@ -13,12 +13,13 @@ export function HtmlBlock({ block, fill, onReply, onSend }: Props) {
   const scheme = useColorScheme();
   const bridge = useEmbedBridge(block, (data) => webview.current?.injectJavaScript(`__rplyReceive(${JSON.stringify(data)});true;`));
   const html = useMemo(
-    () => embedDocument(block, "native", scheme === "dark" ? "dark" : "light", { storage: bridge.loadStorage(), fill }),
+    () => (bridge.ready ? embedDocument(block, "native", scheme === "dark" ? "dark" : "light", { storage: bridge.loadStorage(), fill }) : ""),
+    // stored values only seed the page when it loads, later saves come from the page itself
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [block.html, block.height, scheme, fill],
+    [block.html, block.height, scheme, fill, bridge.ready],
   );
 
-  const view = (
+  const view = !bridge.ready ? null : (
     <WebView
       ref={webview}
       originWhitelist={["*"]}

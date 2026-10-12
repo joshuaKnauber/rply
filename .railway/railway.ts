@@ -10,7 +10,7 @@ export default defineRailway((_ctx, project) => {
     healthcheckTimeout: 60,
     deploy: { restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 10 },
     volumeMounts: { "/data": data },
-    env: { RPLY_ADMIN_TOKEN: preserve() },
+    env: { RPLY_URL: preserve() },
   });
 
   return project("rply", { resources: [server, data] });

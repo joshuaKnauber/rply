@@ -12,5 +12,5 @@ Outline only, copy comes later.
 - `rply.call(name, args)` to fetch data or trigger actions on the agent's machine
 - Command scripts in the commands folder, run by `rply serve`
 - Names without a script go to the agent (`rply respond`)
-- `rply.storage` for per-device state
+- `rply.storage` for small state per person, synced across their devices
 - Security: the page can only name commands, scripts validate their args

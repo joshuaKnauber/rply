@@ -6,7 +6,7 @@ const app = { body: { title: "Dashboard", view: "app", blocks: [{ type: "html", 
 
 async function withApp() {
   const ctx = await setup();
-  const ids = await ctx.pairedChannel();
+  const ids = await ctx.ownedChannel();
   const pinned = await ctx.request("PUT", "/pins/dash", { token: ids.agent, body: app });
   assert.equal(pinned.status, 200);
   assert.equal(pinned.json.message.body.view, "app");

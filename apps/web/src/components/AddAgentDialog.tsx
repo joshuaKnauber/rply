@@ -1,16 +1,16 @@
+import type { ChannelEntry } from "@rply/schema";
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2Icon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import type { StoredChannel } from "@/lib/channels";
 import { formatTime } from "@/lib/format";
-import { createAgentCode } from "@/lib/pairing";
+import { createAgentCode } from "@/lib/onboarding";
 import { useAgents } from "@/lib/queries";
 import { JoinInstructions } from "./JoinInstructions";
 
-export function AddAgentDialog({ entry }: { entry: StoredChannel }) {
+export function AddAgentDialog({ entry }: { entry: ChannelEntry }) {
   const [open, setOpen] = useState(false);
   const code = useMutation({ mutationFn: () => createAgentCode(entry) });
   const { data: agents = [] } = useAgents(entry, open ? 2000 : 60_000);
@@ -40,7 +40,7 @@ export function AddAgentDialog({ entry }: { entry: StoredChannel }) {
         <DialogHeader>
           <DialogTitle>Add an agent</DialogTitle>
           <DialogDescription>
-            Paste this prompt to the agent. It installs rply, joins "{entry.channel.name}" and sets itself up. Also use it to reconnect an agent that lost its setup.
+            Paste this prompt to the agent. It installs rply, joins "{entry.name}" and sets itself up. Also use it to reconnect an agent that lost its setup.
           </DialogDescription>
         </DialogHeader>
         {code.error && <p className="text-destructive text-sm">{code.error.message}</p>}

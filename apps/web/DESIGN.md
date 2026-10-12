@@ -175,7 +175,7 @@ Don't introduce new hues. Message states (seen, working, done) stay gray.
 
 ## Typography
 
-Inter Variable everywhere, loaded with optical sizing so large headings get Inter's tighter display cuts automatically. Geist Mono for code, commands, pairing codes and file-type badges.
+Inter Variable everywhere, loaded with optical sizing so large headings get Inter's tighter display cuts automatically. Geist Mono for code, commands, claim codes and file-type badges.
 
 The scale is sized for an app, one step smaller than Tailwind's defaults: `text-base` is 14px and `text-sm` is 13px. Use the Tailwind classes (`text-xs` through `text-2xl`) and never arbitrary sizes like `text-[11px]`.
 
@@ -183,7 +183,7 @@ The scale is sized for an app, one step smaller than Tailwind's defaults: `text-
 - **Header titles** (`title`): the channel name in the top bar, 16px medium. Headers stay small. The content carries the weight.
 - **Body**: 14px for messages and markdown. 13px for secondary text, list previews and descriptions.
 - **Captions**: 12px for timestamps, sizes and helper text, with `tabular-nums` wherever numbers line up.
-- Section labels inside panels ("Agents", "Devices", "Status") are 13px regular in `muted-foreground`, not uppercase.
+- Section labels inside panels ("Agents", "Status") are 13px regular in `muted-foreground`, not uppercase.
 
 ## Layout
 
@@ -224,7 +224,9 @@ Don't use large radii or pill-shaped buttons in the app. The marketing site's ro
 - **HTML embeds** sit in a bordered card with the label as a header row. The embed inherits the app theme and can use `--rply-fg`, `--rply-muted`, `--rply-border`, `--rply-surface` and `--rply-accent`.
 - **Option lists** (choosing how to add a channel) are one bordered box with divided rows: icon, title, description, and a radio dot that fills with the accent when selected.
 - **Steps** are numbered circles joined by a vertical line. Finished steps fill with the accent and show a check. Upcoming steps are muted.
-- **Pairing codes** use an OTP input: eight mono slots in two groups of four with a dash, matching how codes are printed (`K7QX-M2PD`).
+- **Claim codes** use an OTP input: eight mono slots in two groups of four with a dash, matching how codes are printed (`K7QX-M2PD`).
+- **Sign-in** is a single centered column (384px) with no sidebar: the logo, a display title ("Sign in", "Set up rply" on a fresh server), one muted line, then the form. One primary button submits; passkey and email-link options are full-width outline buttons below it, shown only when the server supports them. Switching between sign-in and creating an account is a plain underlined text link at the bottom.
+- **Settings** is a stack of sections separated by dividers: title and one muted line on the left with the control on the right, or a list below for passkeys and API keys (rows with an icon, the label and a muted date that turns into a ghost action on hover). A new API key shows once in a command block with a copy button.
 - **Confirmations** always use the alert dialog through `confirmDialog()`, never `window.confirm`. Destructive actions get a red action button and a sentence on how to undo or regain access.
 - **Feedback** goes through toasts for completed actions ("Link copied") and inline red text for form errors.
 - **Logo.** In the app header: the bird and "rply.sh" in the current text color. The gradient tile (`LogoMark`) is for icons and favicons.

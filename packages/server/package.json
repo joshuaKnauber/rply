@@ -7,12 +7,15 @@
     "start": "node src/index.ts",
     "dev": "node --watch src/index.ts",
     "test": "node --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "reset-password": "node src/reset-password.ts"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.7.7",
     "@hono/node-server": "^2.1.0",
     "@rply/schema": "*",
     "aws4fetch": "^1.0.20",
+    "better-auth": "^1.7.7",
     "hono": "^4.13.0",
     "kysely": "^0.29.0",
     "pg": "^8.23.1",

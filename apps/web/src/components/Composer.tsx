@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 
 type Pending = { key: string; name: string; file?: FileRef };
 
+const touchKeyboard = () => matchMedia("(pointer: coarse)").matches;
+
 export function Composer({ onSend, disabled }: { onSend: (text: string, attachments: FileRef[]) => void; disabled?: boolean }) {
   const entry = useChannelEntry();
   const filesEnabled = useServerInfo()?.files.enabled ?? false;
@@ -46,7 +48,8 @@ export function Composer({ onSend, disabled }: { onSend: (text: string, attachme
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) submit(e);
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || touchKeyboard()) return;
+    submit(e);
   };
   const onPaste = (e: ClipboardEvent) => {
     if (e.clipboardData.files.length) {

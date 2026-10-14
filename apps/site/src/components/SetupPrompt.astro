@@ -1,9 +1,11 @@
 ---
 import Icon from "./Icon.astro";
 import { hostedPrompt } from "./setup.ts";
+
+const { dark = false } = Astro.props as { dark?: boolean };
 ---
 
-<button class="hero-setup group btn btn-primary h-12 px-6 text-base" data-prompt={hostedPrompt}>
+<button class:list={["hero-setup group btn h-12 px-6 text-base", dark ? "btn-dark" : "btn-primary"]} data-prompt={hostedPrompt}>
   <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
 </button>
 

@@ -10,6 +10,7 @@ import AgentWall from "../components/AgentWall.astro";
 import { siGithub } from "simple-icons";
 import SetupPrompt from "../components/SetupPrompt.astro";
 import Flock from "../components/Flock.astro";
+import Demo from "../components/demo/Demo.astro";
 
 const starPositions = Array.from({ length: 12 }, (_, i) => {
   const angle = (i * Math.PI) / 6;
@@ -41,7 +42,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
     </h1>
     <p class="mx-auto mt-5 max-w-md text-lg text-gray-500">Push notifications from any agent, plus questions you can answer from your phone.</p>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
-      <SetupPrompt />
+      <SetupPrompt dark />
       <a href="https://app.rply.sh" class="btn btn-outline h-12 px-6 text-base">Go to app</a>
     </div>
     <ul class="mt-6 flex flex-wrap justify-center gap-x-7 gap-y-2 text-[15px] text-gray-600">
@@ -50,7 +51,14 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       <li><a href="/docs/self-hosting/overview/" class="flex items-center gap-1.5 hover:text-gray-900"><Icon name="server" class="size-4 text-gray-400" /> Self-hostable</a></li>
     </ul>
 
-    <div class="stage relative mt-16 h-[680px] text-left">
+    <div class="stage group/stage relative mt-16 h-[680px] text-left">
+      <button type="button" class="demo-open absolute inset-0 z-10 cursor-pointer rounded-3xl" aria-label="Try the interactive demo">
+        <span class="pointer-events-none absolute inset-x-0 top-[40%] mx-auto h-72 max-w-2xl -translate-y-1/2 bg-[radial-gradient(closest-side,rgb(255_255_255/0.9),rgb(255_255_255/0.5)_55%,transparent)] opacity-70 transition-opacity duration-300 group-hover/stage:opacity-100"></span>
+        <span class="demo-halo absolute top-[40%] left-1/2 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-full border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 py-2 pr-7 pl-2 text-base font-medium whitespace-nowrap text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_16px_40px_-12px_rgb(91_104_224/0.7)] transition-[filter] duration-200 group-hover/stage:brightness-110">
+          <span class="grid size-10 place-items-center rounded-full bg-white text-brand-600"><Icon name="play" class="size-4 translate-x-px fill-current" /></span>
+          Try the interactive demo
+        </span>
+      </button>
       <div class="stage-content transition-opacity duration-500">
         <div class="absolute top-10 left-0 hidden w-[920px] lg:block">
           <Desktop />
@@ -248,6 +256,8 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
     </div>
   </section>
 
+  <Demo />
+
   <footer class="border-t border-gray-200">
     <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-6 px-6 py-8 text-sm text-gray-500">
       <span class="flex items-center gap-2 text-gray-900"><Bird class="size-4" /> rply.sh</span>
@@ -267,6 +277,29 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
 </Page>
 
 <style>
+  .demo-halo {
+    animation: halo 2.4s ease-out infinite;
+  }
+  @keyframes halo {
+    0% {
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.3),
+        0 16px 40px -12px rgb(91 104 224 / 0.7),
+        0 0 0 0 rgb(111 126 246 / 0.45);
+    }
+    70%,
+    100% {
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.3),
+        0 16px 40px -12px rgb(91 104 224 / 0.7),
+        0 0 0 16px rgb(111 126 246 / 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .demo-halo {
+      animation: none;
+    }
+  }
   .cta-bird {
     animation: hover-bird 3.2s ease-in-out infinite;
   }

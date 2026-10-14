@@ -52,6 +52,9 @@
 @utility btn-primary {
   @apply border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_1px_2px_rgb(0_0_0/0.08)] hover:brightness-105;
 }
+@utility btn-dark {
+  @apply border-gray-950 bg-linear-to-b from-gray-800 to-gray-900 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(0_0_0/0.15)] hover:from-gray-700 hover:to-gray-850;
+}
 @utility btn-outline {
   @apply border-gray-200 bg-white text-gray-800 shadow-[inset_0_1px_0_white,0_1px_2px_rgb(0_0_0/0.04)] hover:bg-gray-50;
 }

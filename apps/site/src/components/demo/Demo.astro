@@ -1,0 +1,190 @@
+---
+import Bird from "../Bird.astro";
+import Icon from "../Icon.astro";
+import SetupPrompt from "../SetupPrompt.astro";
+---
+
+<div class="demo fixed inset-0 z-50 hidden flex-col text-left lg:flex-row [&.open]:flex" role="dialog" aria-modal="true" aria-label="Interactive demo">
+  <section class="demo-agent relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-gray-950 text-gray-300">
+    <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:gap-4 sm:p-6">
+      <p class="flex flex-none items-center gap-2 rounded-full bg-white/[0.04] py-1.5 pr-3.5 pl-3 text-xs text-gray-400 ring-1 ring-white/10">
+        <span class="relative flex size-2"><span class="absolute inset-0 animate-ping rounded-full bg-emerald-400/60"></span><span class="relative size-2 rounded-full bg-emerald-400"></span></span>
+        <span class="font-medium text-gray-200">acme-vm</span> the agent's machine
+      </p>
+      <section class="demo-term flex min-h-0 flex-col overflow-hidden rounded-xl bg-gray-900 text-gray-300 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.8)] ring-1 ring-white/10">
+        <div class="relative flex h-9 flex-none items-center gap-2 border-b border-white/10 px-3.5 text-xs text-gray-400">
+          <span class="flex gap-1.5"><span class="size-3 rounded-full bg-[#ff5f57]"></span><span class="size-3 rounded-full bg-[#febc2e]"></span><span class="size-3 rounded-full bg-[#28c840]"></span></span>
+          <span class="absolute left-1/2 -translate-x-1/2 whitespace-nowrap">claude — ~/acme</span>
+        </div>
+        <div class="agent-log flex-1 space-y-1.5 overflow-y-auto px-4 py-3 font-mono text-[12px] leading-relaxed"></div>
+        <div class="agent-input m-3 mt-1 flex-none rounded-xl bg-white/5 p-3 text-[12px] text-gray-400"></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="demo-laptop relative flex min-h-0 min-w-0 flex-col overflow-hidden">
+    <div class="flex min-h-0 flex-1 flex-col lg:min-w-[calc(100vw-440px)]">
+      <header class="flex h-8 flex-none items-center gap-4 bg-white/35 px-4 pr-12 text-[13px] text-gray-900 backdrop-blur-xl">
+        <span class="flex items-center gap-1.5 font-semibold"><Bird class="size-4 text-brand-600" /> rply</span>
+        <span class="text-gray-700">Your laptop</span>
+        <span class="ml-auto hidden tabular-nums text-gray-700 sm:inline">Wed 9:41</span>
+      </header>
+      <div class="min-h-0 flex-1 p-3 sm:p-6">
+        <section class="demo-browser relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-white shadow-[0_30px_80px_-20px_rgb(20_20_60/0.45)] ring-1 ring-black/10">
+          <div class="flex h-9 flex-none items-center gap-1.5 border-b border-gray-200 bg-gray-50 px-3.5">
+            <span class="flex gap-1.5"><span class="size-3 rounded-full bg-[#ff5f57]"></span><span class="size-3 rounded-full bg-[#febc2e]"></span><span class="size-3 rounded-full bg-[#28c840]"></span></span>
+            <span class="mx-auto -translate-x-6 rounded-md bg-gray-100 px-10 py-0.5 text-xs text-gray-500 sm:px-16">app.rply.sh</span>
+          </div>
+          <div class="flex min-h-0 flex-1 text-[13px]">
+            <aside class="hidden w-[220px] flex-none flex-col border-r border-gray-200 bg-gray-100 lg:flex">
+              <div class="flex h-12 flex-none items-center gap-2 border-b border-gray-200 px-4 font-medium text-gray-900">
+                <Bird class="size-4" /> rply.sh
+                <span class="ml-auto flex gap-3 text-gray-500"><Icon name="bell" /><Icon name="plus" /></span>
+              </div>
+              <div class="demo-sidebar flex flex-col pt-2"></div>
+            </aside>
+            <main class="demo-main relative flex min-w-0 flex-1 flex-col"></main>
+          </div>
+          <div class="demo-toasts pointer-events-none absolute top-12 right-3 z-20 flex w-72 max-w-[calc(100%-24px)] flex-col gap-2"></div>
+          <div class="demo-end absolute inset-0 z-30 hidden place-items-center bg-white/85 p-6 text-center backdrop-blur-sm [&.show]:grid">
+            <div class="max-w-sm">
+              <span class="mx-auto grid size-14 place-items-center rounded-2xl border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_12px_30px_-10px_rgb(91_104_224/0.6)]">
+                <Bird class="size-7" />
+              </span>
+              <p class="mt-5 text-2xl font-[550] tracking-[-0.02em] text-gray-900">That's rply</p>
+              <p class="mt-2 text-gray-500">Questions, screenshots, apps and previews from any agent, in one inbox on your laptop and phone.</p>
+              <div class="mt-6 flex flex-wrap justify-center gap-3">
+                <SetupPrompt />
+                <button type="button" class="demo-replay btn btn-outline h-12 px-5 text-base"><Icon name="rotate" class="size-4" /> Replay</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <button type="button" class="demo-close absolute top-3 right-3 z-50 grid size-8 place-items-center rounded-full bg-white/10 text-gray-300 ring-1 ring-white/10 backdrop-blur hover:bg-white/20 hover:text-white lg:[.with-browser_&]:top-1 lg:[.with-browser_&]:right-2 lg:[.with-browser_&]:size-6 lg:[.with-browser_&]:bg-transparent lg:[.with-browser_&]:text-gray-900 lg:[.with-browser_&]:ring-0 lg:[.with-browser_&]:hover:bg-black/10" aria-label="Close demo"><Icon name="x" class="size-4" /></button>
+
+</div>
+
+<style is:global>
+  .demo-laptop {
+    background:
+      radial-gradient(55% 70% at 12% 18%, #c9cfff 0%, transparent 60%),
+      radial-gradient(45% 60% at 88% 12%, #f3dcff 0%, transparent 62%),
+      radial-gradient(60% 70% at 78% 92%, #5b68e0 0%, transparent 65%),
+      radial-gradient(55% 60% at 18% 95%, #ffd9c7 0%, transparent 62%),
+      radial-gradient(40% 50% at 50% 55%, #97a3ff 0%, transparent 70%),
+      linear-gradient(160deg, #e3e6ff 0%, #aab3ff 55%, #6f7ef6 100%);
+  }
+  .demo-agent {
+    background-image: radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .demo-agent,
+  .demo-laptop,
+  .demo-term {
+    transition:
+      flex 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+      width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+      height 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.6s;
+  }
+  .demo-agent {
+    flex: 1 1 0%;
+  }
+  .demo-laptop {
+    flex: 0 1 0%;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .demo.with-browser .demo-agent {
+    flex: 0 0 34%;
+  }
+  .demo.with-browser .demo-laptop {
+    flex: 1 1 0%;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .demo-term {
+    width: 100%;
+    flex: 1 1 0%;
+  }
+  @media (min-width: 1024px) {
+    .demo.with-browser .demo-agent {
+      flex: 0 0 440px;
+    }
+    .demo-term {
+      flex: 0 1 auto;
+      width: min(640px, 100%);
+      height: min(560px, 100%);
+    }
+    .demo.with-browser .demo-term {
+      width: 100%;
+      height: 100%;
+    }
+  }
+  .demo-target {
+    position: relative;
+    z-index: 1;
+    border-radius: 10px;
+    outline: 2px solid #6f7ef6;
+    outline-offset: 3px;
+    animation: demo-pulse 1.4s ease-out infinite;
+  }
+  .demo-agent .demo-target {
+    outline-color: #aab3ff;
+  }
+  @keyframes demo-pulse {
+    0% {
+      box-shadow:
+        0 0 0 4px rgb(111 126 246 / 0.7),
+        0 0 28px 6px rgb(111 126 246 / 0.45);
+    }
+    100% {
+      box-shadow:
+        0 0 0 22px rgb(111 126 246 / 0),
+        0 0 28px 6px rgb(111 126 246 / 0.45);
+    }
+  }
+  .demo .bar-grow {
+    animation: demo-grow 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes demo-grow {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  .demo .log-in {
+    animation: demo-log 0.25s ease-out both;
+  }
+  @keyframes demo-log {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  ::view-transition-group(demo) {
+    animation-duration: 0.55s;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  ::view-transition-old(demo),
+  ::view-transition-new(demo) {
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .demo-target,
+    .demo .bar-grow,
+    .demo .log-in {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  import { mountDemo } from "./demo.ts";
+  mountDemo();
+</script>

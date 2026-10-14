@@ -58,7 +58,7 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-6" onScroll={onScroll}>
+      <div ref={scrollRef} className="flex-1 overflow-x-hidden overflow-y-auto px-6 py-6" onScroll={onScroll}>
         <div ref={contentRef} className="mx-auto flex max-w-3xl flex-col">
           {isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
           {error && <p className="text-destructive text-sm">{error.message}</p>}

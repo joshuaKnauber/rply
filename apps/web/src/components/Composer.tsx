@@ -1,5 +1,5 @@
-import { useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowUpIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { ArrowUpIcon, Loader2Icon, PlusIcon, ReplyIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { FileRef } from "@rply/schema";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,25 @@ type Pending = { key: string; name: string; file?: FileRef };
 
 const touchKeyboard = () => matchMedia("(pointer: coarse)").matches;
 
-export function Composer({ onSend, disabled }: { onSend: (text: string, attachments: FileRef[]) => void; disabled?: boolean }) {
+type Props = {
+  onSend: (text: string, attachments: FileRef[]) => void;
+  disabled?: boolean;
+  replyTo?: { name: string; text: string } | null;
+  onCancelReply?: () => void;
+};
+
+export function Composer({ onSend, disabled, replyTo, onCancelReply }: Props) {
   const entry = useChannelEntry();
   const filesEnabled = useServerInfo()?.files.enabled ?? false;
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (replyTo) textarea.current?.focus();
+  }, [replyTo]);
 
   const uploading = pending.some((p) => !p.file);
   const ready = pending.flatMap((p) => (p.file ? [p.file] : []));
@@ -48,6 +60,7 @@ export function Composer({ onSend, disabled }: { onSend: (text: string, attachme
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && replyTo) return onCancelReply?.();
     if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || touchKeyboard()) return;
     submit(e);
   };
@@ -72,6 +85,18 @@ export function Composer({ onSend, disabled }: { onSend: (text: string, attachme
       className="shrink-0 px-6 pb-5"
     >
       <div className={cn("bg-muted focus-within:border-ring/60 mx-auto flex max-w-3xl flex-col rounded-xl border transition-colors", dragging && "border-ring")}>
+        {replyTo && (
+          <div className="flex items-center gap-2 border-b py-2 pr-2 pl-3 text-sm">
+            <ReplyIcon className="text-attention size-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-medium">Replying to {replyTo.name}</span>
+              <p className="text-muted-foreground truncate">{replyTo.text}</p>
+            </div>
+            <Button type="button" size="icon-xs" variant="ghost" className="text-muted-foreground" onClick={onCancelReply} aria-label="Cancel reply">
+              <XIcon />
+            </Button>
+          </div>
+        )}
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {pending.map((p) => (
@@ -86,6 +111,7 @@ export function Composer({ onSend, disabled }: { onSend: (text: string, attachme
           </div>
         )}
         <Textarea
+          ref={textarea}
           rows={1}
           placeholder="Message the agent…"
           className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-4 pt-3.5 pb-1 text-base shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent"

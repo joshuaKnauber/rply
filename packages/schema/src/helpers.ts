@@ -74,6 +74,8 @@ export function preview(message: Message) {
   if ("attachments" in body && body.attachments?.length) return `📎 ${body.attachments.map((a) => a.name).join(", ")}`;
   const secret = "blocks" in body ? body.blocks?.find((b) => b.type === "secret") : undefined;
   if (secret) return `Secret requested: ${(secret as BlockOf<"secret">).name}`;
+  const titled = "blocks" in body ? body.blocks?.find((b) => (b.type === "heading" || b.type === "markdown") && "text" in b) : undefined;
+  if (titled) return (titled as { text: string }).text;
   return message.ask ? "Question" : "Message";
 }
 

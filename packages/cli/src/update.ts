@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
@@ -38,11 +38,23 @@ export function registerUpdate(program: Command) {
       if (process.argv[1]?.includes("_npx")) {
         return console.log(`You're running rply through npx. Use \`npx ${PACKAGE}@latest\` to get the newest version.`);
       }
-      const result = spawnSync("npm", ["install", "--global", `${PACKAGE}@latest`], { stdio: "inherit" });
-      if (result.status !== 0) throw new CliError(`Update failed. Try running: npm install --global ${PACKAGE}@latest`);
+      const prefix = installPrefix();
+      const args = ["install", "--global", ...(prefix ? ["--prefix", prefix] : []), `${PACKAGE}@latest`];
+      const result = spawnSync("npm", args, { stdio: "inherit" });
+      if (result.status !== 0) throw new CliError(`Update failed. Try running: npm ${args.join(" ")}`);
       writeCache({ checked_at: 0, latest: VERSION });
       console.log("rply is up to date.");
     });
+}
+
+// npm's default prefix isn't always where rply was installed (e.g. `npm i -g --prefix ~/.local` without root)
+function installPrefix() {
+  try {
+    const path = realpathSync(process.argv[1]!).replaceAll("\\", "/");
+    return path.match(new RegExp(`^(.*?)(/lib)?/node_modules/${PACKAGE}/`))?.[1];
+  } catch {
+    return undefined;
+  }
 }
 
 async function fetchLatest() {

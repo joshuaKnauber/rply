@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent, type UIEvent } from "react";
 import { CheckCheckIcon, CircleDotIcon, CornerDownRightIcon, EyeIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { Answers, Message, MessageState, ChannelEntry } from "@rply/schema";
@@ -135,6 +135,23 @@ function MessageView({
   onEvent?: (blockId: string | null, value: unknown, label?: string) => void;
 }) {
   const fromAgent = message.sender === "agent";
+  const lastTap = useRef(0);
+
+  const onPointerUp = (e: PointerEvent) => {
+    if (e.pointerType !== "touch" || (e.target as Element).closest("a, button, input, textarea, select, label")) return;
+    if (e.timeStamp - lastTap.current > 300) {
+      lastTap.current = e.timeStamp;
+      return;
+    }
+    lastTap.current = 0;
+    const text = message.enc ? undefined : message.body.text || ("title" in message.body ? message.body.title : undefined);
+    if (!text) return;
+    getSelection()?.removeAllRanges();
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Copied"),
+      () => toast.error("Couldn't copy"),
+    );
+  };
 
   const content = (() => {
     if (message.enc) return <p className="text-muted-foreground italic">Encrypted message</p>;
@@ -156,7 +173,8 @@ function MessageView({
   return (
     <div
       id={`msg-${message.id}`}
-      className={cn("flex flex-col gap-1.5 rounded-md border-l-2 border-transparent px-3 py-2.5", !fromAgent && "bg-muted", isWaiting(message) && "border-attention rounded-l-none")}
+      onPointerUp={onPointerUp}
+      className={cn("flex touch-manipulation flex-col gap-1.5 rounded-md border-l-2 border-transparent px-3 py-2.5", !fromAgent && "bg-muted", isWaiting(message) && "border-attention rounded-l-none")}
     >
       <div className="flex items-baseline gap-2 text-xs">
         <span className="font-medium">{fromAgent ? agentName : "You"}</span>

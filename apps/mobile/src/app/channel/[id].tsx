@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -260,6 +261,23 @@ function MessageView({
   const fromAgent = message.sender === "agent";
   const textColor = fromAgent ? "text-neutral-900 dark:text-neutral-100" : "text-white dark:text-neutral-900";
   const status = askStatus(message.ask);
+  const lastTap = useRef(0);
+  const [copied, setCopied] = useState(false);
+
+  const onPress = () => {
+    const now = Date.now();
+    if (now - lastTap.current > 300) {
+      lastTap.current = now;
+      return;
+    }
+    lastTap.current = 0;
+    const text = message.enc ? undefined : message.body.text || ("title" in message.body ? message.body.title : undefined);
+    if (!text) return;
+    Clipboard.setStringAsync(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const content = (() => {
     if (message.enc) return <Text className="italic text-neutral-500">Encrypted message</Text>;
@@ -280,14 +298,16 @@ function MessageView({
 
   return (
     <View className={`gap-1 ${fromAgent ? "items-start" : "items-end"}`}>
-      <View
+      <Pressable
+        onPress={onPress}
         className={`rounded-2xl px-4 py-3 ${status === "open" || message.ask ? "w-[90%]" : "max-w-[85%]"} ${
           fromAgent ? "border bg-white dark:bg-neutral-900" : "bg-neutral-900 dark:bg-neutral-100"
         } ${status === "open" ? "border-neutral-400 dark:border-neutral-500" : "border-neutral-200 dark:border-neutral-800"}`}
       >
         {content}
-      </View>
+      </Pressable>
       <Text className="px-1 text-xs text-neutral-500">
+        {copied ? "Copied · " : ""}
         {formatTime(message.created_at)}
         {message.updated_at ? " · edited" : ""}
         {message.state && <Text className={stateLabels[message.state].className}> · {stateLabels[message.state].label}</Text>}

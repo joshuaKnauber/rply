@@ -10,9 +10,10 @@ import { Composer } from "@/components/Composer";
 import { HtmlBlock } from "@/components/HtmlBlock";
 import { Markdown } from "@/components/Markdown";
 import { MessageBlocks } from "@/components/MessageBlocks";
+import { UrlView } from "@/components/UrlView";
 import { auth, channelsKey, markRead, useChannels, type ServerChannel } from "@/lib/channels";
 import { ChannelContext, MessageContext } from "@/lib/channel-context";
-import { appTitle, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
+import { appTitle, appUrl, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
@@ -96,6 +97,8 @@ function AppView({ entry, app }: { entry: ServerChannel; app: Message }) {
   const only = blocks.length === 1 && !body?.text && blocks[0]!.type === "html" ? (blocks[0] as BlockOf<"html">) : undefined;
   const onEvent = (blockId: string | null, value: unknown, label?: string) =>
     send.mutate({ reply_to: app.id, body: { event: { block_id: blockId, value: value as never, label } } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
+  const url = appUrl(app);
+  if (url) return <UrlView key={app.id} url={url} />;
 
   return (
     <MessageContext.Provider value={app}>

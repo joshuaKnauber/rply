@@ -114,6 +114,18 @@ const tab = rply.storage.get("tab") ?? "week";
 rply.storage.set("tab", "month");
 ```
 
+## Show a running web app
+
+An app can also show a page that's already running somewhere, like a dev server, so you can try it on your laptop or phone next to the chat. Give `rply app set` a URL instead of a file:
+
+```sh
+rply app set preview https://preview.example.ts.net --title Preview
+```
+
+The page loads in a frame, with buttons to reload it or open it in a new tab. Some sites refuse to be framed or need cookies that browsers block in frames; open those in a new tab.
+
+rply doesn't run the tunnel. Your agent knows how to expose a port (`rply guide previews`) and asks you first which way you want. It suggests [OpenTunnel](https://opentunnel.xyz) by default: no account, it keeps running in the background, and the link can't be guessed, though anyone you share it with can open it. [Tailscale](https://tailscale.com/kb/1312/serve) keeps the page private to your own devices. On exe.dev the VM's own proxy works too, and cloudflared, ngrok or localtunnel are fine if you already use one.
+
 ## Reference
 
 The full bridge, including `rply.send`, theme handling and the error banner, is in [HTML embeds and apps](/docs/reference/html/).

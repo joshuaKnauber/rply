@@ -21,6 +21,13 @@ export const isCall = (message: Message) =>
 
 export const isApp = (message: Message) => !message.enc && message.pin !== null && "view" in message.body && message.body.view === "app";
 
+export const appUrl = (message: Message) => {
+  if (message.enc || !isApp(message) || ("text" in message.body && message.body.text)) return null;
+  const blocks = messageBlocks(message);
+  const only = blocks.length === 1 && blocks[0]!.type === "link" ? (blocks[0] as BlockOf<"link">) : null;
+  return only && /^https?:\/\//i.test(only.url) ? only.url : null;
+};
+
 export const appTitle = (message: Message) => (!message.enc && "title" in message.body && message.body.title) || message.pin || "App";
 
 export const secretStatus = (block: BlockOf<"secret">): SecretStatus =>

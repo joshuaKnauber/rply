@@ -16,14 +16,12 @@ export function registerApps(program: Command) {
     .command("set")
     .description("create or replace the app with this key")
     .argument("<key>", "short name, e.g. dashboard")
-    .argument("<file|->", "a single HTML file, or - for stdin")
+    .argument("<file|url|->", "a single HTML file, - for stdin, or an http(s) URL to show a running web app, e.g. a dev server behind a tunnel")
     .option("--title <title>", "tab title (default: the key)")
     .action(async (key: string, source: string, opts: { title?: string }) => {
-      const html = readFileSync(source === "-" ? 0 : source, "utf8");
-      const errors = scriptErrors(html);
-      if (errors.length) throw new CliError(`The page has script errors, not uploaded:\n${errors.map((e) => `  ${e}`).join("\n")}`);
+      const blocks = /^https?:\/\//i.test(source) ? [urlBlock(source)] : [htmlBlock(source)];
       const { message } = await connect().client.request<{ message: Message }>("PUT", `/pins/${key}`, {
-        body: { title: opts.title, view: "app", blocks: [{ type: "html", id: "app", html }] },
+        body: { title: opts.title, view: "app", blocks },
       });
       if (json()) return printJson(message);
       console.log(`App "${key}" ${message.updated_at === null ? "created" : "updated"}`);
@@ -87,6 +85,20 @@ export function registerApps(program: Command) {
       await connect().client.request("POST", `/calls/${id}/result`, body);
       if (!json()) console.log("Responded");
     });
+}
+
+function htmlBlock(source: string) {
+  const html = readFileSync(source === "-" ? 0 : source, "utf8");
+  const errors = scriptErrors(html);
+  if (errors.length) throw new CliError(`The page has script errors, not uploaded:\n${errors.map((e) => `  ${e}`).join("\n")}`);
+  return { type: "html", id: "app", html };
+}
+
+function urlBlock(url: string) {
+  const { hostname } = new URL(url);
+  if (/^(localhost|127\.|0\.0\.0\.0$|\[::1?\]$)/.test(hostname))
+    console.error(`Note: ${hostname} only works if the human's browser runs on this machine. Use a tunnel otherwise, see rply guide previews.`);
+  return { type: "link", id: "app", url };
 }
 
 const JS_TYPES = ["", "text/javascript", "application/javascript"];

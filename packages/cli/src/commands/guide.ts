@@ -69,7 +69,8 @@ Reading messages as data
 rply's own notices (updates, hints) go to stderr, never stdout.
 
 Setting up a new machine: rply guide setup
-More: rply guide ask | blocks | html | pins | apps | secrets | files | all`,
+Showing a running web app (dev server) to the human: rply guide previews
+More: rply guide ask | blocks | html | pins | apps | previews | secrets | files | all`,
 
   ask: `Questions
   rply ask "Publish these 5 pages?" --choices Publish,Skip --wait
@@ -148,6 +149,7 @@ event with value { error }.`,
   apps: `Apps are full-page HTML pages listed under the channel in the app, next to the chat. Use them for dashboards and control panels.
 
   rply app set dashboard dashboard.html --title "Dashboard"   create or replace (one self-contained HTML file)
+  rply app set preview https://... --title "Preview"          show a running web app instead, see rply guide previews
   rply app list | app remove <key>
 app set refuses pages whose inline scripts don't parse. Styling, theme and storage: rply guide html.
 
@@ -175,6 +177,35 @@ rply.agent calls show up in \`rply inbox\` and in the chat:
 Answer with \`rply respond <call-id> '<json>'\` (or --error "..."). The page waits while it's open.
 Use rply.agent for work that needs you, never for polling: every call is a message.`,
 
+  previews: `You can show the human a web app running on this machine (a dev server, a staging build, a tool's UI) as an app
+next to the chat, so they can test it on their laptop or phone without leaving rply.
+
+rply only shows the page. Making it reachable is up to a tunnel or proxy, and the human picks which one.
+Before exposing anything, ask, with your recommendation first and why:
+  rply ask "I'd like to show you the dev server. How should I share it?" \\
+    --choices "OpenTunnel (recommended: no account, unguessable link)","Tailscale (private to your devices)","Don't share it" --other --wait
+Options, in the order to suggest them (check what's installed and what the human already uses):
+  opentunnel route add 5173     no account, keeps running as a background service, prints https://<route>.<id>.opentunnel.xyz.
+                                The link can't be guessed but anyone who has it can open it. Install: npm install -g opentunnel
+  tailscale serve 5173          private to the human's tailnet; their devices need Tailscale. For real data or admin tools.
+  the platform's own proxy      e.g. exe.dev's "share port", if this machine runs there
+  cloudflared, ngrok, localtunnel   if the human already uses one of them
+Through a tunnel every request looks like it comes from localhost, so anything that trusts local requests
+(dev admin panels, debug endpoints) is open to whoever has the link. Never expose real data or secrets on a public link.
+Remember the human's choice (e.g. in your instructions file) instead of asking every time.
+
+Then show it:
+  rply app set preview https://<the url> --title "Preview"   appears under the channel; the human can reload or open it in a new tab
+  rply app remove preview                                    when you stop the server or tunnel
+Don't send the URL in messages instead; the app is where the human looks for it.
+
+Keep the dev server running after your turn ends (a service, tmux, or nohup), or the app shows an error.
+opentunnel and tailscale keep their tunnels running on their own; other tunnel tools need the same care.
+Dev servers often reject the tunnel's host name: for Vite (and Astro, SvelteKit, ...) add it to server.allowedHosts, or start
+the server with __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=.opentunnel.xyz. Check what address the server listens on (lsof -iTCP -sTCP:LISTEN):
+some only listen on IPv6 ::1, then point the tunnel there (opentunnel route add "[::1]:4321").
+Some apps refuse to load in a frame (X-Frame-Options, CSP frame-ancestors) or need cookies that browsers block in frames; then the human opens it in a new tab.`,
+
   secrets: `Ask the human for credentials without ever seeing them. The value is encrypted on their device and written straight to a file.
 
   rply secret request OPENAI_API_KEY --to .env --reason "Keyword research" --wait
@@ -192,7 +223,7 @@ Exit codes: 2 = expired or timed out, 3 = declined or cancelled.`,
 \`rply inbox\` lists files the human attached, with the \`rply file get\` command for each.`,
 };
 
-const order = ["setup", "basics", "ask", "blocks", "html", "pins", "apps", "secrets", "files"];
+const order = ["setup", "basics", "ask", "blocks", "html", "pins", "apps", "previews", "secrets", "files"];
 
 const snippet = `## Talking to the human (rply)
 
@@ -200,6 +231,7 @@ This agent reports to its human through the \`rply\` CLI. Run \`rply guide\` onc
 - Send progress with \`rply send\`, keep \`rply status\` up to date, and check \`rply inbox\` for new instructions.
 - Ask with \`rply ask ... --wait\` when a decision is the human's.
 - Request credentials with \`rply secret request\`, never through messages.
+- To let the human try a running web app (e.g. a dev server), see \`rply guide previews\`; ask them how to expose it first.
 - When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.`;
 
 const seenPath = () => join(dirname(configPath()), "guide.json");

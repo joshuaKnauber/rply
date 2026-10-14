@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { appTitle, type BlockOf, type Message, type ChannelEntry } from "@rply/schema";
+import { appTitle, appUrl, type BlockOf, type Message, type ChannelEntry } from "@rply/schema";
 import { MessageContext } from "@/lib/channel-context";
 import { useSendMessage } from "@/lib/queries";
 import { HtmlBlock } from "./blocks/HtmlBlock";
@@ -12,6 +12,18 @@ export function AppView({ entry, app }: { entry: ChannelEntry; app: Message }) {
     send.mutate(
       { reply_to: app.id, body: { event: { block_id: blockId, value: value as never, label } } },
       { onSuccess: () => toast.success("Sent to the agent"), onError: (err) => toast.error(err.message) },
+    );
+
+  const url = appUrl(app);
+  if (url && new URL(url).origin !== location.origin)
+    return (
+      <iframe
+        key={app.id}
+        src={url}
+        title={appTitle(app)}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
+        className="min-h-0 w-full flex-1 bg-white"
+      />
     );
 
   const body = app.enc ? null : app.body;

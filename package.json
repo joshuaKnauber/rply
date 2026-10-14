@@ -19,7 +19,9 @@
     "rply": "node packages/cli/src/index.ts",
     "dev:mobile": "npm run start -w @rply/mobile",
     "dev:site": "npm run dev -w @rply/site",
-    "build:site": "npm run build -w @rply/site"
+    "build:site": "npm run build -w @rply/site",
+    "dev:video": "npm run dev -w @rply/video",
+    "render:video": "npm run render -w @rply/video"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

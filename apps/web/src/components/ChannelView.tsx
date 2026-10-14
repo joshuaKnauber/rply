@@ -1,4 +1,5 @@
-import { ArrowLeftIcon, BotIcon, CalendarIcon, EllipsisIcon, LockIcon, LockOpenIcon, PanelRightIcon } from "lucide-react";
+import { ArrowLeftIcon, BotIcon, CalendarIcon, EllipsisIcon, ExternalLinkIcon, RotateCwIcon, LockIcon, LockOpenIcon, PanelRightIcon } from "lucide-react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -8,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatAgo } from "@/lib/format";
 import { useAgents, useDeleteChannel, usePins, useRemoveApp, useRevokeAgent } from "@/lib/queries";
 import { toast } from "sonner";
-import { appTitle, isApp, type Participant, type ChannelEntry } from "@rply/schema";
+import { appTitle, appUrl, isApp, type Participant, type ChannelEntry } from "@rply/schema";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AppView } from "./AppView";
 import { confirmDialog } from "./ConfirmDialog";
@@ -19,6 +20,8 @@ export function ChannelView({ entry, appKey }: { entry: ChannelEntry; appKey?: s
   const [, navigate] = useLocation();
   const { data: pins = [] } = usePins(entry);
   const app = appKey ? pins.find((m) => isApp(m) && m.pin === appKey) : undefined;
+  const url = app ? appUrl(app) : null;
+  const [reloads, setReloads] = useState(0);
   const removeApp = useRemoveApp(entry);
   const deleteChannel = useDeleteChannel(entry);
 
@@ -70,6 +73,18 @@ export function ChannelView({ entry, appKey }: { entry: ChannelEntry; appKey?: s
           <WaitingIndicator entry={entry} />
           {app && (
             <div className="-mr-2 ml-auto flex items-center gap-1">
+              {url && (
+                <>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="Reload" onClick={() => setReloads((n) => n + 1)}>
+                    <RotateCwIcon />
+                  </Button>
+                  <Button asChild size="icon" variant="ghost" className="text-muted-foreground" aria-label="Open in new tab">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLinkIcon />
+                    </a>
+                  </Button>
+                </>
+              )}
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <Button size="icon" variant="ghost" className="text-muted-foreground" aria-label="App options">
@@ -116,7 +131,7 @@ export function ChannelView({ entry, appKey }: { entry: ChannelEntry; appKey?: s
         </header>
         {appKey ? (
           app ? (
-            <AppView entry={entry} app={app} />
+            <AppView key={reloads} entry={entry} app={app} />
           ) : (
             <div className="flex flex-1 items-center justify-center p-6">
               <p className="text-muted-foreground text-sm">This app was removed.</p>

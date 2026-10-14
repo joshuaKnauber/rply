@@ -180,9 +180,9 @@ Prints the status message's body as JSON.
 
 ## Apps
 
-### `rply app set <key> <file>`
+### `rply app set <key> <file|url>`
 
-Creates or replaces the app with this key from a single HTML file (or `-` for stdin). Refuses pages whose inline scripts don't parse.
+Creates or replaces the app with this key from a single HTML file (or `-` for stdin). Refuses pages whose inline scripts don't parse. With an `http(s)` URL instead, the app shows that page, e.g. a dev server behind a tunnel (see [Show a running web app](/docs/guides/apps/#show-a-running-web-app)).
 
 | Option | Description |
 | --- | --- |

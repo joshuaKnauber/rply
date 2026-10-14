@@ -210,22 +210,21 @@ function MessageView({
       {...swipe.handlers}
       onPointerUp={onPointerUp}
     >
-      {first && fromAgent && <span className="text-muted-foreground mb-1 px-3 text-xs font-medium">{agentName}</span>}
+      {first && fromAgent && <span className="text-muted-foreground mb-1 text-xs font-medium">{agentName}</span>}
       <ReplyIcon className="text-muted-foreground absolute top-1/2 left-0 size-4 -translate-y-1/2" style={{ opacity: swipe.progress, transform: `translateX(${swipe.offset / 2 - 24}px) scale(${0.6 + swipe.progress * 0.4})` }} />
       <div
-        className={cn("flex max-w-[85%] items-center gap-1", !fromAgent && "flex-row-reverse", wide && "w-full", swipe.offset === 0 && "transition-transform")}
+        className={cn("flex items-center gap-1", fromAgent ? "w-full" : "max-w-[85%] flex-row-reverse", wide && "w-full", swipe.offset === 0 && "transition-transform")}
         style={{ transform: swipe.offset ? `translateX(${swipe.offset}px)` : undefined }}
       >
         <div
           className={cn(
-            "flex min-w-0 touch-manipulation flex-col gap-2 rounded-2xl px-3.5 py-2.5",
-            wide && "flex-1",
-            fromAgent ? "bg-muted" : "bg-brand-600 text-white",
-            fromAgent ? [!first && "rounded-tl-md", !last && "rounded-bl-md"] : [!first && "rounded-tr-md", !last && "rounded-br-md"],
-            isWaiting(message) && "ring-attention ring-2",
+            "flex min-w-0 flex-1 touch-manipulation flex-col gap-2",
+            fromAgent
+              ? isWaiting(message) && "ring-attention my-1 rounded-2xl px-3.5 py-2.5 ring-2"
+              : ["bg-muted rounded-2xl px-3.5 py-2.5", !first && "rounded-tr-md", !last && "rounded-br-md"],
           )}
         >
-          {quoted && <Quote message={quoted} agentName={agentName} onAgentBubble={fromAgent} />}
+          {quoted && <Quote message={quoted} agentName={agentName} />}
           {content}
         </div>
         {onReply && (
@@ -235,7 +234,7 @@ function MessageView({
         )}
       </div>
       {(last || message.state) && (
-        <div className="text-muted-foreground mt-1 flex items-baseline gap-2 px-3 text-xs">
+        <div className={cn("text-muted-foreground mt-1 flex items-baseline gap-2 text-xs", !fromAgent && "px-3")}>
           <span className="tabular-nums">{formatClock(message.created_at)}</span>
           {message.updated_at && <span>edited</span>}
           {message.state && <StateLabel state={message.state} />}
@@ -245,11 +244,11 @@ function MessageView({
   );
 }
 
-function Quote({ message, agentName, onAgentBubble }: { message: Message; agentName: string; onAgentBubble: boolean }) {
+function Quote({ message, agentName }: { message: Message; agentName: string }) {
   return (
     <button
       type="button"
-      className={cn("-mx-1 flex min-w-0 flex-col rounded-lg border-l-2 px-2.5 py-1.5 text-left text-sm", onAgentBubble ? "border-attention bg-current/7" : "border-current/50 bg-current/10")}
+      className="border-attention bg-current/7 -mx-1 flex min-w-0 flex-col rounded-lg border-l-2 px-2.5 py-1.5 text-left text-sm"
       onClick={() => document.getElementById(`msg-${message.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
     >
       <span className="text-xs font-medium">{message.sender === "agent" ? agentName : "You"}</span>

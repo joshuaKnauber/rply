@@ -213,7 +213,7 @@ Don't use large radii or pill-shaped buttons in the app. The marketing site's ro
 ## Components
 
 - **Buttons.** Primary is a vertical gradient from `brand-400` to `brand-500` with a `brand-600` border, a white top highlight and white text, and brightens slightly on hover. Destructive is the same construction in red (`red-500` to `red-600`, `red-700` border). Outline is the page background with a border and the same top highlight. Ghost buttons are for icon actions and secondary links. Keep one primary button per view.
-- **Messages.** Agent messages are flat rows: a small header with the sender name (medium) and time (muted, tabular), then content. Human messages are the same row on a `muted` tint. No chat bubbles, no left/right alignment. A message waiting for an answer gets a 2px `attention` left border.
+- **Messages.** Agent messages have no bubble: full-width content on the left, the agent name above the first of a group and the time (muted, tabular) below the last. Human messages are right-aligned `muted` bubbles (max 85% wide, tighter corners inside a group). Messages from the same sender within 5 minutes form a group; days get a divider. A question waiting for an answer gets a 2px `attention` ring.
 - **Composer.** A rounded `muted` box with the textarea on top and a row underneath: a ghost "+" for attachments on the left, a small send arrow on the right that turns primary once there's something to send.
 - **Answer inputs.** Choices are outline buttons. The selected one becomes primary (or destructive for danger options). Confirms are a single primary or destructive button.
 - **Pinned messages** live in the right panel as sections with a muted label and time, collapsible, unpin on hover.

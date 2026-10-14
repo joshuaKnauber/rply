@@ -1,12 +1,18 @@
 ---
 import { siGithub } from "simple-icons";
 import Bird from "./Bird.astro";
+import Icon from "./Icon.astro";
 
 const nav = [
   { href: "#features", label: "Features" },
   { href: "#integrations", label: "Integrations" },
   { href: "/docs/start/introduction/", label: "Docs" },
 ];
+
+const stars: number | null = await fetch("https://api.github.com/repos/joshuaKnauber/rply")
+  .then((res) => (res.ok ? res.json() : null))
+  .then((repo) => repo?.stargazers_count ?? null)
+  .catch(() => null);
 ---
 
 <header class="sm:pt-4">
@@ -19,8 +25,15 @@ const nav = [
       {nav.map((item) => <a href={item.href} class="rounded-lg px-3 py-1.5 hover:bg-gray-100 hover:text-gray-900">{item.label}</a>)}
     </nav>
     <div class="flex items-center gap-2 justify-self-end">
-      <a href="https://github.com/joshuaKnauber/rply" aria-label="rply on GitHub" class="grid size-8 place-items-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-        <svg viewBox="0 0 24 24" class="size-[18px]" fill="currentColor" aria-hidden="true"><path d={siGithub.path} /></svg>
+      <a href="https://github.com/joshuaKnauber/rply" aria-label="rply on GitHub" class="btn btn-outline h-8 gap-1.5 px-2.5 text-gray-700">
+        <svg viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d={siGithub.path} /></svg>
+        <span class="hidden sm:inline">GitHub</span>
+        {stars !== null && stars >= 50 && (
+          <span class="flex items-center gap-1 border-l border-gray-200 pl-1.5 text-gray-500">
+            <Icon name="star" class="size-3.5 fill-current text-amber-400" />
+            {stars.toLocaleString("en-US")}
+          </span>
+        )}
       </a>
       <a href="https://app.rply.sh" class="btn btn-primary h-8 px-3">Go to app</a>
     </div>

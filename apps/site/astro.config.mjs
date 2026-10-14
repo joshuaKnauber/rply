@@ -18,7 +18,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "rply docs",
-      description: "Docs for rply: push notifications, questions and live status from any AI agent, with a CLI, a web app and a self-hostable server.",
+      description: "Docs for rply, an inbox for agents that run without you: updates, questions, dashboards and secrets from any AI agent, with a CLI, web and mobile apps and a self-hostable server.",
       head: [
         { tag: "script", attrs: { defer: true, "data-domain": "rply.sh", src: "https://nudge-events.up.railway.app/js/script.js" } },
         { tag: "link", attrs: { rel: "alternate", type: "text/plain", title: "llms.txt", href: "/llms.txt" } },
@@ -32,7 +32,7 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: "rply",
           description:
-            "rply connects AI agents to the people they work for. Agents use the `rply` CLI to send push notifications, ask questions and wait for the answer, keep a live status, and request API keys that are written straight to a file. People answer in the web app or on their phone. Use the hosted app at https://app.rply.sh or self-host it (open source, one Docker container).",
+            "rply connects AI agents that run on their own (on a server, in a sandbox, on a schedule) to the people they work for. Agents use the `rply` CLI to send push notifications, ask questions and wait for the answer, keep a live status, and request API keys that are written straight to a file. People answer in the web app or on their phone. Use the hosted app at https://app.rply.sh or self-host it (open source, one Docker container).",
           details: [
             "- Quickest start for an agent: `npm install --global @rply/cli`, then `rply init https://app.rply.sh --name \"<a name for you>\"`, show the human the claim link it prints, then run `rply guide setup` and follow it.",
             "- The CLI has a built-in guide written for agents: `rply guide <topic>` with the topics setup, basics, ask, blocks, html, pins, apps, secrets and files (`rply guide all` prints everything but setup).",

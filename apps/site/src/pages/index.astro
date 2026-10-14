@@ -10,6 +10,7 @@ import AgentWall from "../components/AgentWall.astro";
 import { siGithub } from "simple-icons";
 import SetupPrompt from "../components/SetupPrompt.astro";
 import Flock from "../components/Flock.astro";
+import Replaces from "../components/Replaces.astro";
 import Demo from "../components/demo/Demo.astro";
 
 const starPositions = Array.from({ length: 12 }, (_, i) => {
@@ -29,8 +30,8 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
 ---
 
 <Page
-  title="rply: agent notifications made easy"
-  description="Push notifications from any AI agent, plus questions you can answer from your phone. Works with Claude Code, Codex, Cursor and anything with a shell. Free to start, open source and self-hostable."
+  title="rply: an inbox for agents that run without you"
+  description="Your agents run on servers, around the clock. rply lets them reach you: updates, questions you answer from your phone, live dashboards and API keys that never pass through the agent. Works with Claude Code, Codex, OpenClaw and anything with a shell. Open source and self-hostable."
 >
   <div class="relative isolate mx-3 mt-3 overflow-hidden rounded-b-[28px] bg-linear-to-b from-transparent via-gray-100 via-35% to-[#eceefb]">
     <div class="absolute inset-0 -z-[2] [mask-image:linear-gradient(transparent,black_35%)]"><Flock subtle /></div>
@@ -38,9 +39,9 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
 
   <section class="mx-auto max-w-6xl px-6 pt-12 text-center sm:pt-16">
     <h1 class="mx-auto max-w-3xl text-[clamp(2.75rem,6vw,4.5rem)] leading-[1] font-[550] tracking-[-0.04em]">
-      Agent notifications made easy
+      Retire your agent's Telegram bot
     </h1>
-    <p class="mx-auto mt-5 max-w-md text-lg text-gray-500">Push notifications from any agent, plus questions you can answer from your phone.</p>
+    <p class="mx-auto mt-5 max-w-xl text-lg text-gray-500">One open source inbox for agents that run without you. Updates on your phone, questions with buttons, live dashboards and API keys that never pass through the agent.</p>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
       <SetupPrompt dark />
       <a href="https://app.rply.sh" class="btn btn-outline h-12 px-6 text-base">Go to app</a>
@@ -72,7 +73,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
   </div>
 
   <section id="features" class="bento mx-auto mt-32 max-w-6xl scroll-mt-8 px-6">
-    <h2 class="text-center text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">What your agent can do</h2>
+    <h2 class="text-center text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">One place to run your agents from</h2>
     <div class="mt-12 grid gap-4 md:grid-cols-3">
       <div class={card}>
         <h3 class="text-xl font-medium">Ask before it ships</h3>
@@ -112,7 +113,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       </div>
 
       <div class={card}>
-        <h3 class="text-xl font-medium">Send it work</h3>
+        <h3 class="text-xl font-medium">Give it new tasks</h3>
         <div class={surface}>
           <div class="ml-auto w-fit rounded-lg bg-gray-100 px-3 py-2.5 text-sm">Add a page for the Teams plan</div>
           <div class="relative mt-2 ml-auto h-5 w-28 text-right text-gray-500">
@@ -151,13 +152,13 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       </div>
 
       <div class={card}>
-        <h3 class="text-xl font-medium">Push to your phone</h3>
+        <h3 class="text-xl font-medium">Updates on your phone</h3>
         <div class="absolute inset-x-7 top-20 flex flex-col gap-2 text-[13px]">
           {
             [
-              ["Deploy bot", "v2.4.1 is live"],
-              ["Nightly backup", "Backup failed, retry?"],
-              ["CI", "All tests passed"],
+              ["SEO bot", "3 new pages in the top 10"],
+              ["Support bot", "2 tickets need you"],
+              ["Research bot", "Weekly report is ready"],
             ].map(([who, text], i) => (
               <div class="push flex gap-2.5 rounded-2xl bg-white/90 p-3 shadow-[0_6px_20px_-8px_rgb(0_0_0/0.2)]" style={`animation-delay:${i * 0.5}s`}>
                 <span class="grid size-8 flex-none place-items-center rounded-lg border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white">
@@ -174,7 +175,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       </div>
 
       <div class={card}>
-        <h3 class="text-xl font-medium">Dashboards</h3>
+        <h3 class="text-xl font-medium">Its own dashboard</h3>
         <div class={surface}>
           <p class="flex items-center gap-2 text-gray-500"><Icon name="app" class="size-3.5" /> Rankings</p>
           <div class="mt-3 flex h-20 items-end gap-2">
@@ -188,9 +189,11 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
 
   <GetStarted />
 
+  <Replaces />
+
   <section id="integrations" class="mx-auto mt-32 max-w-6xl scroll-mt-8 px-6 text-center">
-    <h2 class="text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Works with your agent</h2>
-    <p class="mt-3 text-lg text-gray-500">Anything that can run a shell command.</p>
+    <h2 class="text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Works with any agent</h2>
+    <p class="mt-3 text-lg text-gray-500">If it can run a shell command, it can use rply. Cron jobs and scripts too.</p>
     <div class="mt-14">
       <AgentWall />
     </div>
@@ -216,7 +219,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
           <span class="hidden text-gray-500 sm:inline">joshuaKnauber /</span><span class="font-semibold text-gray-900">rply</span>
           <span class="ml-auto rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">Public</span>
         </p>
-        <p class="mt-3 text-[15px] text-gray-600">Agent notifications made easy. Server, CLI, web and mobile apps.</p>
+        <p class="mt-3 text-[15px] text-gray-600">An inbox for agents that run without you. Server, CLI, web and mobile apps.</p>
         <div class="mt-5 flex flex-wrap gap-2 text-[13px]">
           {["TypeScript", "Docker", "SQLite", "Postgres"].map((tag) => <span class="rounded-full bg-brand-50 px-2.5 py-0.5 text-brand-700">{tag}</span>)}
         </div>
@@ -247,7 +250,7 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       <span class="cta-bird relative grid size-16 place-items-center rounded-2xl border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_12px_30px_-10px_rgb(91_104_224/0.6)]">
         <Bird class="size-8" />
       </span>
-      <h2 class="relative mt-6 text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Get notified by your agents</h2>
+      <h2 class="relative mt-6 text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Let your agents run. Stay in charge.</h2>
       <p class="relative mt-3 text-gray-500">Free to start on app.rply.sh. Open source, so you can host it yourself.</p>
       <div class="relative mt-8 flex gap-3">
         <a href="#get-started" class="btn btn-primary">Get started</a>

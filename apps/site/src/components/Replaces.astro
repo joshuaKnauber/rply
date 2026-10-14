@@ -1,0 +1,49 @@
+---
+import Icon from "./Icon.astro";
+import { siTelegram } from "simple-icons";
+import type { IconName } from "./icons.ts";
+
+const rows: { icon: IconName | "telegram"; before: string; after: string }[] = [
+  { icon: "telegram", before: "A Telegram bot for pings and replies", after: "Push to your phone, replies go straight to the agent" },
+  { icon: "bot", before: "One bot or chat per agent", after: "Every agent in one inbox" },
+  { icon: "monitor", before: "A status website the agent hosts", after: "Pinned status and dashboards in the app" },
+  { icon: "ellipsis", before: "Parsing yes or no out of chat messages", after: "Questions with buttons, and the agent waits for your answer" },
+  { icon: "copy", before: "Pasting API keys into the chat", after: "Keys go straight into .env, never into the agent's context" },
+  { icon: "terminal", before: "SSH in to hand it a new task", after: "Send it tasks from your phone" },
+];
+---
+
+<section id="replaces" class="mx-auto mt-32 max-w-6xl scroll-mt-8 px-6">
+  <h2 class="text-center text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">What it replaces</h2>
+  <p class="mt-3 text-center text-lg text-gray-500">The setup you hacked together to keep up with your agents.</p>
+  <div class="mt-12 rounded-3xl bg-gray-100 p-2 sm:p-3">
+    <div class="hidden grid-cols-[1fr_auto_1fr] gap-6 px-5 pt-3 pb-4 text-sm font-medium text-gray-500 md:grid">
+      <span>Today</span>
+      <span class="w-5"></span>
+      <span>With rply</span>
+    </div>
+    <ul class="divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
+      {
+        rows.map(({ icon, before, after }) => (
+          <li class="grid items-center gap-2 px-5 py-4 text-[15px] md:grid-cols-[1fr_auto_1fr] md:gap-6">
+            <span class="flex items-center gap-3 text-gray-500">
+              <span class="grid size-8 flex-none place-items-center rounded-lg bg-gray-100 text-gray-500">
+                {icon === "telegram" ? (
+                  <svg viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d={siTelegram.path} /></svg>
+                ) : (
+                  <Icon name={icon} class="size-4" />
+                )}
+              </span>
+              <span class="line-through decoration-gray-300">{before}</span>
+            </span>
+            <Icon name="arrow-right" class="hidden size-5 text-gray-300 md:block" />
+            <span class="flex items-center gap-3 pl-11 text-gray-900 md:pl-0">
+              <Icon name="check" class="size-4 flex-none text-brand-500" />
+              {after}
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

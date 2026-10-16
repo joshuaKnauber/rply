@@ -81,16 +81,16 @@ export function registerMessages(program: Command) {
     .action(async (opts: { wait?: boolean; timeout?: string; since?: string; peek?: boolean }) => {
       const { client, selected } = connect();
       let cursor = opts.since !== undefined ? Number(opts.since) : (selected.config.inbox_cursor ?? 0);
-      const deadline = opts.wait ? deadlineFrom(opts.timeout) : Date.now() + 1;
-
-      const messages = await client.poll(deadline, async (waitSeconds) => {
+      const fetchOnce = async (waitSeconds: number) => {
         const peek = opts.peek ? "&peek=1" : "";
-        const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${opts.wait ? waitSeconds : 0}${peek}`);
+        const res = await client.once<MessagesResponse>("GET", `/messages?sender=human&since=${cursor}&wait=${waitSeconds}${peek}`);
         cursor = res.cursor;
         if (!opts.peek) saveCursor(selected, cursor);
         const fresh = res.messages.filter((m) => !isAnswer(m));
         return fresh.length || !opts.wait ? fresh : undefined;
-      });
+      };
+
+      const messages = opts.wait ? await client.poll(deadlineFrom(opts.timeout), fetchOnce) : await fetchOnce(0);
 
       if (messages === undefined) throw new CliError("Timed out waiting for messages", 2);
       if (messages.length === 0 && !json()) return console.log("No new messages.");

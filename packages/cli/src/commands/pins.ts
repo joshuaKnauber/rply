@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { Command } from "commander";
 import type { Message } from "@rply/schema";
 import { CliError } from "../client.ts";
@@ -62,8 +63,9 @@ export function registerPins(program: Command) {
   status
     .command("set")
     .description("replace the status message")
-    .argument("<json|file|->", "a blocks array or { blocks: [...] }, as JSON, a file path, or - for stdin")
-    .action((source: string) => setPin("status", undefined, { blocks: source }));
+    .allowUnknownOption()
+    .argument("<text|json|file|->", "plain text, or a blocks array or { blocks: [...] } as JSON, a file path, or - for stdin")
+    .action((source: string) => (isBlocksSource(source) ? setPin("status", undefined, { blocks: source }) : setPin("status", source, {})));
 
   status
     .command("patch")
@@ -101,3 +103,5 @@ function report(message: Message) {
   if (json()) return printJson(message);
   console.log(`Pinned "${message.pin}" updated`);
 }
+
+const isBlocksSource = (source: string) => source === "-" || /^\s*[[{]/.test(source) || existsSync(source);

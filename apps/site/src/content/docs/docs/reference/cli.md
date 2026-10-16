@@ -166,9 +166,9 @@ Updates the pinned message with this key. Takes `--title` and `--patch`.
 
 Unpins and deletes a pinned message, or lists them.
 
-### `rply status set <json>`
+### `rply status set <text|json>`
 
-Replaces the pinned message with key `status`. Takes a blocks array, or `{ "blocks": [...] }`.
+Replaces the pinned message with key `status`. Takes plain text, a blocks array, `{ "blocks": [...] }`, a file path or `-` for stdin.
 
 ### `rply status patch <json>`
 

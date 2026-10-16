@@ -138,6 +138,7 @@ event with value { error }.`,
 
   pins: `Pinned messages sit at the top of the channel and update in place. Use them for a live overview.
 
+  rply status set "Crawling 120 pages"
   rply status set '[{"type":"progress","id":"crawl","value":0,"max":120,"label":"Crawl"}]'
   rply status patch '{"id":"crawl","value":42}'
   rply pin set overview "**3 projects** running" --title Overview

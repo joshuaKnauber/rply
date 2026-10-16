@@ -9,3 +9,5 @@ dist/
 .astro/
 packages/server/files/
 TODO*.md
+research_notes/
+reports/

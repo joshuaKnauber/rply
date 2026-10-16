@@ -15,7 +15,11 @@ const label = (key: string) => `sh.rply.${key}`;
 const plistPath = (key: string) => join(homedir(), "Library", "LaunchAgents", `${label(key)}.plist`);
 const domain = () => `gui/${userInfo().uid}`;
 
-const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { encoding: "utf8" });
+// Non-login shells (e.g. plain ssh) often lack XDG_RUNTIME_DIR, which systemctl --user needs to reach the user bus
+const userRuntimeDir = `/run/user/${userInfo().uid}`;
+const runEnv = !process.env.XDG_RUNTIME_DIR && existsSync(userRuntimeDir) ? { ...process.env, XDG_RUNTIME_DIR: userRuntimeDir } : process.env;
+
+const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { encoding: "utf8", env: runEnv });
 
 export function installService({ key, args, cwd }: Service) {
   if (!/^[a-z0-9_-]+$/i.test(key)) throw new CliError(`Channel key "${key}" can't be used as a service name`);

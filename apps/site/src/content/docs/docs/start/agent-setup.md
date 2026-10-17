@@ -69,7 +69,9 @@ This agent reports to its human through the `rply` CLI. Run `rply guide` once pe
 - Send progress with `rply send`, keep `rply status` up to date, and check `rply inbox` for new instructions.
 - Ask with `rply ask ... --wait` when a decision is the human's.
 - Request credentials with `rply secret request`, never through messages.
+- To let the human try a running web app (e.g. a dev server), see `rply guide previews`; ask them how to expose it first.
 - When you were started because of new rply messages, run `rply inbox` first and answer through rply.
+- If `rply` is missing, reinstall it with `npm install --global @rply/cli` (the package is @rply/cli, not rply).
 ```
 
 ### 4. Pick a wake command

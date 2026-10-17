@@ -212,8 +212,8 @@ export function messageRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const target = await loadMessage(db, channel.id, c.req.param("id"));
       if (target.sender !== "human") throw new HTTPException(400, { message: "Only messages from the human can be acknowledged" });
-      const { state } = parse(MessageStateRequest, await c.req.json());
-      await db.updateTable("messages").set({ state }).where("id", "=", target.id).execute();
+      const { state, note } = parse(MessageStateRequest, await c.req.json());
+      await db.updateTable("messages").set({ state, state_note: note ?? null }).where("id", "=", target.id).execute();
       await recordChanges(deps, channel.id, [target.id]);
       return c.json({ message: toMessage(await loadMessage(db, channel.id, target.id)) });
     })

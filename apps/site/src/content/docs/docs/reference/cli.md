@@ -113,7 +113,7 @@ Streams messages from the person as they arrive, until stopped with Ctrl+C. With
 
 ### `rply ack <message-id> [state]`
 
-Tells the person you've seen a message, are working on it, or are done. `state` is `seen`, `working` (the default) or `done`.
+Tells the person you've seen a message, are working on it, or are done. `state` is `seen`, `working` (the default) or `done`. `--note "running tests"` adds a short detail that shows next to "Working on it".
 
 ## Questions
 

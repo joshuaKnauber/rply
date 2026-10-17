@@ -1,0 +1,33 @@
+name: rply-platform
+label: rply
+kind: platform
+version: 0.2.0
+description: >
+  rply gateway adapter for Hermes Agent. Talk to Hermes from the rply inbox
+  (web app and phone, with push): messages in and out, seen/working/done
+  acknowledgements, cron delivery, and approvals and clarifying questions as
+  tappable questions. Works with app.rply.sh or a self-hosted rply server.
+  Only uses httpx (already a Hermes dependency).
+author: Joshua Knauber
+requires_env:
+  - name: RPLY_TOKEN
+    description: "Agent token for the rply channel (written by `hermes gateway setup`)"
+    prompt: "rply agent token"
+    password: true
+optional_env:
+  - name: RPLY_SERVER
+    description: "rply server URL (default: https://app.rply.sh)"
+    prompt: "rply server URL"
+    password: false
+  - name: RPLY_ALLOWED_USERS
+    description: "The rply channel id (written by setup; only channel members can post to it)"
+    prompt: "rply channel id"
+    password: false
+  - name: RPLY_ALLOW_ALL_USERS
+    description: "Skip the allowlist (true/false)"
+    prompt: "Allow all? (true/false)"
+    password: false
+  - name: RPLY_HOME_CHANNEL
+    description: "Cron delivery target (any value; the token decides the channel)"
+    prompt: "Home channel (or empty)"
+    password: false

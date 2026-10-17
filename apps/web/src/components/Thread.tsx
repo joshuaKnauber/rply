@@ -138,7 +138,7 @@ function EventLine({ message }: { message: Message }) {
       <CornerDownRightIcon className="size-3" />
       <span className="max-w-[70%] truncate">{label}</span>
       <span className="tabular-nums">{formatTime(message.created_at)}</span>
-      {message.state && <StateLabel state={message.state} />}
+      {message.state && <StateLabel state={message.state} note={message.state_note} />}
     </div>
   );
 }
@@ -237,7 +237,7 @@ function MessageView({
         <div className={cn("text-muted-foreground mt-1 flex items-baseline gap-2 text-xs", !fromAgent && "px-3")}>
           <span className="tabular-nums">{formatClock(message.created_at)}</span>
           {message.updated_at && <span>edited</span>}
-          {message.state && <StateLabel state={message.state} />}
+          {message.state && <StateLabel state={message.state} note={message.state_note} />}
         </div>
       )}
     </div>
@@ -263,12 +263,13 @@ const states: Record<MessageState, { label: string; icon: typeof EyeIcon }> = {
   done: { label: "Done", icon: CheckCheckIcon },
 };
 
-function StateLabel({ state }: { state: MessageState }) {
+function StateLabel({ state, note }: { state: MessageState; note: string | null }) {
   const { label, icon: Icon } = states[state];
   return (
-    <span className={cn("flex items-center gap-1", "text-muted-foreground", state === "done" && "text-foreground")}>
-      <Icon className="size-3" />
+    <span className={cn("flex min-w-0 items-center gap-1", "text-muted-foreground", state === "done" && "text-foreground")}>
+      <Icon className="size-3 shrink-0" />
       {label}
+      {note && state === "working" && <span className="truncate">· {note}</span>}
     </span>
   );
 }

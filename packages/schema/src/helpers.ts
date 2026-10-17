@@ -230,3 +230,6 @@ export function embedDocument(block: { html: string; height?: number }, transpor
 </script>
 <style>${embedCss}</style>${block.height || opts.fill ? "" : "<style>html,body{overflow:hidden}</style>"}${stripDocumentTags(block.html)}`;
 }
+
+export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];

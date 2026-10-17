@@ -334,6 +334,9 @@ test("inbox marks messages seen, the agent can acknowledge progress", async () =
 
   const id = sent.json.message.id;
   assert.equal((await request("POST", `/messages/${id}/state`, { token: agent, body: { state: "working" } })).json.message.state, "working");
+  const noted = (await request("POST", `/messages/${id}/state`, { token: agent, body: { state: "working", note: "running tests" } })).json.message;
+  assert.equal(noted.state_note, "running tests");
+  assert.equal((await request("POST", `/messages/${id}/state`, { token: agent, body: { state: "working" } })).json.message.state_note, null);
   assert.equal((await request("POST", `/messages/${id}/state`, { token: human, body: { state: "done" } })).status, 403);
   const own = await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } });
   assert.equal((await request("POST", `/messages/${own.json.message.id}/state`, { token: agent, body: { state: "done" } })).status, 400);

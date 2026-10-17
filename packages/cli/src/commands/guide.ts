@@ -8,7 +8,8 @@ import { VERSION } from "../update.ts";
 const topics: Record<string, string> = {
   setup: `Setting up this machine. Follow every step; the human is waiting for the result in the rply app.
 
-1. Install the CLI globally, not with npx (the background service needs a stable path):
+1. Install the CLI globally, not with npx (the background service needs a stable path). The npm package
+   is @rply/cli; there is no package called rply:
      npm install --global @rply/cli
 2. Connect (skip if \`rply whoami\` already works). If the human gave you a server and an agent code:
      rply join <server-url> <code> --agent-name "<short name for you>"
@@ -50,6 +51,7 @@ Talking
   rply inbox                                  new messages from the human (marks them seen)
   rply listen                                 stream them as JSONL, for long-running agents
   rply ack <message-id> working|done          show the human you picked a message up
+  rply ack <message-id> working --note "running tests"   what you're doing right now
 
 Good habits
 - Check \`rply inbox\` regularly. The human can message you at any time with new instructions.
@@ -233,7 +235,8 @@ This agent reports to its human through the \`rply\` CLI. Run \`rply guide\` onc
 - Ask with \`rply ask ... --wait\` when a decision is the human's.
 - Request credentials with \`rply secret request\`, never through messages.
 - To let the human try a running web app (e.g. a dev server), see \`rply guide previews\`; ask them how to expose it first.
-- When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.`;
+- When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.
+- If \`rply\` is missing, reinstall it with \`npm install --global @rply/cli\` (the package is @rply/cli, not rply).`;
 
 const seenPath = () => join(dirname(configPath()), "guide.json");
 

@@ -26,6 +26,7 @@ export function toMessage(row: JoinedRow): Message {
     reply_to: row.reply_to,
     pin: row.pin,
     state: row.state,
+    state_note: row.state_note,
     created_at: Number(row.created_at),
     updated_at: row.updated_at === null ? null : Number(row.updated_at),
     deleted_at: row.deleted_at === null ? null : Number(row.deleted_at),

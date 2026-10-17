@@ -313,7 +313,13 @@ function MessageView({
         {copied ? "Copied · " : ""}
         {formatTime(message.created_at)}
         {message.updated_at ? " · edited" : ""}
-        {message.state && <Text className={stateLabels[message.state].className}> · {stateLabels[message.state].label}</Text>}
+        {message.state && (
+          <Text className={stateLabels[message.state].className}>
+            {" "}
+            · {stateLabels[message.state].label}
+            {message.state === "working" && message.state_note ? ` · ${message.state_note}` : ""}
+          </Text>
+        )}
       </Text>
     </View>
   );

@@ -75,6 +75,7 @@ interface MessagesTable {
   reply_to: string | null;
   pin: string | null;
   state: MessageState | null;
+  state_note: string | null;
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;

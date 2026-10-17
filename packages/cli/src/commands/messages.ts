@@ -64,9 +64,10 @@ export function registerMessages(program: Command) {
     .description("tell the human you've seen a message, are working on it, or are done")
     .argument("<message-id>", "id shown by rply inbox")
     .argument("[state]", "seen, working or done", "working")
-    .action(async (id: string, state: string) => {
+    .option("--note <text>", 'short detail shown next to the state, e.g. "running tests"')
+    .action(async (id: string, state: string, opts: { note?: string }) => {
       if (!["seen", "working", "done"].includes(state)) throw new CliError("state must be seen, working or done");
-      const { message } = await connect().client.request<{ message: Message }>("POST", `/messages/${id}/state`, { state });
+      const { message } = await connect().client.request<{ message: Message }>("POST", `/messages/${id}/state`, { state, note: opts.note });
       if (json()) return printJson(message);
       console.log(`Marked as ${state}`);
     });

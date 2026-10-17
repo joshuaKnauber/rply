@@ -244,7 +244,7 @@ export const CallRequest = z.object({
 });
 export const CallResultRequest = z.union([z.object({ error: z.string().max(2000) }), z.object({ result: Json })]);
 
-export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]) });
+export const MessageStateRequest = z.object({ state: z.enum(["seen", "working", "done"]), note: z.string().max(200).optional() });
 export const SyncRequest = z.object({
   cursor: z.string().optional(),
   wait: z.number().min(0).max(60).optional(),
@@ -277,6 +277,7 @@ export type Message = {
   pin: string | null;
   ask: Ask | null;
   state: MessageState | null;
+  state_note: string | null;
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;
@@ -299,8 +300,6 @@ export type ServerInfo = {
 
 export type FileInfo = FileRef & { created_at: number };
 
-export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 
 export type ChannelRole = "owner" | "member";
 export type ChannelEntry = Channel & { role: ChannelRole; read_seq: number };

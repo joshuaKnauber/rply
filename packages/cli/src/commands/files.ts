@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 import type { Command } from "commander";
 import type { Block, FileInfo } from "@rply/schema";
+import { INLINE_IMAGE_TYPES } from "@rply/schema/helpers";
 import { CliError } from "../client.ts";
 import { connect, json } from "../context.ts";
 import { printJson } from "../io.ts";
@@ -43,7 +44,9 @@ export async function attachmentBlocks(opts: { image?: string[]; file?: string[]
   }
   for (const path of opts.file ?? []) {
     const file = await uploadFile(path);
-    blocks.push({ type: "file", file_id: file.file_id, name: file.name, mime: file.mime, size: file.size });
+    // pictures sent as files still get a preview
+    if (INLINE_IMAGE_TYPES.includes(file.mime)) blocks.push({ type: "image", file_id: file.file_id, name: file.name });
+    else blocks.push({ type: "file", file_id: file.file_id, name: file.name, mime: file.mime, size: file.size });
   }
   return blocks;
 }

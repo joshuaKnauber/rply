@@ -1,6 +1,7 @@
 import { hostedPrompt } from "../setup.ts";
 import { icon } from "../icons.ts";
-import { agentMessage, bird, choiceButton, el, esc, humanMessage, previewApp, screenshot, statsApp, toggleRow, type Site } from "./views.ts";
+import { chirp, mountBirds, setMood, type BirdState } from "../agent-bird.ts";
+import { AGENT, agentMessage, bird, choiceButton, el, esc, humanMessage, previewApp, screenshot, statsApp, toggleRow, type Site } from "./views.ts";
 
 class Stale extends Error {}
 
@@ -29,6 +30,13 @@ export function mountDemo() {
   let tunnel: string;
   let onSend: ((text: string) => void) | null;
   let waiters: Map<string, () => void>;
+  let navBird: HTMLElement;
+  let agentMood: BirdState;
+
+  const mood = (next: BirdState) => {
+    agentMood = next;
+    setMood(AGENT, next);
+  };
 
   const wait = async (ms: number) => {
     const token = run;
@@ -58,6 +66,7 @@ export function mountDemo() {
   const note = (text: string) => line(`<p class="flex items-center gap-1.5 pt-1 text-[11px] text-brand-300">${bird("size-3")} ${text}</p>`);
 
   const status = (text: string, busy = false) => {
+    if (agentMood !== "done") mood(busy ? "working" : "idle");
     input.innerHTML = `<p class="flex items-center gap-2"><span class="size-1.5 rounded-full ${busy ? "animate-pulse bg-brand-300" : "bg-gray-600"}"></span>${text}</p>`;
   };
 
@@ -78,6 +87,8 @@ export function mountDemo() {
   const agentMsg = (content: string) => {
     const node = el(agentMessage(content, time()));
     thread().append(node);
+    mountBirds(node);
+    chirp(AGENT);
     thread().scrollTop = thread().scrollHeight;
     lastPreview = node.textContent!.replace(/\s+/g, " ").replace(/^ ?claude \d+:\d+ /, "");
     renderNav();
@@ -101,10 +112,12 @@ export function mountDemo() {
         items
           .map((item) =>
             item.key === "chat"
-              ? `<button type="button" data-nav="chat" class="px-4 py-2.5 text-left aria-current:bg-gray-150"><span class="block font-medium text-gray-900">Acme site</span><span class="block truncate text-gray-500">${esc(lastPreview)}</span></button>`
-              : `<button type="button" data-nav="${item.key}" class="flex items-center gap-2 py-2 pr-4 pl-6 text-left text-gray-600 aria-current:bg-gray-150 aria-current:text-gray-900">${icon("app", "size-3.5")} ${item.title}</button>`,
+              ? `<button type="button" data-nav="chat" class="flex items-center gap-2.5 px-4 py-2.5 text-left aria-current:bg-gray-150"><span data-slot="nav-bird" class="size-[30px] flex-none"></span><span class="min-w-0"><span class="block font-medium text-gray-900">Acme site</span><span class="block truncate text-gray-500">${esc(lastPreview)}</span></span></button>`
+              : `<button type="button" data-nav="${item.key}" class="flex items-center gap-2 py-2 pr-4 pl-[56px] text-left text-gray-600 aria-current:bg-gray-150 aria-current:text-gray-900">${icon("app", "size-3.5")} ${item.title}</button>`,
           )
           .join("");
+    sidebar.querySelector("[data-slot=nav-bird]")?.replaceWith(navBird);
+    mountBirds(navBird);
     const tabs = $(".demo-tabs", main);
     tabs.hidden = !channel || apps.length === 0;
     tabs.innerHTML = items
@@ -223,11 +236,13 @@ export function mountDemo() {
       };
     });
     toggle.onclick = () => toggle.setAttribute("aria-pressed", String(toggle.getAttribute("aria-pressed") !== "true"));
+    mood("waiting");
     const value = await interact<{ plans: 2 | 3; annual: boolean }>([$(".q-card", node)], (done) => (send.onclick = () => done({ plans, annual: toggle.getAttribute("aria-pressed") === "true" })));
     choices.forEach((c) => (c.setAttribute("aria-pressed", String(Number(c.dataset.choice) === value.plans)), (c.disabled = true)));
     toggle.setAttribute("aria-pressed", String(value.annual));
     toggle.disabled = true;
     send.replaceWith(answered());
+    mood("working");
     return value;
   };
 
@@ -238,9 +253,11 @@ export function mountDemo() {
         ${(["a", "b"] as const).map((h) => `<button type="button" data-pick="${h}" class="rounded-xl p-1 hover:bg-gray-100 aria-pressed:ring-2 aria-pressed:ring-brand-500">${screenshot({ ...site, hero: h }, 180, h.toUpperCase())}</button>`).join("")}
       </div>`);
     const picks = [...node.querySelectorAll<HTMLButtonElement>("[data-pick]")];
+    mood("waiting");
     const value = await interact<"a" | "b">(picks, (done) => picks.forEach((b) => (b.onclick = () => done(b.dataset.pick as "a" | "b"))));
     picks.forEach((b) => (b.setAttribute("aria-pressed", String(b.dataset.pick === value)), (b.disabled = true), b.dataset.pick !== value && b.classList.add("opacity-50")));
     node.append(answered("mt-3"));
+    mood("working");
     return value;
   };
 
@@ -253,9 +270,11 @@ export function mountDemo() {
       </div>`);
     const choices = [...node.querySelectorAll<HTMLButtonElement>("[data-choice]")];
     const targets = view === "chat" ? choices : [...choices, ...root.querySelectorAll<HTMLElement>('[data-nav="chat"]')];
+    mood("waiting");
     const value = await interact<string>(targets, (done) => choices.forEach((b) => (b.onclick = () => done(b.dataset.choice!))));
     choices.forEach((c) => (c.setAttribute("aria-pressed", String(c.dataset.choice === value)), (c.disabled = true)));
     node.append(answered("mt-3"));
+    mood("working");
     return value;
   };
 
@@ -278,6 +297,7 @@ export function mountDemo() {
       $("a", claimLink).onclick = (e) => e.preventDefault();
       await say("Open the claim link and sign in. I'll wait.");
       status("Waiting for you to open the link");
+      mood("waiting");
     },
     async () => {
       const link = $("a", claimLink);
@@ -383,6 +403,7 @@ export function mountDemo() {
       renderNav();
       await cmd("rply ack 9fk2 done");
       state("Done");
+      mood("done");
       await wait(300);
       agentMsg("Shipped. acme.dev/pricing is live and the preview is down.");
       toast("Acme site", "Shipped. acme.dev/pricing is live.");
@@ -407,6 +428,8 @@ export function mountDemo() {
     onSend = null;
     waiters = new Map();
     signups = 668;
+    navBird = el(`<span class="flex-none [--avatar-ring:var(--color-gray-150)]"><span data-bird="${AGENT}" data-size="30" class="block size-[30px]"></span></span>`);
+    mood("idle");
     main.innerHTML = `
       <div class="demo-tabs flex flex-none gap-1 overflow-x-auto border-b border-gray-200 px-3 py-2 lg:hidden" hidden></div>
       <div data-view="empty" class="flex flex-1 flex-col items-center justify-center p-6 text-center">
@@ -415,7 +438,7 @@ export function mountDemo() {
       </div>
       <div data-view="claim" class="flex flex-1 items-center justify-center p-6" hidden>
         <div class="msg-in w-full max-w-xs rounded-2xl border border-gray-200 p-5 text-center shadow-[0_10px_30px_-16px_rgb(0_0_0/0.2)]">
-          <span class="mx-auto grid size-10 place-items-center rounded-xl bg-gray-100 text-gray-600">${icon("bot", "size-5")}</span>
+          <span data-bird="${AGENT}" data-size="48" class="mx-auto block size-12"></span>
           <p class="mt-3 font-medium text-gray-900">Add "Acme site"?</p>
           <p class="mt-1 text-gray-500">An agent on acme-vm created this channel and wants to reach you.</p>
           <button type="button" class="claim-add btn btn-primary mt-4 h-9 w-full justify-center">Add channel</button>
@@ -424,7 +447,7 @@ export function mountDemo() {
       <div data-view="chat" class="flex min-h-0 flex-1 flex-col" hidden>
         <div class="hidden h-12 flex-none items-center gap-2 border-b border-gray-200 px-5 lg:flex">
           <span class="text-[15px] font-medium text-gray-900">Acme site</span>
-          <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="size-1.5 rounded-full bg-emerald-500"></span>claude</span>
+          <span class="flex items-center gap-1.5 text-xs text-gray-500"><span data-bird="${AGENT}" data-size="20" class="size-5 flex-none"></span>claude</span>
         </div>
         <div class="thread flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-3 pb-2 sm:px-6"><div class="flex-1"></div></div>
         <form class="composer mx-4 mb-4 flex flex-none items-center gap-2 rounded-xl bg-gray-100 py-2 pr-2 pl-3.5 sm:mx-6">
@@ -433,6 +456,7 @@ export function mountDemo() {
         </form>
       </div>
       <div data-view="app" class="flex min-h-0 flex-1 flex-col" hidden></div>`;
+    mountBirds(main);
     $<HTMLFormElement>(".composer", main).onsubmit = (e) => {
       e.preventDefault();
       const value = $<HTMLInputElement>(".composer input", main).value.trim();

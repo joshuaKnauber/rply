@@ -3,10 +3,10 @@ import Bird from "./Bird.astro";
 import Icon from "./Icon.astro";
 
 const channels = [
-  { name: "SEO bot", preview: "Publish them to acme.dev now?", time: "9:41", active: true },
-  { name: "Deploy bot", preview: "Deployed v2.4.1 to production", time: "9:12" },
-  { name: "Nightly backup", preview: "Backup finished, 2.1 GB", time: "3:00" },
-  { name: "Inbox triage", preview: "Archived 38 newsletters", time: "Mon" },
+  { name: "SEO bot", agent: "exe-dev-seo", preview: "Publish them to acme.dev now?", time: "9:41", active: true },
+  { name: "Deploy bot", agent: "deploy-runner", preview: "Deployed v2.4.1 to production", time: "9:12" },
+  { name: "Nightly backup", agent: "nas-backup", mood: "offline", preview: "Backup finished, 2.1 GB", time: "3:00" },
+  { name: "Inbox triage", agent: "mac-mini-inbox", preview: "Archived 38 newsletters", time: "Mon" },
 ];
 ---
 
@@ -18,7 +18,7 @@ const channels = [
     <span class="mx-auto -translate-x-6 rounded-md bg-gray-100 px-16 py-0.5 text-xs text-gray-500">app.rply.sh</span>
   </div>
   <div class="grid h-[540px] grid-cols-[232px_1fr_256px] text-[13px]">
-    <aside class="flex flex-col border-r border-gray-200 bg-gray-100">
+    <aside class="flex flex-col border-r border-gray-200 bg-gray-100 [--avatar-ring:var(--color-gray-100)]">
       <div class="flex h-12 items-center gap-2 border-b border-gray-200 px-4 font-medium text-gray-900">
         <Bird class="size-4" /> rply.sh
         <span class="ml-auto flex gap-3 text-gray-500"><Icon name="bell" /><Icon name="plus" /></span>
@@ -27,14 +27,18 @@ const channels = [
       {
         channels.map((c) => (
           <div class:list={["px-4 py-2.5", c.active && "bg-gray-150"]}>
-            <div class="flex items-center gap-1.5">
-              <span class="font-medium text-gray-900">{c.name}</span>
-              {c.active && <span class="hidden size-1.5 rounded-full bg-brand-600 [.s-ask:not(.answered)_&]:block" />}
-              <span class="ml-auto text-xs text-gray-500 tabular-nums">{c.time}</span>
+            <div class="flex items-center gap-2.5">
+              <span data-bird={c.agent} data-size="30" data-mood={c.mood} class="size-[30px] flex-none" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-medium text-gray-900">{c.name}</span>
+                  <span class="ml-auto text-xs text-gray-500 tabular-nums">{c.time}</span>
+                </div>
+                <p class="mt-0.5 truncate text-gray-500">{c.preview}</p>
+              </div>
             </div>
-            <p class="mt-0.5 truncate text-gray-500">{c.preview}</p>
             {c.active && (
-              <p class="mt-2 -mb-0.5 flex items-center gap-2 pl-2 text-gray-500">
+              <p class="mt-2 -mb-0.5 flex items-center gap-2 pl-10 text-gray-500">
                 <Icon name="app" class="size-3.5" /> Rankings
               </p>
             )}
@@ -49,34 +53,46 @@ const channels = [
         <Icon name="ellipsis" class="ml-auto size-4 text-gray-500" />
       </div>
       <div class="flex flex-1 flex-col justify-end gap-1 overflow-hidden px-5 pb-3 [mask-image:linear-gradient(transparent,black_24px)]">
-        <div class="rounded-lg px-3 py-2.5">
-          <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:12</span></p>
-          <p class="mt-1 text-sm">Keyword research for acme.dev is done. 14 new topics with more than 1k searches a month.</p>
-          <div class="mt-2 flex w-72 items-center gap-3 rounded-lg border border-gray-200 px-2.5 py-2">
-            <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">CSV</span>
-            <span class="text-gray-900">keywords.csv</span>
-            <span class="ml-auto text-xs text-gray-500">4 KB</span>
+        <div class="flex gap-2.5 rounded-lg px-3 py-2.5">
+          <span data-bird="exe-dev-seo" data-size="26" data-dot="off" class="size-[26px] flex-none" />
+          <div class="min-w-0">
+            <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:12</span></p>
+            <p class="mt-1 text-sm">Keyword research for acme.dev is done. 14 new topics with more than 1k searches a month.</p>
+            <div class="mt-2 flex w-72 items-center gap-3 rounded-lg border border-gray-200 px-2.5 py-2">
+              <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">CSV</span>
+              <span class="text-gray-900">keywords.csv</span>
+              <span class="ml-auto text-xs text-gray-500">4 KB</span>
+            </div>
           </div>
         </div>
         <div class="rounded-lg bg-gray-100 px-3 py-2.5">
           <p class="text-gray-500"><span class="font-medium text-gray-900">You</span> <span class="tabular-nums">9:20</span></p>
           <p class="mt-1 text-sm">Nice. Draft pages for the top 5.</p>
         </div>
-        <div class="msg-in hidden rounded-lg px-3 py-2.5 [.s-drafted_&]:block">
-          <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:40</span></p>
-          <p class="mt-1 text-sm">Drafted all 5: /pricing, /pricing/teams, /compare, /faq and /security.</p>
-        </div>
-        <div class="msg-in hidden rounded-r-lg border-l-2 border-brand-600 px-3 py-2.5 [.answered_&]:border-transparent [.s-ask_&]:block">
-          <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:41</span></p>
-          <p class="mt-1 text-sm">Publish them to acme.dev now?</p>
-          <div class="mt-2.5 flex gap-2">
-            <button class="btn btn-outline h-8 [.answered_&]:btn-primary" data-choice>Publish</button>
-            <button class="btn btn-outline h-8 [.answered_&]:opacity-40">Not yet</button>
+        <div class="msg-in hidden gap-2.5 rounded-lg px-3 py-2.5 [.s-drafted_&]:flex">
+          <span data-bird="exe-dev-seo" data-size="26" data-dot="off" class="size-[26px] flex-none" />
+          <div class="min-w-0">
+            <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:40</span></p>
+            <p class="mt-1 text-sm">Drafted all 5: /pricing, /pricing/teams, /compare, /faq and /security.</p>
           </div>
         </div>
-        <div class="msg-in hidden rounded-lg px-3 py-2.5 [.done_&]:block">
-          <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:43</span></p>
-          <p class="mt-1 text-sm">All 5 pages are live. Indexing requested.</p>
+        <div class="msg-in hidden gap-2.5 rounded-r-lg border-l-2 border-brand-600 px-3 py-2.5 [.answered_&]:border-transparent [.s-ask_&]:flex">
+          <span data-bird="exe-dev-seo" data-size="26" data-dot="off" class="size-[26px] flex-none" />
+          <div class="min-w-0">
+            <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:41</span></p>
+            <p class="mt-1 text-sm">Publish them to acme.dev now?</p>
+            <div class="mt-2.5 flex gap-2">
+              <button class="btn btn-outline h-8 [.answered_&]:btn-primary" data-choice>Publish</button>
+              <button class="btn btn-outline h-8 [.answered_&]:opacity-40">Not yet</button>
+            </div>
+          </div>
+        </div>
+        <div class="msg-in hidden gap-2.5 rounded-lg px-3 py-2.5 [.done_&]:flex">
+          <span data-bird="exe-dev-seo" data-size="26" data-dot="off" class="size-[26px] flex-none" />
+          <div class="min-w-0">
+            <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> <span class="tabular-nums">9:43</span></p>
+            <p class="mt-1 text-sm">All 5 pages are live. Indexing requested.</p>
+          </div>
         </div>
       </div>
       <div class="mx-5 mb-5 rounded-xl bg-gray-100 px-4 pt-3 pb-2 text-sm text-gray-400">
@@ -100,7 +116,7 @@ const channels = [
         </div>
         <div class="py-5">
           <p class="text-gray-500">Agents</p>
-          <p class="mt-2 flex items-center gap-2"><Icon name="bot" class="size-4 text-gray-500" /> exe-dev-seo <span class="ml-auto text-xs text-gray-500">Active now</span></p>
+          <p class="mt-2 flex items-center gap-2"><span data-bird="exe-dev-seo" data-size="22" class="-ml-0.5 size-[22px] flex-none" /> exe-dev-seo <span class="ml-auto text-xs text-gray-500">Active now</span></p>
         </div>
       </div>
     </aside>

@@ -80,10 +80,15 @@ export const screenshot = (site: Site, width: number, label?: string) => `
     ${label ? `<span class="absolute top-2 left-2 grid size-6 place-items-center rounded-md bg-gray-900 text-xs font-semibold text-white">${label}</span>` : ""}
   </div>`;
 
+export const AGENT = "claude-acme-vm";
+
 export const agentMessage = (content: string, time: string) => `
-  <div class="msg-in px-1 py-2">
-    <p class="text-xs text-gray-500"><span class="font-medium text-gray-900">claude</span> <span class="tabular-nums">${time}</span></p>
-    <div class="mt-1 text-sm text-gray-800">${content}</div>
+  <div class="msg-in flex gap-2.5 px-1 py-2">
+    <span data-bird="${AGENT}" data-size="26" data-dot="off" class="size-[26px] flex-none"></span>
+    <div class="min-w-0 flex-1">
+      <p class="text-xs text-gray-500"><span class="font-medium text-gray-900">claude</span> <span class="tabular-nums">${time}</span></p>
+      <div class="mt-1 text-sm text-gray-800">${content}</div>
+    </div>
   </div>`;
 
 export const humanMessage = (text: string) => `

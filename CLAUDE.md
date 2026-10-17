@@ -199,6 +199,7 @@ Every agent token is an animated rply bird in the web app (channel list, thread,
 - **Mood**: `agentMood(agent, messages)` (helpers): `waiting` (the agent has an open ask or secret request), `working` (a human message it acked `working`; the ack stores `state_agent_id` on the message), `offline` (no `serve` and not seen for 15 minutes), else `idle`. The web component turns working → idle into a 3s `done` celebration.
 - **Engine**: `apps/web/src/lib/bird.ts` draws the logo path as SVG and animates it with springs plus a little physics (hops with gravity, a tail that bends instead of being cut out, eye saccades and blinks), one shared `requestAnimationFrame` loop that skips birds outside the viewport. `components/AgentAvatar.tsx` wraps it: `mood`, `chirp` (grows with the agent's last message seq, which makes it chirp and the channel's other birds glance over) and `dot` (the waiting badge). `prefers-reduced-motion` drops the moves.
 - Mobile doesn't have avatars yet; it can reuse the helpers and port `bird.ts` to react-native-svg.
+- The site's mockups (hero, interactive demo) use a copy, `apps/site/src/components/agent-bird.ts`: `<span data-bird="<agent id>" data-size="28">` placeholders mounted by `mountBirds`, driven by `setMood(id, mood)` and `chirp(id)` from the hero loop and `demo.ts`. The copy is on purpose; keep the two in sync when the motion changes.
 
 ## 8. Channels, auth and E2E (decided)
 

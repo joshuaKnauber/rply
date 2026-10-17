@@ -162,7 +162,7 @@ Attachments both ways: agents attach images and files to messages and pins, the 
 The web app can notify about agent messages while the tab is closed (desktop browsers; on iPhone only once added to the Home Screen).
 - **VAPID**: the server generates a keypair on first start and keeps it in the `settings` table, or takes `RPLY_VAPID_PUBLIC_KEY` + `RPLY_VAPID_PRIVATE_KEY`. `RPLY_VAPID_SUBJECT` defaults to `https://rply.sh`. `RPLY_PUSH=off` disables it. `/v1/info` returns `push: { public_key } | null`. Sending uses the `web-push` library (`packages/server/src/push/`). Push services need HTTPS, except on `localhost`.
 - **Subscriptions are per browser and user**: the bell in the sidebar subscribes once and `PUT /v1/push/subscription { subscription }` (signed in) stores it with the user; it notifies for every channel the user is a member of. Deleting the user cascades; push services answering 404/410 delete the row.
-- **What notifies**: agent messages (`rply send --silent` / `silent: true` opts out) and secret requests. Title = channel name, body = preview (questions prefixed with ❓), click opens `/c/<id>`, `tag` = channel, so one notification per channel replaces the last. Content goes through the push service end-to-end encrypted (RFC 8291) but the server reads it; E2E channels will need a generic text.
+- **What notifies**: agent messages (`rply send --silent` / `silent: true` opts out) and secret requests. Title = channel name (plus ` · <agent label>` when the channel has more than one active agent), body = preview (questions prefixed with ❓), click opens `/c/<id>`, `tag` = channel, so one notification per channel replaces the last. Content goes through the push service end-to-end encrypted (RFC 8291) but the server reads it; E2E channels will need a generic text.
 - **Presence**: `/v1/sync` sends `viewing` (the open channel while the tab is visible) and `push_endpoint`. The server skips that endpoint for that channel until the long-poll plus 15s runs out, so the channel you're looking at doesn't ping you.
 - **Web app**: `public/sw.js` (shows the notification, focuses an open tab via a `rply:open` message or opens one), `public/manifest.webmanifest` + icons (installable PWA, required for iOS push), `src/lib/push.ts`, `components/NotificationsButton.tsx`. The endpoint is stored as `rply.push` in localStorage.
 - Mobile push (relay, section 5) is separate and not built yet.
@@ -192,6 +192,14 @@ Full-page HTML apps per channel for dashboards and control spaces, replacing cus
 - **Sweeps**: no cron; `index.ts` runs `sweepFiles`, `sweepUnclaimed` and `sweepOldMessages` once at startup and then every 10 minutes (`setInterval`). Fine for one instance; several would only repeat the work.
 - **Client IP** (`clientIp`): the last `X-Forwarded-For` entry, the one the proxy in front appended; the first ones can be forged. better-auth's own sign-in rate limit puts multi-entry headers into one shared bucket, so forging doesn't help there either.
 
+## 7f. Agent avatars (built)
+
+Every agent token is an animated rply bird in the web app (channel list, thread, agents panel); design rules in `apps/web/DESIGN.md`.
+- **Identity**: `birdIdentity(id, channel)` (helpers) picks one of `BIRD_COLORS` and a crest from the token id; agents of a channel, in join order (`GET /v1/agents` is ordered by `created_at`), skip colors and crests already taken. Nothing is stored.
+- **Mood**: `agentMood(agent, messages)` (helpers): `waiting` (the agent has an open ask or secret request), `working` (a human message it acked `working`; the ack stores `state_agent_id` on the message), `offline` (no `serve` and not seen for 15 minutes), else `idle`. The web component turns working → idle into a 3s `done` celebration.
+- **Engine**: `apps/web/src/lib/bird.ts` draws the logo path as SVG and animates it with springs plus a little physics (hops with gravity, a tail that bends instead of being cut out, eye saccades and blinks), one shared `requestAnimationFrame` loop that skips birds outside the viewport. `components/AgentAvatar.tsx` wraps it: `mood`, `chirp` (grows with the agent's last message seq, which makes it chirp and the channel's other birds glance over) and `dot` (the waiting badge). `prefers-reduced-motion` drops the moves.
+- Mobile doesn't have avatars yet; it can reuse the helpers and port `bird.ts` to react-native-svg.
+
 ## 8. Channels, auth and E2E (decided)
 
 ### Accounts and channels
@@ -210,6 +218,7 @@ Humans have accounts on every server, self-hosted included (modelled on Plausibl
 - **Membership**: `channel_members (channel_id, user_id, role owner|member, read_seq)`. A human request is `session + X-Rply-Channel`; `requireAuth` checks membership (404 if not a member) and sets `auth.role`. Owners delete the channel (`DELETE /v1/channel`), add agents (`POST /v1/pairings` → agent code) and revoke them; members (via invites, later) read and reply. `read_seq` is the read position (`PUT /v1/channel/read { seq }`, only moves forward), so unread counts match across devices.
 - Agent tokens are stored only as SHA-256 hashes. The prefixes make leaked tokens easy to spot. Agent requests authenticate with one query (token joined with its channel); `last_seen_at` is only written when it's older than a minute (`markSeen`).
 - One channel per agent is the default, but an agent may use several (e.g. one per project). Cron scripts and CI use channels too.
+- Several agents on one channel: messages carry `agent: { id, label }` (joined from `agent_tokens`, so renames show on old messages too). The apps show the agent's label instead of the channel name when the channel has more than one active agent (`GET /v1/agents`, `agentName` in helpers), and web groups messages per agent. Push titles follow the same rule (`Channel · label`).
 
 ### Creating and joining channels
 1. **App first (main path)**: a signed-in user creates the channel (`POST /v1/channels` with a session) and becomes its owner; the response carries a single-use **agent code** (1 hour). The agent runs `rply join <server-url> <code>` (`POST /v1/agents/join`). "Add an agent" issues more codes (a second agent, or one that lost its config).
@@ -307,9 +316,9 @@ channel_members channel_id, user_id, role (owner|member), read_seq, created_at
 app_storage     user_id, channel_id, app_key (pin key or message id), value (JSON text, max 256 KB), updated_at
 agent_tokens    id, channel_id, token_hash, label (hostname), public_key, created_at, last_seen_at, revoked_at
 pairing_codes   code_hash, channel_id, role (human|agent), expires_at, used_at
-messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), enc,
-                body (JSON text or ciphertext), reply_to, pin (null | key), state (human msgs: seen|working|done),
-                created_at, updated_at, deleted_at
+messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), agent_id (the agent
+                token that sent it; pins: the last writer), enc, body (JSON text or ciphertext), reply_to, pin (null | key),
+                state (human msgs: seen|working|done), state_note, state_agent_id (who acked), created_at, updated_at, deleted_at
 asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),

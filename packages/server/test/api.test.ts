@@ -246,6 +246,29 @@ test("the owner can add more agents and revoke them", async () => {
   assert.equal((await request("GET", "/channel", { token: second })).status, 200);
 });
 
+test("messages and pins carry the agent that sent them, with its current label", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+  await request("PATCH", "/agent", { token: second, body: { label: "Deploy runner" } });
+
+  const first = (await request("POST", "/messages", { token: agent, body: { body: { text: "a" } } })).json.message;
+  const other = (await request("POST", "/messages", { token: second, body: { body: { text: "b" } } })).json.message;
+  const reply = (await request("POST", "/messages", { token: human, body: { body: { text: "c" } } })).json.message;
+  assert.notEqual(first.agent.id, other.agent.id);
+  assert.equal(other.agent.label, "Deploy runner");
+  assert.equal(reply.agent, null);
+
+  await request("PATCH", "/agent", { token: second, body: { label: "Renamed" } });
+  const messages = (await request("GET", "/messages", { token: human })).json.messages;
+  assert.equal(messages.find((m: any) => m.id === other.id).agent.label, "Renamed");
+
+  await request("PUT", "/pins/status", { token: agent, body: { body: { text: "x" } } });
+  const pin = (await request("PATCH", "/pins/status", { token: second, body: { text: "y" } })).json.message;
+  assert.equal(pin.agent.id, other.agent.id);
+});
+
 test("a question is answered once and the agent's wait returns the answer", async () => {
   const { request, ownedChannel } = await setup();
   const { agent, human } = await ownedChannel();
@@ -339,6 +362,7 @@ test("inbox marks messages seen, the agent can acknowledge progress", async () =
   assert.equal((await request("POST", `/messages/${id}/state`, { token: agent, body: { state: "working" } })).json.message.state_note, null);
   assert.equal((await request("POST", `/messages/${id}/state`, { token: human, body: { state: "done" } })).status, 403);
   const own = await request("POST", "/messages", { token: agent, body: { body: { text: "hi" } } });
+  assert.equal(noted.state_agent_id, own.json.message.agent.id);
   assert.equal((await request("POST", `/messages/${own.json.message.id}/state`, { token: agent, body: { state: "done" } })).status, 400);
   const fromHuman = await request("GET", "/messages", { token: human });
   assert.equal(fromHuman.json.messages[0].state, "working");
@@ -741,6 +765,14 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
   await request("POST", "/messages", { token: b.agent, body: { body: { text: "for b's owner" } } });
   await flush();
   assert.deepEqual(sent.map((s) => s.endpoint), ["https://push.example/b"]);
+
+  const code = (await request("POST", "/pairings", { token: b.human })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+  await request("PATCH", "/agent", { token: second, body: { label: "Deploy bot" } });
+  sent.length = 0;
+  await request("POST", "/messages", { token: second, body: { body: { text: "deployed" } } });
+  await flush();
+  assert.equal(sent[0]?.payload.title, "Shop agent · Deploy bot");
 
   failWith = 410;
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "gone" } } });

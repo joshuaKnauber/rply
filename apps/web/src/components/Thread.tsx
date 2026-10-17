@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type UIEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type UIEvent } from "react";
 import { CheckCheckIcon, CircleDotIcon, CornerDownRightIcon, EyeIcon, MessageCircleQuestionIcon, ReplyIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { Answers, Message, MessageState, ChannelEntry } from "@rply/schema";
@@ -6,14 +6,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { markRead } from "@/lib/channels";
 import { MessageContext } from "@/lib/channel-context";
-import { eventLabel, isCall, isWaiting } from "@rply/schema";
+import { agentName, eventLabel, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatClock, formatDay, formatTime, isAnswer, isEvent, preview } from "@/lib/format";
-import { useMessages, useSendMessage } from "@/lib/queries";
+import { useAgents, useMessages, useSendMessage } from "@/lib/queries";
 import { useSwipeToReply } from "@/lib/swipe";
 import { cn } from "@/lib/utils";
 import { Markdown } from "./blocks/Markdown";
 import { AttachmentList } from "./blocks/Attachments";
 import { MessageBlocks } from "./blocks/MessageBlocks";
+import { AgentAvatar, useAgentMoods } from "./AgentAvatar";
 import { Composer } from "./Composer";
 
 export function Thread({ entry }: { entry: ChannelEntry }) {
@@ -27,6 +28,28 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
   const visible = messages.filter((m) => !isAnswer(m));
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const { data: agents = [] } = useAgents(entry);
+  const several = agents.length > 1;
+  const nameOf = (m: Message) => (m.sender === "agent" ? agentName(m, entry.name, several) : "You");
+
+  const moods = useAgentMoods(agents, messages);
+  const agentOrder = useMemo(() => agents.map((a) => a.id), [agents]);
+  const avatarFor = (message: Message, groupLastSeq: number) => {
+    const id = message.agent?.id ?? (agents.length === 1 ? agents[0]!.id : undefined);
+    if (!id) return undefined;
+    return (
+      <AgentAvatar
+        id={id}
+        channel={agentOrder}
+        mood={moods.get(id) ?? "offline"}
+        size={28}
+        group={entry.id}
+        chirp={groupLastSeq}
+        chirpOnMount={Date.now() - message.created_at < 10_000}
+        dot={false}
+      />
+    );
+  };
 
   const queryClient = useQueryClient();
   const lastSeq = messages.at(-1)?.seq;
@@ -67,6 +90,9 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
             const prev = visible[i - 1];
             const next = visible[i + 1];
             const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(message.created_at).toDateString();
+            const first = newDay || !sameGroup(prev, message, several);
+            let groupEnd = i;
+            while (first && visible[groupEnd + 1] && sameGroup(visible[groupEnd], visible[groupEnd + 1]!, several)) groupEnd++;
             const day = newDay && <DayDivider key={`day-${message.id}`} ts={message.created_at} />;
             if (isEvent(message) || isCall(message)) return [day, <EventLine key={message.id} message={message} />];
             return [
@@ -74,10 +100,11 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
               <MessageView
                 key={message.id}
                 message={message}
-                agentName={entry.name}
+                nameOf={nameOf}
                 quoted={message.reply_to ? byId.get(message.reply_to) : undefined}
-                first={newDay || !sameGroup(prev, message)}
-                last={!next || !sameGroup(message, next)}
+                first={first}
+                avatar={first && message.sender === "agent" ? avatarFor(message, visible[groupEnd]!.seq) : undefined}
+                last={!next || !sameGroup(message, next, several)}
                 submitted={message.ask?.answer_id ? answersById.get(message.ask.answer_id) : undefined}
                 onAnswer={answer(message)}
                 onEvent={sendEvent(message)}
@@ -89,7 +116,7 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
       </div>
       <Composer
         disabled={send.isPending}
-        replyTo={replyTo && { name: replyTo.sender === "agent" ? entry.name : "You", text: preview(replyTo) }}
+        replyTo={replyTo && { name: nameOf(replyTo), text: preview(replyTo) }}
         onCancelReply={() => setReplyTo(null)}
         onSend={(text, attachments) => {
           atBottom.current = true;
@@ -123,8 +150,8 @@ export function WaitingIndicator({ entry }: { entry: ChannelEntry }) {
 }
 
 const GROUP_GAP = 5 * 60_000;
-const sameGroup = (a: Message | undefined, b: Message) =>
-  Boolean(a) && a!.sender === b.sender && !isEvent(a!) && !isCall(a!) && b.created_at - a!.created_at < GROUP_GAP;
+const sameGroup = (a: Message | undefined, b: Message, several: boolean) =>
+  Boolean(a) && a!.sender === b.sender && (!several || a!.agent?.id === b.agent?.id) && !isEvent(a!) && !isCall(a!) && b.created_at - a!.created_at < GROUP_GAP;
 
 function DayDivider({ ts }: { ts: number }) {
   return <div className="text-muted-foreground mt-4 mb-1 self-center text-xs font-medium">{formatDay(ts)}</div>;
@@ -145,7 +172,8 @@ function EventLine({ message }: { message: Message }) {
 
 function MessageView({
   message,
-  agentName,
+  avatar,
+  nameOf,
   quoted,
   first,
   last,
@@ -155,7 +183,8 @@ function MessageView({
   onReply,
 }: {
   message: Message;
-  agentName: string;
+  avatar?: ReactNode;
+  nameOf: (message: Message) => string;
   quoted?: Message;
   first: boolean;
   last: boolean;
@@ -206,11 +235,12 @@ function MessageView({
   return (
     <div
       id={`msg-${message.id}`}
-      className={cn("group/msg relative flex touch-pan-y flex-col", fromAgent ? "items-start" : "items-end", first ? "mt-3" : "mt-0.5")}
+      className={cn("group/msg relative flex touch-pan-y flex-col", fromAgent ? "items-start pl-10" : "items-end", first ? "mt-3" : "mt-0.5")}
       {...swipe.handlers}
       onPointerUp={onPointerUp}
     >
-      {first && fromAgent && <span className="text-muted-foreground mb-1 text-xs font-medium">{agentName}</span>}
+      {avatar && <div className="absolute top-0 left-0">{avatar}</div>}
+      {first && fromAgent && <span className="text-muted-foreground mb-1 text-xs font-medium">{nameOf(message)}</span>}
       <ReplyIcon className="text-muted-foreground absolute top-1/2 left-0 size-4 -translate-y-1/2" style={{ opacity: swipe.progress, transform: `translateX(${swipe.offset / 2 - 24}px) scale(${0.6 + swipe.progress * 0.4})` }} />
       <div
         className={cn("flex items-center gap-1", fromAgent ? "w-full" : "max-w-[85%] flex-row-reverse", wide && "w-full", swipe.offset === 0 && "transition-transform")}
@@ -224,7 +254,7 @@ function MessageView({
               : ["bg-muted rounded-2xl px-3.5 py-2.5", !first && "rounded-tr-md", !last && "rounded-br-md"],
           )}
         >
-          {quoted && <Quote message={quoted} agentName={agentName} />}
+          {quoted && <Quote message={quoted} name={nameOf(quoted)} />}
           {content}
         </div>
         {onReply && (
@@ -244,14 +274,14 @@ function MessageView({
   );
 }
 
-function Quote({ message, agentName }: { message: Message; agentName: string }) {
+function Quote({ message, name }: { message: Message; name: string }) {
   return (
     <button
       type="button"
       className="border-attention bg-current/7 -mx-1 flex min-w-0 flex-col rounded-lg border-l-2 px-2.5 py-1.5 text-left text-sm"
       onClick={() => document.getElementById(`msg-${message.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
     >
-      <span className="text-xs font-medium">{message.sender === "agent" ? agentName : "You"}</span>
+      <span className="text-xs font-medium">{name}</span>
       <span className="line-clamp-2 opacity-80">{preview(message)}</span>
     </button>
   );

@@ -83,6 +83,7 @@ export function callRoutes(deps: Deps, serves: Serves) {
         id,
         channel_id: channel.id,
         sender: "human",
+        agent_id: null,
         enc: 0,
         body: JSON.stringify({ call }),
         reply_to: target.id,

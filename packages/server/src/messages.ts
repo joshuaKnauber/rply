@@ -11,8 +11,9 @@ export const selectMessages = (db: DB) =>
   db
     .selectFrom("messages")
     .leftJoin("asks", "asks.message_id", "messages.id")
+    .leftJoin("agent_tokens", "agent_tokens.id", "messages.agent_id")
     .selectAll("messages")
-    .select(["asks.status as ask_status", "asks.expires_at as ask_expires_at", "asks.answer_id as ask_answer_id"]);
+    .select(["asks.status as ask_status", "asks.expires_at as ask_expires_at", "asks.answer_id as ask_answer_id", "agent_tokens.label as agent_label"]);
 
 type JoinedRow = Awaited<ReturnType<ReturnType<typeof selectMessages>["execute"]>>[number];
 
@@ -23,10 +24,12 @@ export function toMessage(row: JoinedRow): Message {
     id: row.id,
     channel_id: row.channel_id,
     sender: row.sender,
+    agent: row.agent_id ? { id: row.agent_id, label: row.agent_label } : null,
     reply_to: row.reply_to,
     pin: row.pin,
     state: row.state,
     state_note: row.state_note,
+    state_agent_id: row.state_agent_id,
     created_at: Number(row.created_at),
     updated_at: row.updated_at === null ? null : Number(row.updated_at),
     deleted_at: row.deleted_at === null ? null : Number(row.deleted_at),

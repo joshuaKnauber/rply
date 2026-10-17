@@ -21,16 +21,16 @@ export function pinRoutes(deps: Deps) {
   const findPinned = (channelId: string, key: string) =>
     selectLiveMessages(db).where("messages.channel_id", "=", channelId).where("messages.pin", "=", key).executeTakeFirst();
 
-  const save = async (channelId: string, key: string, enc: boolean, body: string) => {
+  const save = async (channelId: string, agentId: string, key: string, enc: boolean, body: string) => {
     const existing = await findPinned(channelId, key);
     if (existing) deps.limits.write(channelId);
     else await deps.limits.newMessage(channelId);
     const id = existing?.id ?? randomId();
     const fileIds = enc ? [] : await checkFiles(deps, channelId, JSON.parse(body));
     if (existing) {
-      await db.updateTable("messages").set({ enc: enc ? 1 : 0, body, updated_at: now() }).where("id", "=", id).execute();
+      await db.updateTable("messages").set({ agent_id: agentId, enc: enc ? 1 : 0, body, updated_at: now() }).where("id", "=", id).execute();
     } else {
-      await insertMessage(db, { id, channel_id: channelId, sender: "agent", enc: enc ? 1 : 0, body, reply_to: null, pin: key, state: null, created_at: now(), updated_at: null, deleted_at: null });
+      await insertMessage(db, { id, channel_id: channelId, sender: "agent", agent_id: agentId, enc: enc ? 1 : 0, body, reply_to: null, pin: key, state: null, created_at: now(), updated_at: null, deleted_at: null });
     }
     await linkFiles(deps, fileIds, id);
     await recordChanges(deps, channelId, [id]);
@@ -52,7 +52,7 @@ export function pinRoutes(deps: Deps) {
       const parsed = req.enc ? undefined : parse(PinnedBody, req.body);
       rejectSecretBlocks(parsed?.blocks);
       const body = req.enc ? req.body : JSON.stringify(parsed);
-      return c.json({ message: await save(c.var.auth.channel.id, key, req.enc, body) });
+      return c.json({ message: await save(c.var.auth.channel.id, c.var.auth.agentId!, key, req.enc, body) });
     })
     .patch("/pins/:key", agent, async (c) => {
       const { channel } = c.var.auth;
@@ -64,7 +64,7 @@ export function pinRoutes(deps: Deps) {
       const patch = parse(PatchMessageRequest, await c.req.json());
       const body = JSON.stringify(parse(PinnedBody, applyPatch(current.body, patch)));
       rejectSecretBlocks(JSON.parse(body).blocks);
-      return c.json({ message: await save(channel.id, key, false, body) });
+      return c.json({ message: await save(channel.id, c.var.auth.agentId!, key, false, body) });
     })
     .delete("/pins/:key", requireAuth(deps), async (c) => {
       const { channel, sender } = c.var.auth;

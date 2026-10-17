@@ -6,6 +6,7 @@ can post to it, so the channel id is the one trusted user.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import mimetypes
@@ -40,6 +41,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SERVER = "https://app.rply.sh"
 POLL_WAIT_SECONDS = 55
+CRON_PIN_KEY = "cron"
+CRON_CHECK_SECONDS = 60
+APP_PIN_KEY = "hermes"
+DASHBOARD = Path(__file__).with_name("dashboard.html")
 RECONNECT_BACKOFF = [2, 5, 10, 30, 60]
 INLINE_IMAGES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
@@ -91,6 +96,84 @@ def _message_type(media_types: list[str]) -> MessageType:
     return MessageType.DOCUMENT
 
 
+def _format_time(iso: Optional[str]) -> str:
+    """Absolute times, so the pin doesn't go stale between edits: "08:00" today, else "Oct 18 08:00"."""
+    if not iso:
+        return "–"
+    from hermes_time import get_timezone, now
+    when = datetime.fromisoformat(iso).astimezone(get_timezone())
+    return when.strftime("%H:%M" if when.date() == now().date() else "%b %d %H:%M")
+
+
+def _first_line(text: Any, limit: int) -> str:
+    return next(iter(str(text or "").splitlines()), "")[:limit]
+
+
+def _last_run(job: dict[str, Any]) -> str:
+    execution = job.get("latest_execution") or {}
+    if execution.get("status") == "running":
+        return "⏳ running"
+    if not job.get("last_run_at"):
+        return "–"
+    when = _format_time(job["last_run_at"])
+    if job.get("last_status") == "ok" and not job.get("last_delivery_error"):
+        return f"✅ {when}"
+    error = job.get("last_error") or job.get("last_delivery_error") or job.get("last_status") or "failed"
+    return f"❌ {when} · {_first_line(error, 80)}"
+
+
+def _cron_pin(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = [[job.get("name") or job["id"], job.get("schedule_display") or "",  _last_run(job),
+             "⏸ paused" if job.get("state") == "paused" or not job.get("enabled", True) else _format_time(job.get("next_run_at"))]
+            for job in jobs]
+    return {"title": "Scheduled jobs", "blocks": [{"type": "table", "id": "jobs", "columns": ["Job", "Schedule", "Last run", "Next run"], "rows": rows}]}
+
+
+def _epoch_ms(value: Any) -> Optional[int]:
+    if not value:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value * 1000)
+    return int(datetime.fromisoformat(value).timestamp() * 1000)
+
+
+def _overview() -> dict[str, Any]:
+    """Data for the dashboard app (blocking: reads Hermes' job store and session db)."""
+    from cron.jobs import list_jobs
+    from hermes_state import SessionDB
+    from hermes_cli.config import load_config_readonly as load_config
+    db = SessionDB()
+    jobs = [{
+        "id": job["id"], "name": job.get("name") or job["id"], "schedule": job.get("schedule_display") or "",
+        "paused": job.get("state") == "paused" or not job.get("enabled", True),
+        "running": (job.get("latest_execution") or {}).get("status") == "running",
+        "last_run_at": _epoch_ms(job.get("last_run_at")), "next_run_at": _epoch_ms(job.get("next_run_at")),
+        "ok": job.get("last_status") == "ok" and not job.get("last_delivery_error"),
+        "error": _first_line(job.get("last_error") or job.get("last_delivery_error"), 120),
+    } for job in list_jobs(include_disabled=True)]
+    sessions = [{
+        "title": s.get("title"), "preview": s.get("preview"), "source": s.get("source"),
+        "messages": s.get("message_count") or 0, "last_active": _epoch_ms(s.get("last_active")),
+    } for s in db.list_recent_sessions_bounded(limit=10)]
+    model = (load_config().get("model") or {}).get("default")
+    return {"model": model, "jobs": jobs, "sessions": sessions, "usage": db.usage_totals()}
+
+
+def _job_action(args: Any) -> dict[str, Any]:
+    from cron.jobs import pause_job, resume_job, trigger_job
+    if not isinstance(args, dict) or not isinstance(args.get("id"), str):
+        raise ValueError("expected { id, action }")
+    actions = {"run": lambda i: trigger_job(i), "pause": lambda i: pause_job(i, reason="Paused from rply"), "resume": resume_job}
+    if args.get("action") not in actions:
+        raise ValueError("action must be run, pause or resume")
+    if actions[args["action"]](args["id"]) is None:
+        raise ValueError("no such job")
+    return {"ok": True}
+
+
+COMMANDS = {"hermes-overview": lambda args: _overview(), "hermes-job": _job_action}
+
+
 def _file_block(ref: dict[str, Any]) -> dict[str, Any]:
     if ref["mime"] in INLINE_IMAGES:
         return {"type": "image", "file_id": ref["file_id"], "name": ref["name"]}
@@ -120,6 +203,10 @@ class RplyAdapter(BasePlatformAdapter):
         self._channel: dict[str, Any] = {}
         self._cursor: Optional[int] = None
         self._poll_task: Optional[asyncio.Task] = None
+        self._cron_task: Optional[asyncio.Task] = None
+        self._calls_task: Optional[asyncio.Task] = None
+        self._cron_body: Optional[str] = None
+        self._cron_wake = asyncio.Event()
         self._http: Optional[httpx.AsyncClient] = None
         self._dedup = MessageDeduplicator(max_size=1000, ttl_seconds=300)
         # rply message id of an open question -> ("approval", session_key) | ("clarify", clarify_id)
@@ -146,21 +233,25 @@ class RplyAdapter(BasePlatformAdapter):
             return False
         self._cursor = await self._initial_cursor()
         self._poll_task = asyncio.create_task(self._run_poll())
+        self._cron_task = asyncio.create_task(self._run_cron_pin())
+        self._calls_task = asyncio.create_task(self._run_calls())
         self._mark_connected()
         self._wire_plugin_handlers(None)
         logger.info("[%s] Connected to channel %s on %s", self.name, self._channel.get("name"), self._server)
+        await self._install_app()
         return True
 
     async def disconnect(self) -> None:
         self._running = False
         self._mark_disconnected()
-        if self._poll_task:
-            self._poll_task.cancel()
-            try:
-                await self._poll_task
-            except asyncio.CancelledError:
-                pass
-            self._poll_task = None
+        for task in (self._poll_task, self._cron_task, self._calls_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._poll_task = self._cron_task = self._calls_task = None
         if self._http:
             await self._http.aclose()
             self._http = None
@@ -168,14 +259,23 @@ class RplyAdapter(BasePlatformAdapter):
 
     # -- Cursor: messages that arrive while the gateway is down are delivered on the next start --
 
-    def _cursor_path(self):
-        return get_hermes_home() / "rply" / f"cursor-{self._channel['id']}.json"
+    def _state_path(self):
+        return get_hermes_home() / "rply" / f"state-{self._channel['id']}.json"
+
+    def _load_state(self) -> dict[str, Any]:
+        try:
+            return json.loads(self._state_path().read_text())
+        except (FileNotFoundError, ValueError):
+            return {}
+
+    def _save_state(self, **changes: Any) -> None:
+        path = self._state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({**self._load_state(), **changes}))
 
     async def _initial_cursor(self) -> int:
-        try:
-            return int(json.loads(self._cursor_path().read_text())["cursor"])
-        except (FileNotFoundError, KeyError, ValueError):
-            pass
+        if (cursor := self._load_state().get("cursor")) is not None:
+            return int(cursor)
         resp = await self._http.get("/messages", params={"sender": "human", "peek": "1"})
         resp.raise_for_status()
         cursor = int(resp.json()["cursor"])
@@ -183,9 +283,7 @@ class RplyAdapter(BasePlatformAdapter):
         return cursor
 
     def _save_cursor(self, cursor: int) -> None:
-        path = self._cursor_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"cursor": cursor}))
+        self._save_state(cursor=cursor)
 
     # -- Inbound --------------------------------------------------------------
 
@@ -284,6 +382,81 @@ class RplyAdapter(BasePlatformAdapter):
             value = answers.get("answer")
             resolve_gateway_clarify(key, ", ".join(value) if isinstance(value, list) else str(value or ""))
             self._clarify_messages.pop(key, None)
+
+    # -- Cron overview pin --------------------------------------------------------
+
+    async def _run_cron_pin(self) -> None:
+        """Keep a pinned table of Hermes' scheduled jobs; edits only when a job changed."""
+        from cron.jobs import list_jobs
+        while self._running:
+            try:
+                jobs = await asyncio.to_thread(list_jobs, include_disabled=True)
+                body = json.dumps(_cron_pin(jobs)) if jobs else None
+                if body != self._cron_body:
+                    if body:
+                        resp = await self._http.put(f"/pins/{CRON_PIN_KEY}", json={"body": json.loads(body)})
+                    else:
+                        resp = await self._http.delete(f"/pins/{CRON_PIN_KEY}")
+                    if resp.status_code < 300 or (not body and resp.status_code == 404):
+                        self._cron_body = body
+                    else:
+                        logger.warning("[%s] Couldn't update the cron pin: HTTP %d %s", self.name, resp.status_code, resp.text[:200])
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.warning("[%s] Cron pin update failed: %s", self.name, e)
+            try:
+                await asyncio.wait_for(self._cron_wake.wait(), CRON_CHECK_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+            self._cron_wake.clear()
+
+    # -- Dashboard app: a full-page pin whose buttons call the commands below ---------
+
+    async def _install_app(self) -> None:
+        """Upload the dashboard when its HTML changed, so a human who removed it isn't overruled."""
+        try:
+            html = DASHBOARD.read_text()
+            digest = hashlib.sha256(html.encode()).hexdigest()
+            if self._load_state().get("app") == digest:
+                return
+            body = {"title": "Hermes", "view": "app", "blocks": [{"type": "html", "id": "app", "html": html}]}
+            resp = await self._http.put(f"/pins/{APP_PIN_KEY}", json={"body": body})
+            resp.raise_for_status()
+            self._save_state(app=digest)
+        except Exception as e:
+            logger.warning("[%s] Couldn't install the dashboard app: %s", self.name, e)
+
+    async def _run_calls(self) -> None:
+        """Answer rply.call() from the dashboard, the way `rply serve` runs command scripts."""
+        backoff_idx = 0
+        while self._running:
+            try:
+                resp = await self._http.get(
+                    "/calls", params={"wait": POLL_WAIT_SECONDS, "commands": ",".join(COMMANDS)},
+                    timeout=httpx.Timeout(connect=15.0, read=POLL_WAIT_SECONDS + 30, write=15.0, pool=15.0))
+                resp.raise_for_status()
+                for call in resp.json()["calls"]:
+                    asyncio.create_task(self._answer_call(call))
+                backoff_idx = 0
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.warning("[%s] Calls poll error: %s", self.name, e)
+                await asyncio.sleep(RECONNECT_BACKOFF[min(backoff_idx, len(RECONNECT_BACKOFF) - 1)])
+                backoff_idx += 1
+
+    async def _answer_call(self, call: dict[str, Any]) -> None:
+        try:
+            outcome = {"result": await asyncio.to_thread(COMMANDS[call["name"]], call.get("args"))}
+            if call["name"] == "hermes-job":
+                self._cron_wake.set()
+        except Exception as e:
+            outcome = {"error": str(e)[:2000]}
+        try:
+            await self._http.post(f"/calls/{call['id']}/result", json=outcome)
+        except Exception as e:
+            logger.warning("[%s] Couldn't answer call %s: %s", self.name, call.get("id"), e)
 
     # -- Seen / working / done ------------------------------------------------
     # Reading the inbox already marks messages seen.

@@ -1,4 +1,4 @@
-import type { Answers, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
+import type { AgentParticipant, Answers, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
 
 export const COMMAND_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -18,6 +18,8 @@ export const isEvent = (message: Message) =>
 
 export const isCall = (message: Message) =>
   !message.enc && message.sender === "human" && "call" in message.body && message.body.call !== undefined;
+
+export const agentName = (message: Message, channelName: string, several: boolean) => (several && message.agent?.label) || channelName;
 
 export const isApp = (message: Message) => !message.enc && message.pin !== null && "view" in message.body && message.body.view === "app";
 
@@ -233,3 +235,37 @@ export function embedDocument(block: { html: string; height?: number }, transpor
 
 export const INLINE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 export const INLINE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+
+export type AgentMood = "idle" | "working" | "waiting" | "offline";
+
+const OFFLINE_AFTER = 15 * 60_000;
+
+export function agentMood(agent: AgentParticipant, messages: Message[], now = Date.now()): AgentMood {
+  if (messages.some((m) => m.agent?.id === agent.id && isWaiting(m))) return "waiting";
+  if (messages.some((m) => m.state === "working" && m.state_agent_id === agent.id)) return "working";
+  if (!agent.serve && (agent.last_seen_at === null || now - agent.last_seen_at > OFFLINE_AFTER)) return "offline";
+  return "idle";
+}
+
+export const BIRD_COLORS = ["#8b6cf6", "#3d8bfd", "#22b573", "#14b8a6", "#ff8a3d", "#ff5a5f", "#f062b0", "#f5a524", "#5b68e0", "#7cc243"];
+
+const fnv = (s: string) => {
+  let h = 2166136261;
+  for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
+};
+
+// color and crest come from the agent id; agents of one channel (in join order) skip ones already taken
+export function birdIdentity(id: string, channel: string[] = [id]) {
+  const colors = new Set<number>(), crests = new Set<number>();
+  for (const other of channel.includes(id) ? channel : [...channel, id]) {
+    const h = fnv(other);
+    let color = h % BIRD_COLORS.length, crest = (h >>> 8) % 4;
+    for (let i = 0; i < BIRD_COLORS.length && colors.has(color); i++) color = (color + 1) % BIRD_COLORS.length;
+    for (let i = 0; i < 4 && crests.has(crest); i++) crest = (crest + 1) % 4;
+    colors.add(color);
+    crests.add(crest);
+    if (other === id) return { color: BIRD_COLORS[color]!, crest, seed: h };
+  }
+  throw new Error("unreachable");
+}

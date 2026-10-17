@@ -63,6 +63,7 @@ export function secretRoutes(deps: Deps) {
           id: messageId,
           channel_id: channel.id,
           sender: "agent",
+          agent_id: agentId!,
           enc: 0,
           body: JSON.stringify({ blocks: [block] }),
           reply_to: null,

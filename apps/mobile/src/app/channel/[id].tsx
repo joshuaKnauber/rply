@@ -15,7 +15,7 @@ import { auth, channelsKey, markRead, useChannels, type ServerChannel } from "@/
 import { ChannelContext, MessageContext } from "@/lib/channel-context";
 import { appTitle, appUrl, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
-import { useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
+import { useAgents, useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
 export default function ChannelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -184,6 +184,7 @@ function Thread({ entry }: { entry: ServerChannel }) {
     if (lastSeq) markRead(queryClient, entry, lastSeq);
   }, [lastSeq, entry, queryClient]);
 
+  const several = (useAgents(entry).data?.length ?? 0) > 1;
   const answer = (message: Message) => (answers: Answers) =>
     send.mutate({ reply_to: message.id, body: { answers } }, { onError: (err) => Alert.alert("Couldn't send", err.message) });
   const sendEvent = (message: Message) => (blockId: string | null, value: unknown, label?: string) =>
@@ -207,6 +208,7 @@ function Thread({ entry }: { entry: ServerChannel }) {
           ) : (
             <MessageView
               message={item}
+              author={several ? (item.agent?.label ?? undefined) : undefined}
               submitted={item.ask?.answer_id ? answersById.get(item.ask.answer_id) : undefined}
               onAnswer={answer(item)}
               onEvent={sendEvent(item)}
@@ -252,11 +254,13 @@ const stateLabels: Record<MessageState, { label: string; className: string }> = 
 
 function MessageView({
   message,
+  author,
   submitted,
   onAnswer,
   onEvent,
 }: {
   message: Message;
+  author?: string;
   submitted?: Answers;
   onAnswer?: (answers: Answers) => void;
   onEvent?: (blockId: string | null, value: unknown, label?: string) => void;
@@ -311,6 +315,7 @@ function MessageView({
       </Pressable>
       <Text className="px-1 text-xs text-neutral-500">
         {copied ? "Copied · " : ""}
+        {author ? `${author} · ` : ""}
         {formatTime(message.created_at)}
         {message.updated_at ? " · edited" : ""}
         {message.state && (

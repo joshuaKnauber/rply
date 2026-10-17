@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { HumanMessageBody, Message, MessagesResponse } from "@rply/schema";
+import type { AgentsResponse, HumanMessageBody, Message, MessagesResponse } from "@rply/schema";
 import { api } from "./api";
 import { auth, type ServerChannel } from "./channels";
 
@@ -25,6 +25,13 @@ export const usePins = (entry: ServerChannel) =>
     queryFn: () => api<{ messages: Message[] }>(entry.server, "/pins", auth(entry)).then((r) => r.messages),
     staleTime: Infinity,
     });
+
+export const useAgents = (entry: ServerChannel) =>
+  useQuery({
+    queryKey: ["agents", entry.channel.id],
+    queryFn: () => api<AgentsResponse>(entry.server, "/agents", auth(entry)).then((r) => r.agents),
+    refetchInterval: 60_000,
+  });
 
 function upsert(queryClient: QueryClient, key: string[], incoming: Message[], belongs: (m: Message) => boolean) {
   if (!queryClient.getQueryData(key)) {

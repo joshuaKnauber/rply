@@ -1,7 +1,7 @@
 name: rply-platform
 label: rply
 kind: platform
-version: 0.2.0
+version: 0.4.0
 description: >
   rply gateway adapter for Hermes Agent. Talk to Hermes from the rply inbox
   (web app and phone, with push): messages in and out, seen/working/done

@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, BotIcon, CalendarIcon, EllipsisIcon, ExternalLinkIcon, RotateCwIcon, LockIcon, LockOpenIcon, PanelRightIcon } from "lucide-react";
+import { ArrowLeftIcon, CalendarIcon, EllipsisIcon, ExternalLinkIcon, RotateCwIcon, LockIcon, LockOpenIcon, PanelRightIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,11 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { ChannelContext } from "@/lib/channel-context";
 import { cn } from "@/lib/utils";
 import { formatAgo } from "@/lib/format";
-import { useAgents, useDeleteChannel, usePins, useRemoveApp, useRevokeAgent } from "@/lib/queries";
+import { useAgents, useDeleteChannel, useMessages, usePins, useRemoveApp, useRevokeAgent } from "@/lib/queries";
 import { toast } from "sonner";
 import { appTitle, appUrl, isApp, type Participant, type ChannelEntry } from "@rply/schema";
 import { AddAgentDialog } from "./AddAgentDialog";
+import { AgentAvatar, useAgentMoods } from "./AgentAvatar";
 import { AppView } from "./AppView";
 import { confirmDialog } from "./ConfirmDialog";
 import { PinnedMessages } from "./PinnedMessages";
@@ -173,6 +174,9 @@ function Details({ entry }: { entry: ChannelEntry }) {
 
 function Agents({ entry }: { entry: ChannelEntry }) {
   const { data = [] } = useAgents(entry);
+  const { data: messages = [] } = useMessages(entry);
+  const moods = useAgentMoods(data, messages);
+  const order = data.map((a) => a.id);
   const revoke = useRevokeAgent(entry);
   const owner = entry.role === "owner";
 
@@ -196,7 +200,8 @@ function Agents({ entry }: { entry: ChannelEntry }) {
       <ul className="flex flex-col gap-1.5 text-sm">
         {data.length === 0 && <li className="text-muted-foreground">No agent has joined yet</li>}
         {data.map((p) => (
-          <Row key={p.id} icon={BotIcon}>
+          <li key={p.id} className="group/row flex min-w-0 items-center gap-2">
+            <AgentAvatar id={p.id} channel={order} mood={moods.get(p.id)!} size={22} group={entry.id} className="-ml-0.5" />
             <span className="truncate">{p.label ?? "Agent"}</span>
             <span className="ml-auto flex h-5 shrink-0 items-center">
               <span className={cn("text-muted-foreground text-xs", owner && "group-hover/row:hidden")}>{p.last_seen_at ? formatAgo(p.last_seen_at) : "Never seen"}</span>
@@ -206,7 +211,7 @@ function Agents({ entry }: { entry: ChannelEntry }) {
                 </Button>
               )}
             </span>
-          </Row>
+          </li>
         ))}
       </ul>
     </section>

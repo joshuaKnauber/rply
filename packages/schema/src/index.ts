@@ -273,11 +273,13 @@ export type Message = {
   id: string;
   channel_id: string;
   sender: Sender;
+  agent: { id: string; label: string | null } | null;
   reply_to: string | null;
   pin: string | null;
   ask: Ask | null;
   state: MessageState | null;
   state_note: string | null;
+  state_agent_id: string | null;
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;

@@ -31,13 +31,16 @@ export const usePins = (entry: ChannelEntry) => useQuery(pinsQuery(entry));
 
 export const useAllPins = (entries: ChannelEntry[]) => useQueries({ queries: entries.map(pinsQuery) });
 
-export const useAgents = (entry: ChannelEntry, refetchInterval = 60_000) =>
-  useQuery({
-    queryKey: ["agents", entry.id],
-    queryFn: () => api<AgentsResponse>("/agents", auth(entry)).then((r) => r.agents),
-    refetchInterval,
-    refetchOnWindowFocus: true,
-  });
+const agentsQuery = (entry: ChannelEntry, refetchInterval = 60_000) => ({
+  queryKey: ["agents", entry.id],
+  queryFn: () => api<AgentsResponse>("/agents", auth(entry)).then((r) => r.agents),
+  refetchInterval,
+  refetchOnWindowFocus: true,
+});
+
+export const useAgents = (entry: ChannelEntry, refetchInterval?: number) => useQuery(agentsQuery(entry, refetchInterval));
+
+export const useAllAgents = (entries: ChannelEntry[]) => useQueries({ queries: entries.map((entry) => agentsQuery(entry)) });
 
 export function useRevokeAgent(entry: ChannelEntry) {
   const queryClient = useQueryClient();

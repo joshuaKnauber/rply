@@ -8,7 +8,7 @@ description: >
   (web app and phone, with push): messages in and out, seen/working/done
   acknowledgements, cron delivery, and approvals and clarifying questions as
   tappable questions. Works with app.rply.sh or a self-hosted rply server.
-  Only uses httpx (already a Hermes dependency).
+  Only uses httpx and cryptography (both already Hermes dependencies).
 author: Joshua Knauber
 provides_tools:
   - rply_request_secret

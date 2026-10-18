@@ -15,7 +15,8 @@ export type ChannelConfig = {
 
 type ConfigFile = { default?: string; channels: Record<string, ChannelConfig> };
 
-export type Selected = { key?: string; config: ChannelConfig };
+// key: a channel saved in the config file; otherwise it comes from RPLY_SERVER/RPLY_TOKEN or a Hermes profile
+export type Selected = { key?: string; from?: "env" | "hermes"; config: ChannelConfig };
 
 export const configPath = () =>
   process.env.RPLY_CONFIG ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "rply", "config.json");
@@ -44,8 +45,10 @@ export function updateConfigFile(fn: (file: ConfigFile) => void) {
 
 export function selectChannel(requested?: string): Selected {
   if (process.env.RPLY_SERVER && process.env.RPLY_TOKEN) {
-    return { config: { server: normalizeServer(process.env.RPLY_SERVER), token: process.env.RPLY_TOKEN } };
+    return { from: "env", config: { server: normalizeServer(process.env.RPLY_SERVER), token: process.env.RPLY_TOKEN } };
   }
+  const hermes = !requested && hermesChannel();
+  if (hermes) return { from: "hermes", config: hermes };
   const file = readConfigFile();
   const keys = Object.keys(file.channels);
   if (keys.length === 0) throw new CliError("Not set up yet. Run `rply init <server-url>`, or set RPLY_SERVER and RPLY_TOKEN.");
@@ -55,6 +58,22 @@ export function selectChannel(requested?: string): Selected {
   const config = file.channels[key];
   if (!config) throw new CliError(`No channel "${key}". Set up: ${keys.join(", ")}`);
   return { key, config };
+}
+
+// Hermes keeps platform tokens out of the agent's commands but sets HERMES_HOME to the profile, whose
+// .env holds the rply plugin's token, so the CLI acts as the same agent as the plugin.
+function hermesChannel(): ChannelConfig | undefined {
+  const home = process.env.HERMES_HOME;
+  if (!home || !existsSync(join(home, ".env"))) return undefined;
+  const env = Object.fromEntries(
+    readFileSync(join(home, ".env"), "utf8")
+      .split("\n")
+      .map((line) => line.match(/^\s*(?:export\s+)?(RPLY_[A-Z_]+)\s*=\s*(.*?)\s*$/))
+      .filter((m) => m !== null)
+      .map(([, name, value]) => [name, value!.replace(/^(["'])(.*)\1$/, "$2")]),
+  );
+  if (!env.RPLY_TOKEN) return undefined;
+  return { server: normalizeServer(env.RPLY_SERVER || "https://app.rply.sh"), token: env.RPLY_TOKEN };
 }
 
 export function saveCursor(selected: Selected, cursor: number) {

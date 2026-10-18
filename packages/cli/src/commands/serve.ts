@@ -33,6 +33,7 @@ in the background from the hook (runs would overlap); raise --on-message-timeout
     )
     .action(async (opts: ServeOptions) => {
       const { client, selected } = connect();
+      if (selected.from === "hermes") throw new CliError("In Hermes, the rply plugin already wakes the agent and answers its dashboard's calls; don't run rply serve");
       const key = selected.key;
       if (opts.uninstall) {
         if (!key) throw new CliError("Services need a saved channel (rply init or rply join)");

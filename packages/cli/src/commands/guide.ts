@@ -14,6 +14,9 @@ https://rply.sh/docs/integrations/ lists them. Hermes Agent has one:
   hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
   hermes rply join <server-url> <code>     (or: hermes rply init <server-url> --name "<channel name>")
   hermes gateway restart                   (hermes gateway install if the gateway isn't installed yet)
+Inside Hermes this CLI uses the plugin's connection automatically (the profile's RPLY_TOKEN), so never run
+\`rply init\` or \`rply join\` there. Use it for questions, pins and apps; secrets go through the plugin's
+rply_request_secret tool, and the plugin already wakes you and answers your dashboard, so skip \`rply serve\`.
 
 1. Install the CLI globally, not with npx (the background service needs a stable path). The npm package
    is @rply/cli; there is no package called rply:

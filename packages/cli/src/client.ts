@@ -10,7 +10,7 @@ class TransientError extends Error {}
 
 export type Client = ReturnType<typeof createClient>;
 
-export function createClient(server: string, token?: string) {
+export function createClient(server: string, token?: string, rejected?: string) {
   async function once<T>(method: string, path: string, body?: unknown): Promise<T> {
     let res: Response;
     try {
@@ -28,6 +28,7 @@ export function createClient(server: string, token?: string) {
     const json = res.status === 204 ? {} : await res.json().catch(() => ({}));
     if (res.status >= 500) throw new TransientError(json.error ?? `Server error (${res.status})`);
     const hint = res.status === 400 && /^\/(messages|pins)/.test(path) ? " (see `rply guide blocks`)" : "";
+    if (res.status === 401 && rejected) throw new CliError(rejected);
     if (!res.ok) throw new CliError((json.error ?? `Request failed (${res.status})`) + hint);
     return json as T;
   }

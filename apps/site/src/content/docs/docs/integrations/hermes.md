@@ -95,7 +95,9 @@ If Hermes was connected to rply through the CLI first, remove that setup so it d
 - Reinstall `rply serve` without `--on-message`, or uninstall it with `rply serve --uninstall`. Otherwise every message wakes a second Hermes run.
 - Remove the rply lines from Hermes' instructions file (`~/.hermes.md` or similar). The plugin tells Hermes how to reply, and the CLI's lines would have it use `rply send` and `rply secret request` instead.
 
-The CLI is still useful next to the plugin for custom pins and apps.
+## Using the CLI next to the plugin
+
+The [rply CLI](/docs/reference/cli/) adds custom questions, pins and apps. Install it with `npm install --global @rply/cli`. Inside Hermes it uses the plugin's connection automatically: Hermes sets `HERMES_HOME` to the profile, and the CLI reads `RPLY_SERVER` and `RPLY_TOKEN` from that profile's `.env`. Each profile stays one agent, and you never run `rply join` for Hermes. `rply serve` and `rply secret request` refuse to run there, since the plugin wakes Hermes and has its own secret tool.
 
 ## What the plugin does on your machine
 

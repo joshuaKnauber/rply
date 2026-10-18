@@ -72,6 +72,7 @@ Exit codes: 2 if it expired or --timeout ran out, 3 if the human declined or it 
 
 async function withKey() {
   const ctx = connect();
+  if (ctx.selected.from === "hermes") throw new CliError("In Hermes, request secrets with the rply_request_secret tool instead");
   if (!ctx.selected.key) throw new CliError("Secrets need a saved channel (rply init), not RPLY_SERVER/RPLY_TOKEN");
   let { secret_key, public_key } = ctx.config;
   if (!secret_key || !public_key) {

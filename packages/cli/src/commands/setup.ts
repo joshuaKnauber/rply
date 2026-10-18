@@ -107,7 +107,7 @@ export function registerSetup(program: Command) {
         client.request<AgentsResponse>("GET", "/agents"),
       ]);
       if (json()) return printJson({ key: selected.key ?? null, server: config.server, channel, agents });
-      console.log(`"${channel.name}" (${selected.key ? `saved as ${selected.key}` : "from RPLY_SERVER/RPLY_TOKEN"}) on ${config.server}`);
+      console.log(`"${channel.name}" (${selected.key ? `saved as ${selected.key}` : selected.from === "hermes" ? `from the Hermes profile in ${process.env.HERMES_HOME}` : "from RPLY_SERVER/RPLY_TOKEN"}) on ${config.server}`);
       console.log(agents.length > 1 ? `\n${agents.length} agents in this channel:` : "\nYou're the only agent in this channel.");
       if (agents.length > 1) for (const a of agents) console.log(`  ${describeAgent(a)}`);
     });

@@ -11,3 +11,4 @@ packages/server/files/
 TODO*.md
 research_notes/
 reports/
+__pycache__/

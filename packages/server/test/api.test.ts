@@ -868,3 +868,23 @@ test("the human renames an agent and picks its bird", async () => {
   await request("PATCH", `/agents/${bot.id}`, { token: human, body: { avatar: null } });
   assert.equal((await request("GET", "/agents", { token: human })).json.agents[0].avatar, null);
 });
+
+test("feedback lands in the collecting server's channel, and only there", async () => {
+  const { deps, request, ownedChannel } = await setup();
+  const body = { text: "rply send --blocks should say which block is wrong", from: "agent", version: "0.9.0", contact: "me@example.com" };
+  assert.equal((await request("POST", "/feedback", { body })).status, 404);
+
+  const { channel, agent } = await ownedChannel("feedback");
+  deps.feedbackChannel = channel.id;
+  assert.equal((await request("POST", "/feedback", { body: { ...body, text: " " } })).status, 400);
+  assert.equal((await request("POST", "/feedback", { body })).status, 200);
+
+  const [message] = (await request("GET", "/messages", { token: agent })).json.messages;
+  assert.equal(message.body.title, "Feedback from an agent");
+  assert.equal(message.body.text, body.text);
+  assert.deepEqual(message.body.blocks[0].items, [{ key: "Version", value: "0.9.0" }, { key: "Contact", value: "me@example.com" }]);
+
+  const ip = { "x-forwarded-for": "203.0.113.9" };
+  for (let i = 0; i < 5; i++) assert.equal((await request("POST", "/feedback", { body, headers: ip })).status, 200);
+  assert.equal((await request("POST", "/feedback", { body, headers: ip })).status, 429);
+});

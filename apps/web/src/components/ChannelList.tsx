@@ -8,6 +8,7 @@ import { useAllAgents, useAllMessages, useAllPins } from "@/lib/queries";
 import { openCustomizer } from "@/lib/customize";
 import { cn } from "@/lib/utils";
 import { AgentAvatar, AvatarPlaceholder, useAgentMoods } from "./AgentAvatar";
+import { FeedbackButton } from "./FeedbackButton";
 import { NotificationsButton } from "./NotificationsButton";
 import { Logo } from "./Logo";
 
@@ -94,6 +95,7 @@ export function ChannelList({ channels, activeId, activeApp, adding, settings }:
           Documentation
           <ArrowUpRightIcon className="ml-auto size-3.5" />
         </a>
+        <FeedbackButton />
         <Link
           href="/settings"
           className={cn("text-muted-foreground hover:bg-foreground/4 hover:text-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm", settings && "bg-foreground/6 text-foreground")}

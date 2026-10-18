@@ -8,6 +8,7 @@ import type { AppEnv, Deps } from "./context.ts";
 import { accountRoutes } from "./routes/account.ts";
 import { callRoutes } from "./routes/calls.ts";
 import { channelRoutes } from "./routes/channels.ts";
+import { feedbackRoutes } from "./routes/feedback.ts";
 import { fileRoutes } from "./routes/files.ts";
 import { messageRoutes } from "./routes/messages.ts";
 import { pinRoutes } from "./routes/pins.ts";
@@ -48,6 +49,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", storageRoutes(deps))
     .route("/", callRoutes(deps, serves))
     .route("/", unfurlRoutes(deps))
+    .route("/", feedbackRoutes(deps))
     .route("/", messageRoutes(deps));
 
   const app = new Hono()

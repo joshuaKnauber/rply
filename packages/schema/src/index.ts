@@ -274,6 +274,12 @@ export const PushSubscriptionRequest = z.object({
   }),
 });
 export const PushUnsubscribeRequest = z.object({ endpoint: z.string().max(2000) });
+export const FeedbackRequest = z.object({
+  text: z.string().trim().min(1).max(4000),
+  from: z.enum(["agent", "human"]),
+  version: z.string().max(50).optional(),
+  contact: z.string().trim().max(200).optional(),
+});
 
 export type Sender = "agent" | "human";
 // system messages are written by the server, e.g. "Deploy bot joined the channel."

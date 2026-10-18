@@ -25,6 +25,7 @@ export const GUARDS = {
   unclaimedMessages: 100,
   unclaimedLifetimeMs: 24 * 60 * 60 * 1000,
   anonymousChannelsPerIpPerHour: 20,
+  feedbackPerIpPerHour: 5,
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -74,6 +75,7 @@ export function createLimits(db: DB, quotas: Quotas = noQuotas) {
   const unfurls = createRateLimiter(GUARDS.unfurlsPerChannelPerMinute, 60_000);
   const failedCodes = createRateLimiter(GUARDS.failedCodesPerIp, GUARDS.failedCodesWindowMs);
   const anonymousChannels = createRateLimiter(GUARDS.anonymousChannelsPerIpPerHour, 60 * 60 * 1000);
+  const feedback = createRateLimiter(GUARDS.feedbackPerIpPerHour, 60 * 60 * 1000);
   const tooMany = (message: string) => new HTTPException(429, { message });
 
   const ownerOf = async (channelId: string) =>
@@ -166,6 +168,10 @@ export function createLimits(db: DB, quotas: Quotas = noQuotas) {
 
     anonymousChannel(ip: string) {
       if (!anonymousChannels.take(ip)) throw tooMany("Too many new channels from here, try again later");
+    },
+
+    feedback(ip: string) {
+      if (!feedback.take(ip)) throw tooMany("Thanks, that's enough feedback for now. Try again in an hour.");
     },
 
     // codes are short, so guessing is limited per IP; only failures count

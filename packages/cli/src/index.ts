@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { CliError } from "./client.ts";
 import { registerApps } from "./commands/apps.ts";
 import { registerAsks } from "./commands/asks.ts";
+import { registerFeedback } from "./commands/feedback.ts";
 import { registerFiles } from "./commands/files.ts";
 import { guideHint, registerGuide } from "./commands/guide.ts";
 import { registerMessages } from "./commands/messages.ts";
@@ -32,6 +33,7 @@ registerPins(program);
 registerApps(program);
 registerServe(program);
 registerSecrets(program);
+registerFeedback(program);
 registerUpdate(program);
 
 const update = checkForUpdate().catch(() => undefined);

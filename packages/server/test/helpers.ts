@@ -2,6 +2,7 @@ import pg from "pg";
 import { createAccounts, type AccountsOptions } from "../src/accounts.ts";
 import { createLimits, type Quotas } from "../src/limits.ts";
 import { createApp } from "../src/app.ts";
+import type { Deps } from "../src/context.ts";
 import { openDatabase } from "../src/db/index.ts";
 import { deleteOwnedChannels } from "../src/routes/channels.ts";
 import { randomId } from "../src/tokens.ts";
@@ -14,7 +15,7 @@ export async function setup(opts: { files?: FilesConfig; pushSend?: PushSender; 
   const db = await openDatabase(await testDatabase());
   const push = opts.pushSend ? await createPush(db, { send: opts.pushSend }) : null;
   const accounts = await createAccounts(db, { registration: "open", beforeDeleteUser: (userId) => deleteOwnedChannels(deps, userId), ...opts.accounts });
-  const deps = { db, notifier: createNotifier(), accounts, limits: createLimits(db, opts.quotas), files: opts.files ?? null, push };
+  const deps: Deps = { db, notifier: createNotifier(), accounts, limits: createLimits(db, opts.quotas), files: opts.files ?? null, push };
   const app = createApp(deps);
   // session tokens act on one channel through X-Rply-Channel, like the apps do; tests set it per token
   const channelOf = new Map<string, string>();

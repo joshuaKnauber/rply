@@ -9,7 +9,7 @@ import type { FilesConfig } from "./files/config.ts";
 import type { Notifier } from "./notifier.ts";
 import type { Push } from "./push/index.ts";
 
-export type Deps = { db: DB; notifier: Notifier; accounts: Accounts; limits: Limits; files?: FilesConfig | null; push?: Push | null };
+export type Deps = { db: DB; notifier: Notifier; accounts: Accounts; limits: Limits; files?: FilesConfig | null; push?: Push | null; feedbackChannel?: string | null };
 
 export type Auth = { channel: ChannelRow; sender: Sender; agentId?: string; userId?: string; role?: ChannelRole };
 

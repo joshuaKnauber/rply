@@ -30,7 +30,7 @@ const accounts = await createAccounts(db, {
 const files = filesConfigFromEnv(process.env, dbPath);
 const push = process.env.RPLY_PUSH === "off" ? null : await createPush(db, { env: process.env });
 const limits = createLimits(db, quotasFromEnv(process.env));
-const deps = { db, notifier: createNotifier(), accounts, limits, files, push };
+const deps = { db, notifier: createNotifier(), accounts, limits, files, push, feedbackChannel: process.env.RPLY_FEEDBACK_CHANNEL || null };
 const app = createApp(deps, { webDir });
 // logs only runs that deleted something
 const sweep = () => {
@@ -53,6 +53,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`rply server listening on :${info.port} (db: ${dbPath ?? "postgres"})`);
   console.log(`accounts: registration ${accounts.info.registration}${accounts.info.email ? ", email on" : ", email off"}${accounts.info.passkeys ? ", passkeys on" : " (set RPLY_URL for passkeys)"}`);
   console.log(push ? "push: web push enabled" : "push: off");
+  if (deps.feedbackChannel) console.log(`feedback: collected in channel ${deps.feedbackChannel}`);
   console.log(files ? `files: ${files.store.name} (max ${Math.round(files.maxSize / 1024 / 1024)} MB per file)` : "files: off");
 });
 

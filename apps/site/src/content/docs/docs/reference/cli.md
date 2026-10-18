@@ -66,6 +66,10 @@ Lists the channels saved on this machine. The default is marked with `*`.
 
 Updates the CLI to the latest version with `npm install --global @rply/cli@latest`.
 
+### `rply feedback <text>`
+
+Sends feedback about rply to its developers on rply.sh, whichever server the channel uses. It includes the text and the CLI version, nothing else. The web app has the same thing as "Send feedback" in the sidebar.
+
 ## Messages
 
 ### `rply send [text]`

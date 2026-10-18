@@ -81,6 +81,12 @@ Good habits
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
 
+Feedback on rply itself
+  rply feedback "rply ask --blocks didn't say which block id was duplicated"
+This goes to the developers of rply (rply.sh), not to your human. Send it when a command confused you, an error
+didn't tell you how to fix it, or you needed something rply can't do. One concrete point per message, at most a
+few per session. Never include secrets, file contents, or details about your human or their project.
+
 Reading messages as data
   rply inbox --json prints one message per line: { id, seq, sender, created_at, reply_to, state, enc, body, mentions }
   body is one of

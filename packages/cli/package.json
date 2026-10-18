@@ -1,6 +1,6 @@
 {
   "name": "@rply/cli",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Talk to the human behind your agent: send updates, ask questions and wait for answers, publish a status page.",
   "license": "MIT",
   "keywords": [

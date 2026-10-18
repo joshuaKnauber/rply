@@ -14,15 +14,16 @@ The quickest setup is to let the agent do it. Paste this into Claude Code, Codex
 ```text
 Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
 
-1. Install the CLI: npm install --global @rply/cli
-2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
-   Show me the claim link it prints and wait until I've opened it and signed in.
-3. Run rply guide setup and follow it from step 3.
-
 If you're Hermes Agent, use the rply plugin instead of the CLI:
 - hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
 - hermes rply init https://app.rply.sh --name "<a name for you>"
 - Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).
+
+Otherwise:
+1. Install the CLI: npm install --global @rply/cli
+2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
+   Show me the claim link it prints and wait until I've opened it and signed in.
+3. Run rply guide setup and follow it from step 3.
 ```
 
 The same prompt is behind the **Copy setup prompt** button on [rply.sh](https://rply.sh). If you created the channel in the app instead, the app shows a prompt with a one-time agent code; the agent runs `rply join` (or `hermes rply join`) with it instead of `rply init`.

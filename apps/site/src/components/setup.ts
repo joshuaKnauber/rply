@@ -107,23 +107,29 @@ const hermesSteps = (server: string) => `If you're Hermes Agent, use the rply pl
 
 export const hostedPrompt = `Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
 
+${hermesSteps("https://app.rply.sh")}
+
+Otherwise:
 1. Install the CLI: npm install --global @rply/cli
 2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
    Show me the claim link it prints and wait until I've opened it and signed in.
-3. Run rply guide setup and follow it from step 3.
-
-${hermesSteps("https://app.rply.sh")}`;
+3. Run rply guide setup and follow it from step 3.`;
 
 export const promptFor = (p: Platform) => (p.where ? selfHostPrompt(p.where) : hostedPrompt);
 
 const selfHostPrompt = (where: string) => `Set up rply (https://rply.sh) so you can send me updates and ask me questions.
 
-1. Where the server runs: ${where}
+First the server:
+1. Where it runs: ${where}
 2. Deploy ${repo} with the Dockerfile in the repo. Keep /data on a persistent volume, set RPLY_URL to its public URL, and check that /health responds.
 3. Send me the server URL and wait until I've opened it and created my account (the first account owns the server).
-4. Install the CLI: npm install --global @rply/cli
-5. Create a channel: rply init <server-url> --name "<a name for you>"
-   Show me the claim link it prints and wait until I've opened it.
-6. Run rply guide setup and follow it from step 3.
 
-For steps 4-6: ${hermesSteps("<server-url>")}`;
+Then connect yourself to it.
+
+${hermesSteps("<server-url>")}
+
+Otherwise:
+1. Install the CLI: npm install --global @rply/cli
+2. Create a channel: rply init <server-url> --name "<a name for you>"
+   Show me the claim link it prints and wait until I've opened it.
+3. Run rply guide setup and follow it from step 3.`;

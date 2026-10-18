@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import { LinkIcon } from "lucide-react";
 import { shortUrl, type LinkPreview } from "@rply/schema";
 import { api } from "@/lib/api";
@@ -8,13 +9,15 @@ import { useChannelEntry } from "@/lib/channel-context";
 
 function usePreview(url: string) {
   const entry = useChannelEntry();
-  return useQuery({
+  const dark = useTheme().resolvedTheme === "dark";
+  const preview = useQuery({
     queryKey: ["unfurl", url],
     queryFn: () => api<LinkPreview>(`/unfurl?url=${encodeURIComponent(url)}`, auth(entry!)),
     enabled: Boolean(entry),
     staleTime: Infinity,
     retry: false,
   }).data;
+  return preview && dark && preview.icon_dark ? { ...preview, icon: preview.icon_dark } : preview;
 }
 
 export function LinkChip({ url }: { url: string }) {

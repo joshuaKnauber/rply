@@ -23,7 +23,7 @@ export function unfurlRoutes(deps: Deps, fetchPage: typeof fetchPreview = fetchP
     if (cached && cached.expires > Date.now()) return c.json(cached.preview);
     deps.limits.unfurl(c.var.auth.channel.id);
 
-    const preview = await fetchPage(url).catch(() => ({ url, title: null, description: null, image: null, icon: null, site: null }));
+    const preview = await fetchPage(url).catch(() => ({ url, title: null, description: null, image: null, icon: null, icon_dark: null, site: null }));
     cache.delete(url);
     cache.set(url, { preview, expires: Date.now() + (preview.title ? HIT_TTL : MISS_TTL) });
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
@@ -48,8 +48,8 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
     if (!res.ok || !res.headers.get("content-type")?.includes("text/html")) {
       // Borrow the icon the site's homepage declares; a bare /favicon.ico is often an .ico the mobile app can't show.
       const home = new URL("/", current).toString();
-      const icon = current === home ? null : (await fetchPreview(home).catch(() => null))?.icon;
-      return fallbackPreview(url, current, icon);
+      const homePreview = current === home ? null : await fetchPreview(home).catch(() => null);
+      return { ...fallbackPreview(url, current, homePreview?.icon), icon_dark: homePreview?.icon_dark ?? null };
     }
     return parsePreview(url, current, await readStart(res));
   }
@@ -65,6 +65,7 @@ export function fallbackPreview(url: string, pageUrl: string, icon?: string | nu
     description: null,
     image: null,
     icon: icon ?? new URL("/favicon.ico", pageUrl).toString(),
+    icon_dark: null,
     site: repo ? "GitHub" : null,
   };
 }
@@ -109,7 +110,12 @@ export function parsePreview(url: string, pageUrl: string, html: string): LinkPr
     }
     return null;
   };
-  const icon = (head.match(/<link\b[^>]*>/gi) ?? []).find((tag) => /(^|\s)(shortcut )?icon(\s|$)/i.test(attr(tag, "rel") ?? ""));
+  const icons = (head.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => /(^|\s)(shortcut )?icon(\s|$)/i.test(attr(tag, "rel") ?? ""));
+  const isDark = (tag: string) => /prefers-color-scheme:\s*dark/i.test(attr(tag, "media") ?? "");
+  const icon = icons.find((tag) => !isDark(tag));
+  const darkIcon = icons.find(isDark);
+  // GitHub swaps its favicon with JS, from data-base-href (".../favicon") to ".../favicon-dark.svg".
+  const darkBase = icon && attr(icon, "data-base-href");
   const resolve = (value: string | null) => {
     if (!value) return null;
     try {
@@ -125,6 +131,7 @@ export function parsePreview(url: string, pageUrl: string, html: string): LinkPr
     description: meta("og:description") ?? meta("twitter:description") ?? meta("description"),
     image: resolve(meta("og:image") ?? meta("twitter:image")),
     icon: resolve(icon ? attr(icon, "href") : "/favicon.ico"),
+    icon_dark: resolve(darkIcon ? attr(darkIcon, "href") : darkBase ? `${darkBase}-dark.svg` : null),
     site: meta("og:site_name"),
   };
 }

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Image, Linking, Pressable, Text, View, type TextStyle } from "react-native";
+import { Image, Linking, Pressable, Text, useColorScheme, View, type TextStyle } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { shortUrl, type LinkPreview } from "@rply/schema";
 import { api } from "@/lib/api";
@@ -8,13 +8,15 @@ import { useChannelEntry } from "@/lib/channel-context";
 
 function usePreview(url: string) {
   const entry = useChannelEntry();
-  return useQuery({
+  const dark = useColorScheme() === "dark";
+  const preview = useQuery({
     queryKey: ["unfurl", url],
     queryFn: () => api<LinkPreview>(entry!.server, `/unfurl?url=${encodeURIComponent(url)}`, auth(entry!)),
     enabled: Boolean(entry),
     staleTime: Infinity,
     retry: false,
   }).data;
+  return preview && dark && preview.icon_dark ? { ...preview, icon: preview.icon_dark } : preview;
 }
 
 export function LinkText({ url, style }: { url: string; style?: TextStyle }) {

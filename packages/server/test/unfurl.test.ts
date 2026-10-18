@@ -17,11 +17,20 @@ test("previews read open graph tags and fall back to title and favicon", () => {
     description: "Caching, smaller layers — and more",
     image: "https://example.com/cover.png",
     icon: "https://cdn.example.com/icon.png",
+    icon_dark: null,
     site: null,
   });
   const bare = parsePreview("https://example.com/x", "https://example.com/x", "<title>Only a title</title>");
   assert.equal(bare.title, "Only a title");
   assert.equal(bare.icon, "https://example.com/favicon.ico");
+});
+
+test("previews pick up dark favicons", () => {
+  const media = parsePreview("https://a.com", "https://a.com", `<link rel="icon" href="/dark.png" media="(prefers-color-scheme: dark)"><link rel="icon" href="/light.png" media="(prefers-color-scheme: light)">`);
+  assert.equal(media.icon, "https://a.com/light.png");
+  assert.equal(media.icon_dark, "https://a.com/dark.png");
+  const github = parsePreview("https://github.com", "https://github.com", `<link rel="icon" href="https://github.githubassets.com/favicons/favicon.svg" data-base-href="https://github.githubassets.com/favicons/favicon">`);
+  assert.equal(github.icon_dark, "https://github.githubassets.com/favicons/favicon-dark.svg");
 });
 
 test("unfurl refuses private addresses and non-http URLs", async () => {
@@ -42,6 +51,7 @@ test("pages that can't be read still get a favicon, and GitHub links a title", (
     description: null,
     image: null,
     icon: "https://github.com/favicon.ico",
+    icon_dark: null,
     site: "GitHub",
   });
   const other = fallbackPreview("https://example.com/report.pdf", "https://cdn.example.com/report.pdf");

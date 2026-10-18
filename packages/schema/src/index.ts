@@ -353,6 +353,6 @@ export type CallResponse =
   | { id: string; status: "done"; result: unknown }
   | { id: string; status: "error"; error: string }
   | { id: string; status: "pending" };
-export type LinkPreview = { url: string; title: string | null; description: string | null; image: string | null; icon: string | null; site: string | null };
+export type LinkPreview = { url: string; title: string | null; description: string | null; image: string | null; icon: string | null; icon_dark: string | null; site: string | null };
 export type SyncResponse = { cursor: string; messages: Message[]; channels: string[] };
 export * from "./helpers.ts";

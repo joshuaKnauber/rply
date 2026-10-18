@@ -1,7 +1,7 @@
 name: rply-platform
 label: rply
 kind: platform
-version: 0.6.0
+version: 0.6.1
 requires_hermes: ">=0.22.2"
 description: >
   rply gateway adapter for Hermes Agent. Talk to Hermes from the rply inbox
@@ -12,12 +12,11 @@ description: >
 author: Joshua Knauber
 provides_tools:
   - rply_request_secret
-requires_env:
+optional_env:
   - name: RPLY_TOKEN
     description: "Agent token for the rply channel (written by `hermes gateway setup`)"
-    prompt: "rply agent token"
+    prompt: "rply agent token (leave empty; hermes gateway setup writes it)"
     password: true
-optional_env:
   - name: RPLY_SERVER
     description: "rply server URL (default: https://app.rply.sh)"
     prompt: "rply server URL"

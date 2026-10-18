@@ -693,11 +693,13 @@ def interactive_setup() -> None:
     save_env_value("RPLY_SERVER", server)
     save_env_value("RPLY_TOKEN", data["agent_token"])
     save_env_value("RPLY_ALLOWED_USERS", data["channel"]["id"])
+    print_success(f"Connected to rply channel \"{data['channel']['name']}\"")
     if claim := data.get("claim"):
         minutes = max(1, round((claim["expires_at"] / 1000 - time.time()) / 60))
         print_info(f"Open this link within {minutes} minutes to add the channel to your rply account:")
         print_info(f"   {server}/claim?c={claim['code']}")
-    print_success(f"Connected to rply channel \"{data['channel']['name']}\"")
+        # the platform menu redraws the screen next, so hold here until the link has been used
+        prompt("Press Enter once you've opened the link")
     print_info("Restart the gateway for changes to take effect: hermes gateway restart")
 
 

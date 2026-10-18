@@ -348,12 +348,15 @@ class RplyAdapter(BasePlatformAdapter):
             return
         body = message.get("body") or {}
         if "answers" in body:
-            self._resolve_answer(message)
+            await self._resolve_answer(message)
             return
         media_urls, media_types, failed = await self._download_attachments(body.get("attachments") or [])
         text = "\n".join([_message_text(message), *failed]).strip()
         if not text and not media_urls:
             return
+        await self._dispatch(message, text, media_urls, media_types)
+
+    async def _dispatch(self, message: dict[str, Any], text: str, media_urls: list[str] = [], media_types: list[str] = []) -> None:
         channel_id = self._channel["id"]
         source = self.build_source(
             chat_id=channel_id, chat_name=self._channel.get("name") or "rply", chat_type="dm",
@@ -384,14 +387,17 @@ class RplyAdapter(BasePlatformAdapter):
                 failed.append(f"(attachment {ref.get('name')} couldn't be downloaded)")
         return paths, types, failed
 
-    def _resolve_answer(self, message: dict[str, Any]) -> None:
+    async def _resolve_answer(self, message: dict[str, Any]) -> None:
         """Answers to our own questions resolve the waiting approval or clarify; others belong to the CLI."""
         pending = self._pending.pop(message.get("reply_to") or "", None)
         if not pending:
             return
         kind, key = pending
         answers = message["body"]["answers"]
-        if kind == "approval":
+        if kind == "slash":
+            # the documented text path: as if the human had typed /approve, /always or /cancel
+            await self._dispatch(message, str(answers.get("confirm") or "/cancel"))
+        elif kind == "approval":
             from tools.approval import resolve_gateway_approval
             resolve_gateway_approval(key, str(answers.get("approval") or "deny"))
         else:
@@ -596,6 +602,15 @@ class RplyAdapter(BasePlatformAdapter):
             ask={"expires_at": expires_at})
         if result.success:
             self._pending[result.message_id] = ("approval", prompt.session_key)
+        return result
+
+    async def send_slash_confirm(self, chat_id: str, title: str, message: str, session_key: str, confirm_id: str,
+                                 metadata: Optional[dict[str, Any]] = None) -> SendResult:
+        options = [{"label": "Approve once", "value": "/approve"}, {"label": "Always approve", "value": "/always"},
+                   {"label": "Cancel", "value": "/cancel"}]
+        result = await self._post({"title": title, "text": message, "blocks": [{"type": "choice", "id": "confirm", "options": options}]})
+        if result.success:
+            self._pending[result.message_id] = ("slash", confirm_id)
         return result
 
     async def send_clarify(self, chat_id: str, question: str, choices: Optional[list], clarify_id: str,

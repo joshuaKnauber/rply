@@ -30,7 +30,8 @@ const topics: Record<string, string> = {
      cd <your project> && rply serve --install --on-message "<the command from step 4>"
    It restarts on crash and reboot, runs your command once at a time when the human writes (the new
    messages are also on stdin), and runs command scripts for apps. Logs: see the install output.
-   Only one agent per channel should use --on-message; others install without it.
+   If the channel has other agents, they wake too: each for messages that mention it and for those that
+   mention nobody (see "Several agents" in \`rply guide basics\`).
    Runs are stopped after an hour. Don't start yourself in the background from the hook (runs would
    overlap); for longer work add --on-message-timeout 4h, or 0 for no limit.
    Never also run \`rply serve\` by hand for the same channel.
@@ -52,6 +53,19 @@ Talking
   rply listen                                 stream them as JSONL, for long-running agents
   rply ack <message-id> working|done          show the human you picked a message up
   rply ack <message-id> working --note "running tests"   what you're doing right now
+  rply whoami                                 this channel and the agents in it
+  rply history                                the recent conversation, including other agents' messages
+
+Several agents
+A channel can have more than one agent. Run \`rply whoami\` at the start of a session to see who else is here.
+- A message that @mentions agents, or replies to one of their messages, only reaches those agents. Your inbox
+  marks it "(mentions you)": it's yours to handle.
+- A message without mentions reaches every agent. Before acting on it, read \`rply history\` and decide whether
+  it's meant for you: if it's clearly another agent's area, or another agent already answered or acked it, leave it.
+  If it's unclear who should take it, say so briefly instead of doing the work twice.
+- Your inbox tells you when another agent joins ("... joined the channel").
+- You can only edit, delete or cancel your own messages and pins. Pin keys belong to whoever set them first, so
+  pin under your own keys (e.g. \`rply pin set status-<your name>\`) when another agent already uses one.
 
 Good habits
 - Check \`rply inbox\` regularly. The human can message you at any time with new instructions.
@@ -59,8 +73,6 @@ Good habits
 - Keep a live overview with \`rply status set\` instead of sending a message for every step.
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
-- A channel can have several agents. A message that @mentions agents only reaches those; the inbox marks
-  them "(mentions you)". Messages without mentions reach every agent.
 
 Reading messages as data
   rply inbox --json prints one message per line: { id, seq, sender, created_at, reply_to, state, enc, body, mentions }
@@ -238,6 +250,7 @@ This agent reports to its human through the \`rply\` CLI. Run \`rply guide\` onc
 - Request credentials with \`rply secret request\`, never through messages.
 - To let the human try a running web app (e.g. a dev server), see \`rply guide previews\`; ask them how to expose it first.
 - When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.
+- The channel may have other agents (\`rply whoami\`). For messages that don't mention you, check \`rply history\` before acting.
 - If \`rply\` is missing, reinstall it with \`npm install --global @rply/cli\` (the package is @rply/cli, not rply).`;
 
 const seenPath = () => join(dirname(configPath()), "guide.json");

@@ -1,5 +1,5 @@
 import type { Generated, Selectable } from "kysely";
-import type { AskStatus, ChannelRole, MessageState, Sender } from "@rply/schema";
+import type { AskStatus, ChannelRole, MessageSender, MessageState, Sender } from "@rply/schema";
 
 export interface Database {
   channels: ChannelsTable;
@@ -70,7 +70,7 @@ interface MessagesTable {
   seq: Generated<number>;
   id: string;
   channel_id: string;
-  sender: Sender;
+  sender: MessageSender;
   agent_id: string | null;
   mentions: string | null;
   enc: number;

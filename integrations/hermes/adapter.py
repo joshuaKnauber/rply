@@ -35,7 +35,7 @@ from gateway.platforms._shared import (
     extra_or_secret as _extra_or_secret, get_scoped_secret as _get_scoped_secret,
     seed_extra_from_env as _seed_extra_from_env, send_error,
 )
-from hermes_constants import get_hermes_home
+from hermes_constants import get_hermes_home, set_hermes_home_override
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +122,11 @@ def _last_run(job: dict[str, Any]) -> str:
     return f"❌ {when} · {_first_line(error, 80)}"
 
 
-def _cron_pin(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+def _cron_pin(jobs: list[dict[str, Any]], title: str) -> dict[str, Any]:
     rows = [[job.get("name") or job["id"], job.get("schedule_display") or "",  _last_run(job),
              "⏸ paused" if job.get("state") == "paused" or not job.get("enabled", True) else _format_time(job.get("next_run_at"))]
             for job in jobs]
-    return {"title": "Scheduled jobs", "blocks": [{"type": "table", "id": "jobs", "columns": ["Job", "Schedule", "Last run", "Next run"], "rows": rows}]}
+    return {"title": title, "blocks": [{"type": "table", "id": "jobs", "columns": ["Job", "Schedule", "Last run", "Next run"], "rows": rows}]}
 
 
 def _epoch_ms(value: Any) -> Optional[int]:
@@ -212,6 +212,8 @@ class RplyAdapter(BasePlatformAdapter):
         # rply message id of an open question -> ("approval", session_key) | ("clarify", clarify_id)
         self._pending: dict[str, tuple[str, str]] = {}
         self._clarify_messages: dict[str, str] = {}
+        self._profile: Optional[str] = None
+        self._home = get_hermes_home()
         # chat id -> [rply id of the message being worked on, last note sent]
         self._working: dict[str, list[Optional[str]]] = {}
 
@@ -231,6 +233,11 @@ class RplyAdapter(BasePlatformAdapter):
             await self._http.aclose()
             self._http = None
             return False
+        # Hermes names secondary profiles before connect; their jobs, sessions and state live in their own home
+        self._profile = getattr(self, "_owner_profile", None)
+        if self._profile:
+            from hermes_cli.profiles import get_profile_dir
+            self._home = get_profile_dir(self._profile)
         self._cursor = await self._initial_cursor()
         self._poll_task = asyncio.create_task(self._run_poll())
         self._cron_task = asyncio.create_task(self._run_cron_pin())
@@ -260,7 +267,13 @@ class RplyAdapter(BasePlatformAdapter):
     # -- Cursor: messages that arrive while the gateway is down are delivered on the next start --
 
     def _state_path(self):
-        return get_hermes_home() / "rply" / f"state-{self._channel['id']}.json"
+        return self._home / "rply" / f"state-{self._channel['id']}.json"
+
+    def _pin_key(self, base: str) -> str:
+        return f"{base}-{self._profile}"[:32] if self._profile else base
+
+    def _titled(self, title: str) -> str:
+        return f"{title} · {self._profile}" if self._profile else title
 
     def _load_state(self) -> dict[str, Any]:
         try:
@@ -388,15 +401,17 @@ class RplyAdapter(BasePlatformAdapter):
     async def _run_cron_pin(self) -> None:
         """Keep a pinned table of Hermes' scheduled jobs; edits only when a job changed."""
         from cron.jobs import list_jobs
+        set_hermes_home_override(self._home)
+        key = self._pin_key(CRON_PIN_KEY)
         while self._running:
             try:
                 jobs = await asyncio.to_thread(list_jobs, include_disabled=True)
-                body = json.dumps(_cron_pin(jobs)) if jobs else None
+                body = json.dumps(_cron_pin(jobs, self._titled("Scheduled jobs"))) if jobs else None
                 if body != self._cron_body:
                     if body:
-                        resp = await self._http.put(f"/pins/{CRON_PIN_KEY}", json={"body": json.loads(body)})
+                        resp = await self._http.put(f"/pins/{key}", json={"body": json.loads(body)})
                     else:
-                        resp = await self._http.delete(f"/pins/{CRON_PIN_KEY}")
+                        resp = await self._http.delete(f"/pins/{key}")
                     if resp.status_code < 300 or (not body and resp.status_code == 404):
                         self._cron_body = body
                     else:
@@ -420,8 +435,8 @@ class RplyAdapter(BasePlatformAdapter):
             digest = hashlib.sha256(html.encode()).hexdigest()
             if self._load_state().get("app") == digest:
                 return
-            body = {"title": "Hermes", "view": "app", "blocks": [{"type": "html", "id": "app", "html": html}]}
-            resp = await self._http.put(f"/pins/{APP_PIN_KEY}", json={"body": body})
+            body = {"title": self._titled("Hermes"), "view": "app", "blocks": [{"type": "html", "id": "app", "html": html}]}
+            resp = await self._http.put(f"/pins/{self._pin_key(APP_PIN_KEY)}", json={"body": body})
             resp.raise_for_status()
             self._save_state(app=digest)
         except Exception as e:
@@ -429,6 +444,7 @@ class RplyAdapter(BasePlatformAdapter):
 
     async def _run_calls(self) -> None:
         """Answer rply.call() from the dashboard, the way `rply serve` runs command scripts."""
+        set_hermes_home_override(self._home)
         backoff_idx = 0
         while self._running:
             try:
@@ -639,6 +655,9 @@ def interactive_setup() -> None:
     from hermes_cli.setup import prompt, save_env_value, get_env_value, print_header, print_info, print_success, print_warning
     from hermes_cli.setup_platforms import declines_reconfigure
 
+    from hermes_cli.profiles import get_active_profile_name
+    profile = get_active_profile_name()
+    label = "Hermes" if profile in ("default", "custom") else profile
     print_header("rply")
     if declines_reconfigure("rply", "Reconfigure rply?", "RPLY_TOKEN"):
         return
@@ -649,10 +668,10 @@ def interactive_setup() -> None:
     try:
         with httpx.Client(base_url=f"{server}/v1", timeout=15.0) as client:
             if code:
-                resp = client.post("/agents/join", json={"code": code, "label": "Hermes"})
+                resp = client.post("/agents/join", json={"code": code, "label": label})
             else:
                 name = prompt("Channel name", default="Hermes") or "Hermes"
-                resp = client.post("/channels", json={"name": name, "label": "Hermes"})
+                resp = client.post("/channels", json={"name": name, "label": label})
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:

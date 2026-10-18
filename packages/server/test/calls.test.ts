@@ -65,6 +65,23 @@ test("calls to registered script commands are relayed to serve without being sto
   assert.equal(inbox.json.messages.length, 0);
 });
 
+test("with several agents, an app's calls go to the agent that sent it", async () => {
+  const { request, agent, human, messageId } = await withApp();
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  const other = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+
+  const otherPoll = request("GET", "/calls?wait=1&commands=stats", { token: other });
+  await delay(20);
+  const ownPoll = request("GET", "/calls?wait=5&commands=stats", { token: agent });
+  await delay(20);
+  const call = request("POST", "/calls", { token: human, body: { message_id: messageId, name: "stats" } });
+  const { json } = await ownPoll;
+  assert.equal(json.calls.length, 1);
+  assert.equal((await otherPoll).json.calls.length, 0);
+  await request("POST", `/calls/${json.calls[0].id}/result`, { token: agent, body: { result: "mine" } });
+  assert.equal((await call).json.result, "mine");
+});
+
 test("script calls never reach the chat: offline without serve, unknown names are errors", async () => {
   const { request, agent, human, messageId } = await withApp();
   const offline = await request("POST", "/calls", { token: human, body: { message_id: messageId, name: "stats" } });

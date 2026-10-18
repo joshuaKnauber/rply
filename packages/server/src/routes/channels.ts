@@ -24,6 +24,7 @@ import { clientIp, GUARDS } from "../limits.ts";
 import type { Serves } from "../serves.ts";
 import type { DB } from "../db/index.ts";
 import { toChannel, toChannelEntry } from "../serialize.ts";
+import { insertMessage, recordChanges } from "../messages.ts";
 import { createAgentToken, createPairingCode, hashToken, normalizePairingCode, now, randomId } from "../tokens.ts";
 
 const PAIRING_TTL_MS = 60 * 60 * 1000;
@@ -85,7 +86,7 @@ export function channelRoutes(deps: Deps, serves: Serves) {
       const channel = await createChannel(req.name);
       const res: CreateChannelResponse = {
         channel: toChannel(channel),
-        agent_token: await addAgentToken(db, channel.id, req.label),
+        agent_token: (await addAgentToken(db, channel.id, req.label)).token,
         claim: await createPairing(db, channel.id, "human"),
       };
       return c.json(res, 201);
@@ -183,7 +184,8 @@ export function channelRoutes(deps: Deps, serves: Serves) {
       const { code, label } = parse(JoinChannelRequest, await c.req.json());
       const channelId = await limits.code(clientIp(c), () => usePairing(db, code, "agent"));
       await limits.agentSlot(channelId);
-      const token = await addAgentToken(db, channelId, label);
+      const { token, id } = await addAgentToken(db, channelId, label);
+      await announceJoin(deps, channelId, id);
       const res: JoinChannelResponse = { channel: toChannel(await db.selectFrom("channels").selectAll().where("id", "=", channelId).executeTakeFirstOrThrow()), agent_token: token };
       return c.json(res, 201);
     });
@@ -262,11 +264,23 @@ async function usePairing(db: DB, code: string, role: Sender) {
   return pairing.channel_id;
 }
 
+// tells the agents already in the channel (and the human) that another one joined
+async function announceJoin(deps: Deps, channelId: string, agentId: string) {
+  const agents = await deps.db.selectFrom("agent_tokens").select(["id", "label"]).where("channel_id", "=", channelId).where("revoked_at", "is", null).execute();
+  const joined = agents.find((a) => a.id === agentId)!;
+  if (agents.length < 2) return;
+  const id = randomId();
+  const text = `${joined.label ?? "A new agent"} joined the channel.`;
+  await insertMessage(deps.db, { id, channel_id: channelId, sender: "system", agent_id: joined.id, enc: 0, body: JSON.stringify({ text }), reply_to: null, pin: null, state: null, created_at: now(), updated_at: null, deleted_at: null });
+  await recordChanges(deps, channelId, [id]);
+}
+
 async function addAgentToken(db: DB, channelId: string, label?: string) {
   const token = createAgentToken();
+  const id = randomId();
   await db
     .insertInto("agent_tokens")
-    .values({ id: randomId(), channel_id: channelId, token_hash: hashToken(token), label: label ?? null, public_key: null, created_at: now(), last_seen_at: null, revoked_at: null })
+    .values({ id, channel_id: channelId, token_hash: hashToken(token), label: label ?? null, public_key: null, created_at: now(), last_seen_at: null, revoked_at: null })
     .execute();
-  return token;
+  return { token, id };
 }

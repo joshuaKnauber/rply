@@ -1,19 +1,190 @@
 ---
 import Icon from "./Icon.astro";
 import { hostedPrompt } from "./setup.ts";
+import { birdPath } from "./bird.ts";
 
 const { dark = false } = Astro.props as { dark?: boolean };
+const outline = birdPath.split("ZM")[0] + "Z";
 ---
 
-<button class:list={["hero-setup group btn h-12 px-6 text-base", dark ? "btn-dark" : "btn-primary"]} data-prompt={hostedPrompt}>
+<button class:list={["hero-setup group btn relative h-12 px-6 text-base", dark ? "btn-dark" : "btn-primary"]} data-prompt={hostedPrompt}>
+  {
+    dark && (
+      <svg viewBox="0 0 442 417" class="perch pointer-events-none absolute bottom-[calc(100%-5px)] left-1.5 size-8 overflow-visible" aria-hidden="true">
+        <g class="perch-body">
+          <g class="perch-face">
+            <path d={outline} fill="var(--color-gray-900)" stroke="white" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            <path d="M205 168 C150 70 30 30 -40 62 C30 150 120 206 210 212 Z" fill="var(--color-gray-600)" class="perch-wing" style="opacity:0" />
+            <g class="perch-eye">
+              <rect class="perch-open" x="237" y="92" width="38" height="58" rx="19" fill="white" />
+              <path class="perch-happy" d="M232 132 Q256 96 280 132" fill="none" stroke="white" stroke-width="16" stroke-linecap="round" style="opacity:0" />
+            </g>
+          </g>
+        </g>
+      </svg>
+    )
+  }
   <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
 </button>
 
+<style>
+  .perch-body {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+  }
+  .perch-face {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.18s ease-out;
+  }
+  .perch-face.back {
+    transform: scaleX(-1);
+  }
+  .perch-eye {
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+</style>
+
 <script>
   import { flutter } from "./flutter.ts";
+
+  const ease = (t: number) => (1 - Math.cos(Math.PI * t)) / 2;
+  const bezier = (p: number[][], t: number) =>
+    [0, 1].map((k) => (1 - t) ** 3 * p[0]![k]! + 3 * (1 - t) ** 2 * t * p[1]![k]! + 3 * (1 - t) * t * t * p[2]![k]! + t ** 3 * p[3]![k]!);
+
+  function perched(perch: SVGSVGElement) {
+    const body = perch.querySelector<SVGGElement>(".perch-body")!;
+    const face = perch.querySelector<SVGGElement>(".perch-face")!;
+    const wing = perch.querySelector<SVGPathElement>(".perch-wing")!;
+    const eye = perch.querySelector<SVGGElement>(".perch-eye")!;
+    const open = perch.querySelector<SVGRectElement>(".perch-open")!;
+    const happy = perch.querySelector<SVGPathElement>(".perch-happy")!;
+    const setWing = (deg: number) => wing.setAttribute("transform", `rotate(${deg.toFixed(1)} 190 185)`);
+    let landed = false;
+    let cheering = 0;
+
+    const flap = (ms: number, rate: number) => {
+      wing.getAnimations().forEach((a) => a.cancel());
+      wing.style.opacity = "1";
+      const end = performance.now() + ms;
+      let phase = 0;
+      let last = performance.now();
+      const step = (now: number) => {
+        phase += ((now - last) / 1000) * rate * Math.PI * 2;
+        last = now;
+        setWing(10 + Math.sin(phase) * 34);
+        if (now < end) return requestAnimationFrame(step);
+        setWing(0);
+        wing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" });
+      };
+      requestAnimationFrame(step);
+    };
+
+    addEventListener("pointermove", (e) => {
+      if (!landed) return;
+      const r = perch.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width * 0.55), dy = e.clientY - (r.top + r.height * 0.3), d = Math.hypot(dx, dy) || 1;
+      const back = dx < -24;
+      face.classList.toggle("back", back);
+      const reach = Math.min(1, d / 120) * 14;
+      eye.style.transform = `translate(${((back ? -dx : dx) / d) * reach}px, ${(dy / d) * reach}px)`;
+    });
+
+    const cheer = () => {
+      if (!landed) return;
+      clearTimeout(cheering);
+      open.style.opacity = "0";
+      happy.style.opacity = "1";
+      flap(1100, 11);
+      body.animate(
+        [0, 1, 2]
+          .flatMap((i) => [
+            { transform: "scale(1.12, 0.86)", offset: i / 3 },
+            { transform: `translateY(-${32 - i * 8}%) rotate(${i % 2 ? 8 : -8}deg)`, offset: i / 3 + 0.16 },
+          ])
+          .concat({ transform: "none", offset: 1 }),
+        { duration: 1100, easing: "ease-out" },
+      );
+      cheering = window.setTimeout(() => {
+        cheering = 0;
+        open.style.opacity = "";
+        happy.style.opacity = "0";
+      }, 1600);
+    };
+
+    const idle = () => {
+      if (!cheering)
+        body.animate(
+          [{ transform: "none" }, { transform: "scale(1.06, 0.92)", offset: 0.25 }, { transform: "translateY(-12%) rotate(-6deg)", offset: 0.55 }, { transform: "none" }],
+          { duration: 700, easing: "ease-in-out" },
+        );
+      setTimeout(idle, 5000 + Math.random() * 4000);
+    };
+
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      landed = true;
+      return { cheer: () => {} };
+    }
+
+    const from = perch.getBoundingClientRect().left + 80;
+    const path = [
+      [-from, -240],
+      [-from * 0.55, -340],
+      [-110, -150],
+      [0, 0],
+    ];
+    const duration = 3200;
+    let t0 = 0;
+    let phase = 0;
+    let last = 0;
+    let prev = path[0]!;
+
+    const frame = (now: number) => {
+      if (!t0) t0 = last = now;
+      const dt = (now - last) / 1000;
+      last = now;
+      const t = Math.min(1, (now - t0) / duration);
+      const [x, y] = bezier(path, ease(t));
+      // flap, glide in the middle, flare with quick beats before touching down
+      const gliding = t > 0.32 && t < 0.52;
+      phase += dt * (t > 0.78 ? 13 : 8) * Math.PI * 2;
+      const beat = Math.sin(phase);
+      setWing(gliding ? 18 + beat * 4 : 8 + beat * 34);
+      const bob = gliding ? 0 : -beat * 3;
+      const heading = Math.atan2(y - prev[1]!, Math.max(0.01, x - prev[0]!)) * (180 / Math.PI);
+      const tilt = t > 0.82 ? -14 * Math.sin(((t - 0.82) / 0.18) * Math.PI) : Math.max(-18, Math.min(18, heading * 0.5));
+      prev = [x, y];
+      perch.style.transform = `translate(${x}px, ${y + bob}px) rotate(${tilt}deg)`;
+      if (t < 1) return requestAnimationFrame(frame);
+
+      perch.style.transform = "";
+      landed = true;
+      setWing(0);
+      wing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" });
+      body.animate(
+        [
+          { transform: "scale(1.16, 0.8)" },
+          { transform: "scale(0.94, 1.07)", offset: 0.35 },
+          { transform: "scale(1.03, 0.97)", offset: 0.65 },
+          { transform: "none" },
+        ],
+        { duration: 700, easing: "ease-out" },
+      );
+      setTimeout(idle, 3500);
+    };
+
+    wing.style.opacity = "1";
+    perch.style.transform = `translate(${path[0]![0]}px, ${path[0]![1]}px)`;
+    setTimeout(() => requestAnimationFrame(frame), 900);
+    return { cheer };
+  }
+
   document.querySelectorAll<HTMLElement>(".hero-setup").forEach((button) => {
+    const perch = button.querySelector<SVGSVGElement>(".perch");
+    const bird = perch && perched(perch);
     button.addEventListener("click", async () => {
       flutter(button);
+      bird?.cheer();
       button.classList.add("copied");
       setTimeout(() => button.classList.remove("copied"), 2000);
       await navigator.clipboard.writeText(button.dataset.prompt!);

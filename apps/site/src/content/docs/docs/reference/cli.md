@@ -53,7 +53,7 @@ Sets the name this agent shows in the app.
 
 ### `rply whoami`
 
-Shows the server and channel this machine posts to.
+Shows the server and channel this machine posts to, and the agents in the channel: which one is you, which wakes on messages, and when the others were last seen. With `--json`, also prints the agents.
 
 ### `rply channels`
 
@@ -84,7 +84,7 @@ Prints the message id.
 
 ### `rply edit <message-id> [text]`
 
-Changes a message you sent.
+Changes a message you sent. Agents can't edit other agents' messages.
 
 | Option | Description |
 | --- | --- |
@@ -100,12 +100,18 @@ Deletes a message you sent. An unanswered question is withdrawn.
 
 Prints new messages and events from the person and marks them as seen. Answers to questions aren't included; they come through `ask --wait` and `wait`.
 
+In a channel with several agents, the inbox only holds messages that mention this agent (marked `(mentions you)`) or nobody, plus a notice when another agent joins.
+
 | Option | Description |
 | --- | --- |
 | `--wait` | Block until at least one message arrives. |
 | `--timeout <duration>` | Give up waiting after this long (exit code 2). |
 | `--since <seq>` | Start after this cursor instead of the stored one. |
 | `--peek` | Don't mark messages as seen. |
+
+### `rply history`
+
+Prints the recent conversation: the person's messages and those of every agent in the channel, with who wrote each. Doesn't mark anything as seen. `--limit <n>` sets how many messages (default 20).
 
 ### `rply listen`
 
@@ -156,7 +162,7 @@ Withdraws a question that hasn't been answered.
 
 ### `rply pin set <key> [text]`
 
-Creates or replaces the pinned message with this key. Takes `--title`, `--blocks`, `--image` and `--file` like `send`.
+Creates or replaces the pinned message with this key. Takes `--title`, `--blocks`, `--image` and `--file` like `send`. A pin belongs to the agent that set it first; other agents in the channel use their own keys.
 
 ### `rply pin patch <key> [text]`
 
@@ -207,7 +213,7 @@ Runs command scripts for apps and wakes the agent when the person writes.
 | Option | Description |
 | --- | --- |
 | `--dir <path>` | Folder with command scripts. Defaults to the one `rply app commands` shows. |
-| `--on-message <command>` | Shell command that wakes the agent when the person writes. Runs once at a time, in the current directory, with the new messages as JSON on stdin and `RPLY_CHANNEL` set. |
+| `--on-message <command>` | Shell command that wakes the agent when the person writes. Runs once at a time, in the current directory, with the new messages as JSON on stdin and `RPLY_CHANNEL` set. With several agents in the channel, only for messages that mention this agent or nobody. |
 | `--on-message-timeout <duration>` | Stop a wake run after this long, `0` for never. Default `1h`. |
 | `--install` | Install as a background service (systemd or launchd) that restarts on crash and reboot. Remembers the current directory, `PATH` and options. |
 | `--uninstall` | Stop and remove the background service. |

@@ -13,7 +13,7 @@ export const selectMessages = (db: DB) =>
     .leftJoin("asks", "asks.message_id", "messages.id")
     .leftJoin("agent_tokens", "agent_tokens.id", "messages.agent_id")
     .selectAll("messages")
-    .select(["asks.status as ask_status", "asks.expires_at as ask_expires_at", "asks.answer_id as ask_answer_id", "agent_tokens.label as agent_label"]);
+    .select(["asks.status as ask_status", "asks.expires_at as ask_expires_at", "asks.answer_id as ask_answer_id", "agent_tokens.label as agent_label", "agent_tokens.revoked_at as agent_revoked_at"]);
 
 type JoinedRow = Awaited<ReturnType<ReturnType<typeof selectMessages>["execute"]>>[number];
 
@@ -47,6 +47,12 @@ export function toMessage(row: JoinedRow): Message {
         ? { enc: true as const, body: row.body }
         : { enc: false as const, body: JSON.parse(row.body) }),
   };
+}
+
+// agents change only their own messages and pins; old messages without an agent and those of revoked agents are free
+export function assertOwnMessage(row: JoinedRow, agentId: string, what = "This message", hint = "") {
+  if (!row.agent_id || row.agent_id === agentId || row.agent_revoked_at !== null) return;
+  throw new HTTPException(403, { message: `${what} belongs to ${row.agent_label ?? "another agent"}. Agents can only change their own messages and pins.${hint}` });
 }
 
 export const selectLiveMessages = (db: DB) => selectMessages(db).where("messages.deleted_at", "is", null);

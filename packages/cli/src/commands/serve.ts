@@ -84,7 +84,7 @@ async function warnAboutOtherWakers(client: Client) {
   const { agents } = await client.request<AgentsResponse>("GET", "/agents");
   const others = agents.filter((a) => !a.current && a.serve?.wakes);
   if (others.length) {
-    console.error(`rply: ${others.map((a) => a.label ?? "another agent").join(", ")} already wakes on messages in this channel, so both will handle every message that doesn't @mention one of you.`);
+    console.error(`rply: ${others.map((a) => a.label ?? "another agent").join(", ")} also wakes on messages in this channel. Messages that mention nobody wake all of you; check rply history before acting on them.`);
   }
 }
 

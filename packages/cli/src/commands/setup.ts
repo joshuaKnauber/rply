@@ -1,10 +1,19 @@
 import { hostname } from "node:os";
 import type { Command } from "commander";
-import type { Channel, CreateChannelResponse, JoinChannelResponse, Pairing } from "@rply/schema";
+import type { AgentsResponse, Channel, CreateChannelResponse, JoinChannelResponse, Pairing } from "@rply/schema";
 import { CliError, createClient } from "../client.ts";
 import { channelKey, normalizeServer, readConfigFile, updateConfigFile } from "../config.ts";
 import { connect, json, requested } from "../context.ts";
 import { claimUrl, printClaim, printJson } from "../io.ts";
+
+function describeAgent(agent: AgentsResponse["agents"][number]) {
+  const notes = [
+    agent.current && "you",
+    agent.serve?.wakes && "wakes on messages",
+    !agent.current && (agent.last_seen_at ? `last seen ${new Date(agent.last_seen_at).toLocaleString()}` : "never seen"),
+  ].filter(Boolean);
+  return `${agent.label ?? "(unnamed)"} (${notes.join(", ")})`;
+}
 
 const nextSteps = "\nNext: run `rply guide setup` and follow it to finish setting up this machine.";
 
@@ -90,12 +99,17 @@ export function registerSetup(program: Command) {
 
   program
     .command("whoami")
-    .description("show the server and channel this machine posts to")
+    .description("show the server and channel this machine posts to, and the agents in it")
     .action(async () => {
       const { selected, config, client } = connect();
-      const { channel } = await client.request<{ channel: Channel }>("GET", "/channel");
-      if (json()) return printJson({ key: selected.key ?? null, server: config.server, channel });
+      const [{ channel }, { agents }] = await Promise.all([
+        client.request<{ channel: Channel }>("GET", "/channel"),
+        client.request<AgentsResponse>("GET", "/agents"),
+      ]);
+      if (json()) return printJson({ key: selected.key ?? null, server: config.server, channel, agents });
       console.log(`"${channel.name}" (${selected.key ? `saved as ${selected.key}` : "from RPLY_SERVER/RPLY_TOKEN"}) on ${config.server}`);
+      console.log(agents.length > 1 ? `\n${agents.length} agents in this channel:` : "\nYou're the only agent in this channel.");
+      if (agents.length > 1) for (const a of agents) console.log(`  ${describeAgent(a)}`);
     });
 
   const channels = program

@@ -13,7 +13,7 @@ import { MessageBlocks } from "@/components/MessageBlocks";
 import { UrlView } from "@/components/UrlView";
 import { auth, channelsKey, markRead, useChannels, type ServerChannel } from "@/lib/channels";
 import { ChannelContext, MessageContext } from "@/lib/channel-context";
-import { appTitle, appUrl, eventLabel, isApp, isCall, isWaiting } from "@rply/schema";
+import { appTitle, appUrl, eventLabel, isApp, isCall, isWaiting, preview } from "@rply/schema";
 import { askStatus, formatTime, isAnswer, isEvent } from "@/lib/format";
 import { useAgents, useMessages, usePins, useSendMessage, useUnpin } from "@/lib/queries";
 
@@ -200,7 +200,9 @@ function Thread({ entry }: { entry: ServerChannel }) {
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={<Text className="text-neutral-500">{isPending ? "Loading…" : error ? error.message : "No messages yet."}</Text>}
         renderItem={({ item }) =>
-          isEvent(item) || isCall(item) ? (
+          item.sender === "system" ? (
+            <Text className="self-center text-xs text-neutral-500">{preview(item)}</Text>
+          ) : isEvent(item) || isCall(item) ? (
             <Text className="self-end px-1 text-xs text-neutral-500">
               ↳ {actionLabel(item)} · {formatTime(item.created_at)}
               {item.state ? ` · ${stateLabels[item.state].label}` : ""}

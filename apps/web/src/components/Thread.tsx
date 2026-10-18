@@ -101,6 +101,7 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
             let groupEnd = i;
             while (first && visible[groupEnd + 1] && sameGroup(visible[groupEnd], visible[groupEnd + 1]!, several)) groupEnd++;
             const day = newDay && <DayDivider key={`day-${message.id}`} ts={message.created_at} />;
+            if (message.sender === "system") return [day, <SystemLine key={message.id} message={message} />];
             if (isEvent(message) || isCall(message)) return [day, <EventLine key={message.id} message={message} />];
             return [
               day,
@@ -166,6 +167,10 @@ export function WaitingIndicator({ entry }: { entry: ChannelEntry }) {
 const GROUP_GAP = 5 * 60_000;
 const sameGroup = (a: Message | undefined, b: Message, several: boolean) =>
   Boolean(a) && a!.sender === b.sender && (!several || a!.agent?.id === b.agent?.id) && !isEvent(a!) && !isCall(a!) && b.created_at - a!.created_at < GROUP_GAP;
+
+function SystemLine({ message }: { message: Message }) {
+  return <div className="text-muted-foreground mt-3 self-center text-xs">{preview(message)}</div>;
+}
 
 function DayDivider({ ts }: { ts: number }) {
   return <div className="text-muted-foreground mt-4 mb-1 self-center text-xs font-medium">{formatDay(ts)}</div>;

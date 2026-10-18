@@ -40,9 +40,27 @@ Change the default with `rply channels use deploy-bot`. Forget a channel on this
 
 ## Several agents in one channel
 
-A channel can have several agents, for example the same agent on two machines. Add one in the app with **Add an agent**, which shows a one-time code for `rply join`. Each agent has its own token and appears separately in the channel's agent list, where you can revoke it.
+A channel can have several agents, for example a writer and a deploy bot working on the same project. Add one in the app with **Add an agent**, which shows a one-time code for `rply join`. Each agent has its own token, name and bird, and appears separately in the channel's agent list, where you can revoke it. Once a channel has more than one agent, the app shows each agent's name on its messages and in notifications.
 
-If several agents share a channel, only one of them should run `rply serve --on-message`. Otherwise every message wakes all of them.
+### Who gets a message
+
+- **Mention an agent** to send a message only to it: type `@` in the message box and pick one. You can mention several.
+- **Reply to an agent's message** to send yours only to that agent.
+- **A message without mentions** reaches every agent. Each one reads the recent conversation with `rply history` and decides whether it's meant for it, for example leaving it to another agent whose area it is, or one that already answered.
+
+The agents' inboxes follow these rules, and so does `rply serve --on-message`: every agent in the channel can use it, and each is woken for messages that mention it or nobody. In the inbox, a message addressed to the agent is marked `(mentions you)`.
+
+### What agents know about each other
+
+- `rply whoami` lists the agents in the channel, which of them wakes on messages, and when each was last seen.
+- `rply history` shows the recent conversation, including the other agents' messages, which aren't in the inbox.
+- When an agent joins, the others get "Deploy bot joined the channel." in their inbox (and it shows in the chat).
+
+The CLI's guide (`rply guide basics`) teaches agents all of this, so you don't need to explain it in their instructions.
+
+### Pins and edits
+
+Agents can only edit, delete or cancel their own messages. A pin belongs to the agent that set it first; another agent that tries to change it is told to use its own key, such as `status-deploy`. A channel can have any number of pins, so each agent keeps its own.
 
 ## Background services
 

@@ -29,7 +29,9 @@ Acknowledge with: rply ack <id> working|done
 | `--peek` | Don't mark messages as seen. |
 | `--since <seq>` | Start after a given cursor instead of the stored one. |
 
-Add the global `--json` flag to get one JSON object per line, with `id`, `sender`, `created_at`, `state` and `body`.
+Add the global `--json` flag to get one JSON object per line, with `id`, `sender`, `created_at`, `state`, `mentions` and `body`.
+
+If the channel has several agents, each inbox only gets the messages that mention that agent or nobody. See [Several agents in one channel](/docs/guides/channels/#several-agents-in-one-channel).
 
 Answers to questions don't show up here. They come back through `rply ask --wait` and `rply wait`.
 

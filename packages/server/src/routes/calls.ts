@@ -70,7 +70,9 @@ export function callRoutes(deps: Deps, serves: Serves) {
       if (!req.agent) {
         const online = serves.onlineIn(channel.id);
         if (online.length === 0) throw new HTTPException(503, { message: "offline" });
-        const [agentId, server] = online.find(([, s]) => s.commands.has(req.name)) ?? [];
+        // with several agents, an app's commands belong to the agent that sent it
+        const [agentId, server] =
+          online.find(([id, s]) => id === target.agent_id && s.commands.has(req.name)) ?? online.find(([, s]) => s.commands.has(req.name)) ?? [];
         if (!server) throw new HTTPException(404, { message: `No command "${req.name}"` });
         const call: PendingCall = { id, name: req.name, args: req.args, block_id: req.block_id, message_id: target.id };
         const res = await runScript(server, agentId!, call, c.req.raw.signal);

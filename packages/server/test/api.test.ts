@@ -264,9 +264,49 @@ test("messages and pins carry the agent that sent them, with its current label",
   const messages = (await request("GET", "/messages", { token: human })).json.messages;
   assert.equal(messages.find((m: any) => m.id === other.id).agent.label, "Renamed");
 
-  await request("PUT", "/pins/status", { token: agent, body: { body: { text: "x" } } });
-  const pin = (await request("PATCH", "/pins/status", { token: second, body: { text: "y" } })).json.message;
+  const pin = (await request("PUT", "/pins/status", { token: second, body: { body: { text: "x" } } })).json.message;
   assert.equal(pin.agent.id, other.agent.id);
+});
+
+test("agents only change their own messages and pins, and a plain reply reaches the agent it replies to", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code, label: "Deploy bot" } })).json.agent_token;
+
+  const mine = (await request("POST", "/messages", { token: agent, body: { body: { text: "mine" } } })).json.message;
+  const edit = await request("PATCH", `/messages/${mine.id}`, { token: second, body: { text: "hijacked" } });
+  assert.equal(edit.status, 403);
+  assert.match(edit.json.error ?? edit.json.message ?? JSON.stringify(edit.json), /belongs to/);
+  assert.equal((await request("DELETE", `/messages/${mine.id}`, { token: second })).status, 403);
+  assert.equal((await request("PATCH", `/messages/${mine.id}`, { token: agent, body: { text: "edited" } })).status, 200);
+
+  await request("PUT", "/pins/status", { token: agent, body: { body: { text: "first" } } });
+  assert.equal((await request("PUT", "/pins/status", { token: second, body: { body: { text: "second" } } })).status, 403);
+  assert.equal((await request("PATCH", "/pins/status", { token: second, body: { text: "second" } })).status, 403);
+  assert.equal((await request("DELETE", "/pins/status", { token: second })).status, 403);
+  assert.equal((await request("PUT", "/pins/status-deploy", { token: second, body: { body: { text: "own key" } } })).status, 200);
+
+  const reply = (await request("POST", "/messages", { token: human, body: { body: { text: "for you" }, reply_to: mine.id } })).json.message;
+  assert.deepEqual(reply.mentions, [mine.agent.id]);
+  const inbox = async (token: string) => (await request("GET", "/messages?sender=human&since=0", { token })).json.messages.map((m: any) => m.body.text);
+  assert.ok((await inbox(agent)).includes("for you"));
+  assert.ok(!(await inbox(second)).includes("for you"));
+  const history = (await request("GET", "/messages", { token: second })).json.messages.map((m: any) => m.body.text);
+  assert.ok(history.includes("for you"));
+});
+
+test("agents already in a channel are told when another one joins", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code, label: "Deploy bot" } })).json.agent_token;
+
+  const inbox = async (token: string) => (await request("GET", "/messages?sender=human&since=0", { token })).json.messages;
+  const notice = (await inbox(agent)).find((m: any) => m.sender === "system");
+  assert.equal(notice?.body.text, "Deploy bot joined the channel.");
+  assert.equal((await inbox(second)).length, 0);
+  assert.ok((await request("GET", "/messages", { token: human })).json.messages.some((m: any) => m.sender === "system"));
 });
 
 test("a human message that mentions agents only reaches those agents", async () => {
@@ -285,9 +325,12 @@ test("a human message that mentions agents only reaches those agents", async () 
   assert.deepEqual(targeted.mentions, [secondId]);
   assert.deepEqual(all.mentions, []);
 
-  const inbox = async (token: string) => (await request("GET", "/messages?sender=human&since=0", { token })).json;
+  const inbox = async (token: string) => {
+    const res = (await request("GET", "/messages?sender=human&since=0", { token })).json;
+    return { ...res, messages: res.messages.filter((m: any) => m.sender === "human") };
+  };
   const first = await inbox(agent);
-  assert.deepEqual(first.messages.map((m: any) => m.text ?? m.body.text), ["everyone"]);
+  assert.deepEqual(first.messages.map((m: any) => m.body.text), ["everyone"]);
   assert.equal(first.cursor, targeted.seq);
   assert.deepEqual((await inbox(second)).messages.map((m: any) => m.body.text), ["everyone", "@Deploy only you"]);
 

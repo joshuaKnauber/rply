@@ -5,13 +5,13 @@ import Icon from "../components/Icon.astro";
 import Desktop from "../components/Desktop.astro";
 import Phone from "../components/Phone.astro";
 import Bird from "../components/Bird.astro";
-import GetStarted from "../components/GetStarted.astro";
 import AgentWall from "../components/AgentWall.astro";
 import { siGithub } from "simple-icons";
 import SetupPrompt from "../components/SetupPrompt.astro";
 import Flock from "../components/Flock.astro";
-import Replaces from "../components/Replaces.astro";
+import Setup from "../components/Setup.astro";
 import Demo from "../components/demo/Demo.astro";
+import { birdPath } from "../components/bird.ts";
 
 const starPositions = Array.from({ length: 12 }, (_, i) => {
   const angle = (i * Math.PI) / 6;
@@ -25,8 +25,10 @@ const star = (cx: number, cy: number) =>
   }).join(" ") + "Z";
 
 
-const card = "relative flex h-[280px] flex-col overflow-hidden rounded-3xl bg-gray-100 p-7";
-const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t border-l border-gray-200 bg-white p-5 text-[13px]";
+const card = "flex flex-col rounded-3xl bg-gray-100 p-6 sm:p-8";
+const title = "max-w-md text-lg leading-snug text-gray-500";
+const visual = "relative mt-8 h-[230px] overflow-hidden rounded-2xl bg-linear-to-br";
+const surface = "absolute inset-x-6 top-8 bottom-0 mx-auto max-w-sm rounded-t-xl bg-white p-5 text-sm shadow-[0_12px_32px_-12px_rgb(0_0_0/0.25)] sm:inset-x-10";
 ---
 
 <Page
@@ -34,14 +36,14 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
   description="Your agents run on servers, around the clock. rply lets them reach you: updates, questions you answer from your phone, live dashboards and API keys that never pass through the agent. Works with Claude Code, Codex, OpenClaw and anything with a shell. Open source and self-hostable."
 >
   <div class="relative isolate mx-3 mt-3 overflow-hidden rounded-b-[28px] bg-linear-to-b from-transparent via-gray-100 via-35% to-[#eceefb]">
-    <div class="absolute inset-0 -z-[2] [mask-image:linear-gradient(transparent,black_35%)]"><Flock subtle /></div>
+    <div class="absolute inset-0 -z-[2] [mask-image:radial-gradient(ellipse_34%_26%_at_50%_24%,transparent_55%,black),linear-gradient(transparent,black_35%)] [mask-composite:intersect]"><Flock subtle /></div>
     <Header />
 
   <section class="mx-auto max-w-6xl px-6 pt-12 text-center sm:pt-16">
     <h1 class="mx-auto max-w-3xl text-[clamp(2.75rem,6vw,4.5rem)] leading-[1] font-[550] tracking-[-0.04em]">
       Retire your agent's Telegram bot
     </h1>
-    <p class="mx-auto mt-5 max-w-xl text-lg text-gray-500">One open source inbox for agents that run without you. Updates on your phone, questions with buttons, live dashboards and API keys that never pass through the agent.</p>
+    <p class="mx-auto mt-6 max-w-2xl text-xl leading-relaxed text-gray-500">One open source inbox for agents that run without you. Updates on your phone, questions with buttons, live dashboards and API keys that never pass through the agent.</p>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
       <SetupPrompt dark />
       <a href="https://app.rply.sh" class="btn btn-outline h-12 px-6 text-base">Go to app</a>
@@ -74,122 +76,89 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
 
   <section id="features" class="bento mx-auto mt-32 max-w-6xl scroll-mt-8 px-6">
     <h2 class="text-center text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">One place to run your agents from</h2>
-    <div class="mt-12 grid gap-4 md:grid-cols-3">
+    <div class="mt-12 grid gap-4 md:grid-cols-2">
       <div class={card}>
-        <h3 class="text-xl font-medium">Ask before it ships</h3>
-        <div class={surface}>
-          <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> now</p>
-          <p class="mt-1 text-sm">Publish 5 new pages?</p>
-          <div class="mt-3 flex gap-2">
-            <span class="btn btn-outline relative h-8 overflow-hidden">
-              Publish
-              <span class="approve-on btn-primary absolute inset-0 grid place-items-center">Publish</span>
-              <span class="approve-tap absolute top-1/2 left-1/2 -mt-4 -ml-4 size-8 rounded-full border-2 border-white bg-black/20"></span>
-            </span>
-            <span class="approve-dim btn btn-outline h-8">Not yet</span>
+        <h3 class={title}><span class="font-medium text-gray-900">Ask before it ships.</span> Questions come with buttons, and the agent waits for your answer.</h3>
+        <div class:list={[visual, "from-brand-100 to-brand-300/70"]}>
+          <div class={surface}>
+            <p class="flex items-center gap-2 text-gray-500"><span data-bird="exe-dev-seo" data-size="22" data-dot="off" class="block size-[22px] [&>svg]:size-full"></span><span class="font-medium text-gray-900">SEO bot</span> now</p>
+            <p class="mt-2 text-[15px] text-gray-900">Publish 5 new pages to acme.dev?</p>
+            <div class="mt-4 flex gap-2">
+              <span class="btn btn-outline relative h-9 overflow-hidden px-4">
+                Publish
+                <span class="approve-on btn-primary absolute inset-0 grid place-items-center">Publish</span>
+                <span class="approve-tap absolute top-1/2 left-1/2 -mt-4 -ml-4 size-8 rounded-full border-2 border-white bg-black/20"></span>
+              </span>
+              <span class="approve-dim btn btn-outline h-9 px-4">Not yet</span>
+            </div>
+            <p class="approve-on mt-5 flex items-center gap-1.5 text-gray-500"><Icon name="check" class="size-3.5" /> Publishing</p>
           </div>
-          <p class="approve-on mt-4 flex items-center gap-1.5 text-gray-500"><Icon name="check" class="size-3.5" /> Publishing</p>
         </div>
       </div>
 
       <div class={card}>
-        <h3 class="text-xl font-medium">Live status</h3>
-        <div class={surface}>
-          <p class="flex justify-between text-gray-500">Migrating users <span class="text-xs">Pinned</span></p>
-          <div class="mt-3 h-1.5 rounded-full bg-gray-200"><div class="track-bar h-full rounded-full bg-gray-800"></div></div>
-          <ul class="mt-4 flex flex-col gap-2.5">
+        <h3 class={title}><span class="font-medium text-gray-900">Updates on your phone.</span> Push notifications from every agent, in one inbox.</h3>
+        <div class:list={[visual, "from-[#fdeadf] to-[#f5c9b5]"]}>
+          <div class="absolute inset-x-6 top-8 mx-auto flex max-w-sm flex-col gap-2 text-sm sm:inset-x-10">
             {
-              ["Copy rows", "Verify", "Switch over"].map((label, i) => (
-                <li class="flex items-center gap-2.5">
-                  <span class={`track-${i + 1} grid size-5 place-items-center rounded-full bg-gray-200 text-white`}>
-                    <Icon name="check" class="size-3" />
+              [
+                ["SEO bot", "3 new pages in the top 10"],
+                ["Support bot", "2 tickets need you"],
+                ["Research bot", "Weekly report is ready"],
+              ].map(([who, text], i) => (
+                <div class="push flex gap-3 rounded-2xl bg-white/85 p-3 shadow-[0_8px_24px_-10px_rgb(0_0_0/0.25)] backdrop-blur" style={`animation-delay:${i * 0.5}s`}>
+                  <span class="grid size-9 flex-none place-items-center rounded-[10px] border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white">
+                    <Bird class="size-4.5" />
                   </span>
-                  {label}
-                </li>
-              ))
-            }
-          </ul>
-        </div>
-      </div>
-
-      <div class={card}>
-        <h3 class="text-xl font-medium">Give it new tasks</h3>
-        <div class={surface}>
-          <div class="ml-auto w-fit rounded-lg bg-gray-100 px-3 py-2.5 text-sm">Add a page for the Teams plan</div>
-          <div class="relative mt-2 ml-auto h-5 w-28 text-right text-gray-500">
-            {
-              ["Sent", "Seen", "Working on it", "Done"].map((label, i) => (
-                <span class="handoff-state absolute inset-0" style={`animation-delay:${-(6 - i * 1.5)}s`}>
-                  {label}
-                </span>
-              ))
-            }
-          </div>
-          <div class="handoff-reply mt-3 w-fit rounded-lg px-3 py-1">
-            <p class="text-gray-500"><span class="font-medium text-gray-900">SEO bot</span> now</p>
-            <p class="mt-1 text-sm">Done, it's live.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class={card}>
-        <h3 class="text-xl font-medium">Share keys safely</h3>
-        <div class={surface}>
-          <p class="flex items-center gap-2 font-medium text-gray-900"><Icon name="lock" class="size-3.5 text-gray-500" /> STRIPE_SECRET_KEY</p>
-          <div class="mt-3 flex gap-2">
-            <span class="flex h-8 flex-1 items-center overflow-hidden rounded-lg border border-gray-200 px-3">
-              <span class="keys-dots overflow-hidden font-mono tracking-widest whitespace-nowrap text-gray-500">••••••••••••••••••</span>
-            </span>
-            <span class="btn btn-outline relative h-8 overflow-hidden">
-              Send
-              <span class="keys-on btn-primary absolute inset-0 grid place-items-center">Send</span>
-            </span>
-          </div>
-          <div class="keys-file mt-5 flex w-fit items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 font-mono text-xs text-gray-300">
-            <Icon name="check" class="size-3.5 text-brand-300" /> written to .env
-          </div>
-        </div>
-      </div>
-
-      <div class={card}>
-        <h3 class="text-xl font-medium">Updates on your phone</h3>
-        <div class="absolute inset-x-7 top-20 flex flex-col gap-2 text-[13px]">
-          {
-            [
-              ["SEO bot", "3 new pages in the top 10"],
-              ["Support bot", "2 tickets need you"],
-              ["Research bot", "Weekly report is ready"],
-            ].map(([who, text], i) => (
-              <div class="push flex gap-2.5 rounded-2xl bg-white/90 p-3 shadow-[0_6px_20px_-8px_rgb(0_0_0/0.2)]" style={`animation-delay:${i * 0.5}s`}>
-                <span class="grid size-8 flex-none place-items-center rounded-lg border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white">
-                  <Bird class="size-4" />
-                </span>
-                <div class="leading-snug">
-                  <p class="font-semibold text-gray-900">{who}</p>
-                  <p class="text-gray-600">{text}</p>
+                  <div class="leading-snug">
+                    <p class="font-semibold text-gray-900">{who}</p>
+                    <p class="text-gray-600">{text}</p>
+                  </div>
                 </div>
-              </div>
-            ))
-          }
+              ))
+            }
+          </div>
         </div>
       </div>
 
       <div class={card}>
-        <h3 class="text-xl font-medium">Its own dashboard</h3>
-        <div class={surface}>
-          <p class="flex items-center gap-2 text-gray-500"><Icon name="app" class="size-3.5" /> Rankings</p>
-          <div class="mt-3 flex h-20 items-end gap-2">
-            {[38, 46, 41, 58, 64, 79, 92].map((h, i) => <span class="bar-grow flex-1 origin-bottom rounded-t-sm bg-brand-400" style={`height:${h}%;animation-delay:${i * 0.08}s`} />)}
+        <h3 class={title}><span class="font-medium text-gray-900">Share keys safely.</span> Keys go straight into .env, never through the agent.</h3>
+        <div class:list={[visual, "from-[#e2f4ec] to-[#b8e2cf]"]}>
+          <div class={surface}>
+            <p class="flex items-center gap-2 text-[15px] font-medium text-gray-900"><Icon name="lock" class="size-4 text-gray-500" /> STRIPE_SECRET_KEY</p>
+            <p class="mt-1 text-gray-500">Written to ~/app/.env</p>
+            <div class="mt-4 flex gap-2">
+              <span class="flex h-9 flex-1 items-center overflow-hidden rounded-lg border border-gray-200 px-3">
+                <span class="keys-dots overflow-hidden font-mono tracking-widest whitespace-nowrap text-gray-500">••••••••••••••••••••••</span>
+              </span>
+              <span class="btn btn-outline relative h-9 overflow-hidden px-4">
+                Send
+                <span class="keys-on btn-primary absolute inset-0 grid place-items-center">Send</span>
+              </span>
+            </div>
+            <div class="keys-file mt-5 flex w-fit items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 font-mono text-xs text-gray-300">
+              <Icon name="check" class="size-3.5 text-brand-300" /> STRIPE_SECRET_KEY written to .env
+            </div>
           </div>
-          <span class="btn btn-outline mt-4 h-8">Re-run audit</span>
+        </div>
+      </div>
+
+      <div class={card}>
+        <h3 class={title}><span class="font-medium text-gray-900">Live status and dashboards.</span> Agents pin their progress and build small apps next to the chat.</h3>
+        <div class:list={[visual, "from-[#e7e9ff] via-[#f1e6f6] to-[#fbe0e3]"]}>
+          <div class={surface}>
+            <p class="flex items-center gap-2 text-gray-500"><Icon name="app" class="size-3.5" /> Rankings</p>
+            <div class="mt-4 flex h-20 items-end gap-2">
+              {[38, 46, 41, 58, 64, 79, 92].map((h, i) => <span class="bar-grow flex-1 origin-bottom rounded-t-sm bg-brand-400" style={`height:${h}%;animation-delay:${i * 0.08}s`} />)}
+            </div>
+            <span class="btn btn-outline mt-5 h-9 px-4">Re-run audit</span>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <GetStarted />
-
-  <Replaces />
+  <Setup />
 
   <section id="integrations" class="mx-auto mt-32 max-w-6xl scroll-mt-8 px-6 text-center">
     <h2 class="text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Works with any agent</h2>
@@ -244,18 +213,19 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
   </section>
 
   <section class="mx-auto mt-32 max-w-6xl px-6 pb-24">
-    <div class="relative isolate flex flex-col items-center overflow-hidden rounded-3xl bg-linear-to-b from-gray-100 to-[#eceefb] px-6 py-24 text-center">
+    <div class="relative isolate flex flex-col items-center overflow-hidden rounded-3xl bg-linear-to-b from-gray-100 to-[#eceefb] px-6 pt-24 text-center">
       <Flock />
       <div class="pointer-events-none absolute inset-0 -z-[1] bg-[radial-gradient(ellipse_50%_45%_at_center,rgb(250_250_252/0.92)_45%,transparent)]"></div>
-      <span class="cta-bird relative grid size-16 place-items-center rounded-2xl border border-brand-600 bg-linear-to-b from-brand-400 to-brand-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_12px_30px_-10px_rgb(91_104_224/0.6)]">
-        <Bird class="size-8" />
-      </span>
-      <h2 class="relative mt-6 text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Let your agents run. Stay in charge.</h2>
+      <h2 class="relative text-[40px] leading-[1.05] font-[550] tracking-[-0.035em]">Let your agents run. Stay in charge.</h2>
       <p class="relative mt-3 text-gray-500">Free to start on app.rply.sh. Open source, so you can host it yourself.</p>
       <div class="relative mt-8 flex gap-3">
         <a href="#get-started" class="btn btn-primary">Get started</a>
         <a href="https://app.rply.sh" class="btn btn-outline">Go to app</a>
       </div>
+      <svg viewBox="0 0 442 417" class="cta-bird relative mt-14 -mb-[min(240px,40vw)] w-[min(520px,90%)] text-brand-300" fill="none" aria-hidden="true">
+        <path d={birdPath.split("ZM")[0] + "Z"} fill="white" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+        <g class="cta-eye"><rect class="cta-lid" x="236" y="92" width="39" height="58" rx="19.5" fill="var(--color-brand-400)" /></g>
+      </svg>
     </div>
   </section>
 
@@ -304,11 +274,22 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
     }
   }
   .cta-bird {
-    animation: hover-bird 3.2s ease-in-out infinite;
+    animation: hover-bird 5s ease-in-out infinite;
+  }
+  .cta-eye {
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .cta-lid {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.08s ease-in;
+  }
+  .cta-lid.blink {
+    transform: scaleY(0.12);
   }
   @keyframes hover-bird {
     50% {
-      transform: translateY(-6px) rotate(-3deg);
+      transform: translateY(-10px) rotate(-2deg);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -369,96 +350,6 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       transform: scale(0.85);
     }
     48%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  .track-bar {
-    animation-name: track-bar;
-  }
-  @keyframes track-bar {
-    0% {
-      width: 0;
-    }
-    75%,
-    95% {
-      width: 100%;
-    }
-    100% {
-      width: 0;
-    }
-  }
-  .track-1 {
-    animation-name: light-1;
-  }
-  .track-2 {
-    animation-name: light-2;
-  }
-  .track-3 {
-    animation-name: light-3;
-  }
-  @keyframes light-1 {
-    0%,
-    24%,
-    100% {
-      background: var(--color-gray-200);
-    }
-    26%,
-    95% {
-      background: var(--color-gray-800);
-    }
-  }
-  @keyframes light-2 {
-    0%,
-    49%,
-    100% {
-      background: var(--color-gray-200);
-    }
-    51%,
-    95% {
-      background: var(--color-gray-800);
-    }
-  }
-  @keyframes light-3 {
-    0%,
-    74%,
-    100% {
-      background: var(--color-gray-200);
-    }
-    76%,
-    95% {
-      background: var(--color-gray-800);
-    }
-  }
-
-  .handoff-state {
-    animation-name: slot;
-  }
-  @keyframes slot {
-    0%,
-    24% {
-      opacity: 1;
-    }
-    25%,
-    100% {
-      opacity: 0;
-    }
-  }
-  .handoff-reply {
-    animation-name: reply;
-  }
-  @keyframes reply {
-    0%,
-    70% {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    76%,
-    96% {
-      opacity: 1;
-      transform: none;
-    }
     100% {
       opacity: 0;
     }
@@ -555,22 +446,34 @@ const surface = "absolute top-20 right-0 bottom-0 left-7 rounded-tl-xl border-t 
       animation-play-state: paused !important;
       animation-delay: -5.3s !important;
     }
-    .bento .handoff-state {
-      animation: none !important;
-      opacity: 0;
-    }
-    .bento .handoff-state:last-child {
-      opacity: 1;
-    }
   }
 </style>
 
 <script>
+  const ctaBird = document.querySelector<SVGSVGElement>(".cta-bird")!;
+  const eye = ctaBird.querySelector<SVGGElement>(".cta-eye")!;
+  const lid = ctaBird.querySelector<SVGRectElement>(".cta-lid")!;
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    addEventListener("pointermove", (e) => {
+      const r = eye.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy) || 1;
+      const reach = Math.min(1, d / 300) * 16;
+      eye.style.transform = `translate(${(dx / d) * reach}px, ${(dy / d) * reach}px)`;
+    });
+    const blink = () => {
+      lid.classList.add("blink");
+      setTimeout(() => lid.classList.remove("blink"), 120);
+      setTimeout(blink, 2500 + Math.random() * 3500);
+    };
+    setTimeout(blink, 2000);
+  }
+
   import { chirp, mountBirds, setMood } from "../components/agent-bird.ts";
 
   const stage = document.querySelector<HTMLElement>(".stage")!;
   const agent = "exe-dev-seo";
   mountBirds(stage);
+  mountBirds(document.querySelector(".bento")!);
   const content = stage.querySelector<HTMLElement>(".stage-content")!;
   const finger = stage.querySelector<HTMLElement>(".finger")!;
   const states = ["s-drafted", "s-ask", "opened", "answered", "done"];

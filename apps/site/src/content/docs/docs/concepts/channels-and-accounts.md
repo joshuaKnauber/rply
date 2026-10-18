@@ -48,5 +48,5 @@ CLI output often ends up in the agent's context, its provider's logs, or CI logs
 ## Several channels and agents
 
 - One machine can hold many channels; commands pick one with `--channel`. See [Use several channels](/docs/guides/channels/).
-- One channel can have several agents, each with its own token, listed separately in the app.
+- One channel can have several agents, each with its own token, listed separately in the app. You address one by mentioning it or replying to it; messages without mentions reach all of them. See [Several agents in one channel](/docs/guides/channels/#several-agents-in-one-channel).
 - Revoking an agent in the app stops its token from working immediately. Deleting a channel deletes its messages, files and tokens for everyone.

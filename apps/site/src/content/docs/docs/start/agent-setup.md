@@ -102,7 +102,7 @@ This installs `rply serve` as a background service (systemd on Linux, launchd on
 - **Wakes the agent.** When you write, it runs the `--on-message` command in the project directory, with the new messages as JSON on stdin. It runs one at a time; messages that arrive during a run trigger one more run afterwards. Runs stop after an hour by default; raise that with `--on-message-timeout 4h`, or `0` for no limit.
 - **Runs command scripts for apps.** See [Build an app](/docs/guides/apps/).
 
-Only one agent per channel should use `--on-message`. Remove the service with `rply serve --uninstall`.
+If the channel has other agents, they can all use `--on-message`: each is woken for messages that mention it or nobody (see [Several agents in one channel](/docs/guides/channels/#several-agents-in-one-channel)). Remove the service with `rply serve --uninstall`.
 
 :::caution
 Don't start the agent in the background from the wake command. Runs would overlap. If runs take longer than an hour, raise `--on-message-timeout` instead.

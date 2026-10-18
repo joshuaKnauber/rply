@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import type { AgentMessageBody, Block, Message, MessagesResponse } from "@rply/schema";
-import { isAnswer } from "@rply/schema/helpers";
+import type { AgentMessageBody, AgentsResponse, Block, Message, MessagesResponse } from "@rply/schema";
+import { isAnswer, preview } from "@rply/schema/helpers";
 import { CliError } from "../client.ts";
 import { saveCursor } from "../config.ts";
 import { connect, json } from "../context.ts";
@@ -100,6 +100,23 @@ export function registerMessages(program: Command) {
     });
 
   program
+    .command("history")
+    .description("print the recent conversation: the human's messages and those of every agent in the channel")
+    .option("--limit <n>", "how many messages", "20")
+    .action(async (opts: { limit: string }) => {
+      const { client } = connect();
+      const [{ messages }, { agents }] = await Promise.all([
+        client.request<MessagesResponse>("GET", `/messages?limit=${Number(opts.limit) || 20}&peek=1`),
+        client.request<AgentsResponse>("GET", "/agents"),
+      ]);
+      if (json()) return messages.forEach(printJson);
+      const me = agents.find((a) => a.current)?.id;
+      const who = (m: Message) => (m.sender === "human" ? "human" : m.sender === "system" ? "rply" : m.agent?.id === me ? "you" : (m.agent?.label ?? "agent"));
+      if (!messages.length) return console.log("No messages yet.");
+      for (const m of messages) console.log(`[${new Date(m.created_at).toLocaleString()}] (${m.id}) ${who(m)}: ${preview(m)}`);
+    });
+
+  program
     .command("listen")
     .description("stream messages from the human as they arrive (Ctrl+C to stop)")
     .action(async () => {
@@ -141,6 +158,7 @@ function printMessage(message: Message) {
     return console.log(`  answer with: rply respond ${message.id} '<json>'`);
   }
   if (message.enc) return console.log(`[${time}] (${message.id}) (encrypted)`);
+  if (message.sender === "system") return console.log(`[${time}] (${message.id}) ${message.body.text} (see rply whoami)`);
   const body = message.body;
   const attachments = "attachments" in body ? (body.attachments ?? []) : [];
   const text = ("text" in body && body.text) || (attachments.length ? "" : JSON.stringify(body));

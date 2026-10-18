@@ -10,12 +10,13 @@ import {
   PostMessageRequest,
   ReplaceMessageRequest,
   type AskResponse,
+  type MessageSender,
   type MessagesResponse,
   type Sender,
 } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { assertOwnMessage, insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { longPoll } from "../notifier.ts";
 import { notifyAboutMessage } from "../push/notify.ts";
@@ -31,10 +32,25 @@ export function messageRoutes(deps: Deps) {
   const auth = requireAuth(deps);
   const agent = requireAuth(deps, "agent");
 
-  const loadAgentMessage = async (channelId: string, id: string) => {
+  const loadAgentMessage = async (channelId: string, id: string, agentId: string) => {
     const row = await loadMessage(db, channelId, id);
     if (row.sender !== "agent") throw new HTTPException(400, { message: "Only agent messages can be changed" });
+    assertOwnMessage(row, agentId);
     return row;
+  };
+
+  // a plain reply to an agent's message is meant for that agent, as if it was mentioned
+  const repliedAgent = async (channelId: string, sender: Sender, replyTo: string | undefined, body: unknown) => {
+    if (sender !== "human" || !replyTo || !body || typeof body !== "object" || "answers" in body || "event" in body) return [];
+    const row = await db
+      .selectFrom("messages")
+      .innerJoin("agent_tokens", "agent_tokens.id", "messages.agent_id")
+      .select("agent_tokens.id")
+      .where("messages.id", "=", replyTo)
+      .where("messages.channel_id", "=", channelId)
+      .where("agent_tokens.revoked_at", "is", null)
+      .executeTakeFirst();
+    return row ? [row.id] : [];
   };
 
   const checkMentions = async (channelId: string, sender: Sender, ids: string[] = []) => {
@@ -56,7 +72,7 @@ export function messageRoutes(deps: Deps) {
       const id = randomId();
       const fileIds = await checkFiles(deps, channel.id, body);
       if (sender === "human" && req.ask) throw new HTTPException(400, { message: "Only the agent can ask" });
-      const mentions = await checkMentions(channel.id, sender, req.mentions);
+      const mentions = await checkMentions(channel.id, sender, [...(req.mentions ?? []), ...(await repliedAgent(channel.id, sender, req.reply_to, body))]);
 
       const ask = sender === "agent" && (req.ask ?? (body && "blocks" in body && body.blocks?.some(isInput) ? {} : undefined));
       const changed = [id];
@@ -114,9 +130,14 @@ export function messageRoutes(deps: Deps) {
     })
     .get("/messages", auth, async (c) => {
       const { channel, sender: reader, agentId } = c.var.auth;
-      const forReader = (row: { sender: Sender; mentions: string | null }) =>
-        reader !== "agent" || row.sender !== "human" || !row.mentions || JSON.parse(row.mentions).includes(agentId);
       const since = c.req.query("since") === undefined ? undefined : Number(c.req.query("since"));
+      // an agent's inbox (reads with since) only gets human messages that mention it or nobody, and no notice about itself;
+      // the latest page without since is the full history
+      const forReader = (row: { sender: MessageSender; mentions: string | null; agent_id: string | null }) => {
+        if (reader !== "agent" || since === undefined) return true;
+        if (row.sender === "system") return row.agent_id !== agentId;
+        return row.sender !== "human" || !row.mentions || JSON.parse(row.mentions).includes(agentId);
+      };
       const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
       const sender = c.req.query("sender") as Sender | undefined;
       if (sender && sender !== "agent" && sender !== "human") throw new HTTPException(400, { message: "sender must be agent or human" });
@@ -124,7 +145,9 @@ export function messageRoutes(deps: Deps) {
       const query = () => {
         let q = selectLiveMessages(db).where("messages.channel_id", "=", channel.id).limit(limit);
         q = q.where("messages.pin", "is", null);
-        if (sender) q = q.where("messages.sender", "=", sender);
+        // system messages are addressed to agents, so their inbox (sender=human) includes them
+        if (sender === "human" && reader === "agent") q = q.where("messages.sender", "in", ["human", "system"]);
+        else if (sender) q = q.where("messages.sender", "=", sender);
         return since === undefined
           ? q.orderBy("messages.seq", "desc").execute().then((rows) => rows.reverse())
           : q.where("messages.seq", ">", since).orderBy("messages.seq", "asc").execute();
@@ -159,7 +182,7 @@ export function messageRoutes(deps: Deps) {
     .put("/messages/:id", agent, async (c) => {
       const { channel } = c.var.auth;
       deps.limits.write(channel.id);
-      const target = await loadAgentMessage(channel.id, c.req.param("id"));
+      const target = await loadAgentMessage(channel.id, c.req.param("id"), c.var.auth.agentId!);
       const req = parse(ReplaceMessageRequest, await c.req.json());
       rejectSecretBlocks(JSON.parse(target.enc ? "{}" : target.body).blocks);
       const parsed = req.enc ? undefined : parse(AgentMessageBody, req.body);
@@ -173,7 +196,7 @@ export function messageRoutes(deps: Deps) {
     .patch("/messages/:id", agent, async (c) => {
       const { channel } = c.var.auth;
       deps.limits.write(channel.id);
-      const target = await loadAgentMessage(channel.id, c.req.param("id"));
+      const target = await loadAgentMessage(channel.id, c.req.param("id"), c.var.auth.agentId!);
       if (target.enc) throw new HTTPException(400, { message: "Encrypted messages can't be patched, replace them with PUT" });
       rejectSecretBlocks(JSON.parse(target.body).blocks);
       const patch = parse(PatchMessageRequest, await c.req.json());
@@ -186,7 +209,7 @@ export function messageRoutes(deps: Deps) {
     })
     .delete("/messages/:id", agent, async (c) => {
       const { channel } = c.var.auth;
-      const target = await loadAgentMessage(channel.id, c.req.param("id"));
+      const target = await loadAgentMessage(channel.id, c.req.param("id"), c.var.auth.agentId!);
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", target.id).execute();
       await deleteFilesOf(deps, target.id);
       await db.updateTable("asks").set({ status: "cancelled", closed_at: now() }).where("message_id", "=", target.id).where("status", "=", "open").execute();
@@ -209,7 +232,7 @@ export function messageRoutes(deps: Deps) {
     })
     .post("/messages/:id/cancel", agent, async (c) => {
       const { channel } = c.var.auth;
-      const target = await loadAgentMessage(channel.id, c.req.param("id"));
+      const target = await loadAgentMessage(channel.id, c.req.param("id"), c.var.auth.agentId!);
       const result = await db
         .updateTable("asks")
         .set({ status: "cancelled", closed_at: now() })

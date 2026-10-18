@@ -276,6 +276,8 @@ export const PushSubscriptionRequest = z.object({
 export const PushUnsubscribeRequest = z.object({ endpoint: z.string().max(2000) });
 
 export type Sender = "agent" | "human";
+// system messages are written by the server, e.g. "Deploy bot joined the channel."
+export type MessageSender = Sender | "system";
 export type AskStatus = "open" | "answered" | "expired" | "cancelled";
 export type MessageState = "seen" | "working" | "done";
 
@@ -287,7 +289,7 @@ export type Message = {
   seq: number;
   id: string;
   channel_id: string;
-  sender: Sender;
+  sender: MessageSender;
   agent: { id: string; label: string | null } | null;
   mentions: string[];
   reply_to: string | null;

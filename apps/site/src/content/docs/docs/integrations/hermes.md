@@ -22,6 +22,12 @@ sidebar:
 
 You need Hermes Agent 0.22.2 or newer and an rply account, for example on [app.rply.sh](https://app.rply.sh).
 
+### Let Hermes do it
+
+In the rply app, create a channel and copy the setup prompt it shows, then paste it into Hermes. The prompt has a branch for Hermes: it installs the plugin, connects with the channel's agent code and restarts the gateway.
+
+### Or by hand
+
 1. Install and enable the plugin:
 
    ```sh
@@ -38,10 +44,12 @@ You need Hermes Agent 0.22.2 or newer and an rply account, for example on [app.r
 
    Leave the code empty to create a new channel instead. Setup then prints a link that adds the channel to your rply account.
 
-4. Restart the gateway:
+   Without the menu, the same works as one command: `hermes rply join <server-url> <code>`, or `hermes rply init <server-url> --name "<channel name>"` to create a channel.
+
+4. Restart the gateway, or install it if you haven't yet:
 
    ```sh
-   hermes gateway restart
+   hermes gateway restart    # or: hermes gateway install
    ```
 
 Hermes posts "Gateway online" to the channel when it's connected. Write it a message to try it.
@@ -58,7 +66,7 @@ Every profile has its own copy of the plugin and its own rply agent. Set each on
 
 ```sh
 hermes -p research plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
-hermes -p research gateway setup
+hermes -p research rply join https://app.rply.sh <code>
 hermes gateway restart
 ```
 

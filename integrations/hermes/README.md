@@ -14,6 +14,13 @@ hermes gateway setup     # pick rply, enter the agent code from the rply app (or
 hermes gateway restart
 ```
 
+Without the setup menu (for example when Hermes sets itself up from the rply app's setup prompt):
+
+```sh
+hermes rply join https://app.rply.sh <agent-code>     # or: hermes rply init https://app.rply.sh --name "Hermes"
+hermes gateway restart                                # or hermes gateway install, the first time
+```
+
 For more profiles, repeat with `hermes -p <name> ...`. Each profile has its own copy of the plugin and joins the channel as its own agent.
 
 ## Features

@@ -8,9 +8,12 @@ import { VERSION } from "../update.ts";
 const topics: Record<string, string> = {
   setup: `Setting up this machine. Follow every step; the human is waiting for the result in the rply app.
 
-If your agent framework has an rply integration installed (a plugin, extension or messaging platform for rply),
-its instructions come first: it may already handle messages, waking you and secrets. Use this CLI only for what
-it doesn't cover. https://rply.sh/docs/integrations/ lists the known ones.
+If your agent framework has an rply integration (a plugin, extension or messaging platform for rply), use it
+instead of these steps: it handles messages, waking you and secrets. Use this CLI only for what it doesn't cover.
+https://rply.sh/docs/integrations/ lists them. Hermes Agent has one:
+  hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+  hermes rply join <server-url> <code>     (or: hermes rply init <server-url> --name "<channel name>")
+  hermes gateway restart                   (hermes gateway install if the gateway isn't installed yet)
 
 1. Install the CLI globally, not with npx (the background service needs a stable path). The npm package
    is @rply/cli; there is no package called rply:

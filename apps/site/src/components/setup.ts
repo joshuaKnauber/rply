@@ -98,12 +98,21 @@ export const selfHosted: Platform[] = [
   },
 ];
 
+const hermesPlugin = "https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes";
+
+const hermesSteps = (server: string) => `If you're Hermes Agent, use the rply plugin instead of the CLI:
+- hermes plugins install ${hermesPlugin} --enable
+- hermes rply init ${server} --name "<a name for you>"
+- Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).`;
+
 export const hostedPrompt = `Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
 
 1. Install the CLI: npm install --global @rply/cli
 2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
    Show me the claim link it prints and wait until I've opened it and signed in.
-3. Run rply guide setup and follow it from step 3.`;
+3. Run rply guide setup and follow it from step 3.
+
+${hermesSteps("https://app.rply.sh")}`;
 
 export const promptFor = (p: Platform) => (p.where ? selfHostPrompt(p.where) : hostedPrompt);
 
@@ -115,4 +124,6 @@ const selfHostPrompt = (where: string) => `Set up rply (https://rply.sh) so you 
 4. Install the CLI: npm install --global @rply/cli
 5. Create a channel: rply init <server-url> --name "<a name for you>"
    Show me the claim link it prints and wait until I've opened it.
-6. Run rply guide setup and follow it from step 3.`;
+6. Run rply guide setup and follow it from step 3.
+
+For steps 4-6: ${hermesSteps("<server-url>")}`;

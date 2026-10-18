@@ -5,13 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/Button";
 import { channelsKey, claimChannel, createChannel } from "@/lib/channels";
 import { useSessions } from "@/lib/sessions";
+import { agentSetupPrompt } from "@rply/schema/helpers";
 
 const input = "rounded-lg border border-neutral-300 px-3 py-2.5 text-neutral-900 dark:border-neutral-700 dark:text-neutral-100";
 
-const joinPrompt = (server: string, code: string) => `Connect yourself to rply so I can reach you from the rply app:
-1. npm install --global @rply/cli
-2. rply join ${server} ${code}
-3. Run \`rply guide setup\` and follow every step, including the background service and the test message at the end.`;
 
 export default function AddChannel() {
   const sessions = useSessions();
@@ -34,7 +31,7 @@ export default function AddChannel() {
   });
 
   if (create.data) {
-    const prompt = joinPrompt(create.data.entry.server, create.data.code.code);
+    const prompt = agentSetupPrompt(create.data.entry.server, { code: create.data.code.code });
     return (
       <ScrollView className="flex-1 bg-white dark:bg-neutral-950" contentContainerClassName="gap-4 p-4">
         <Text className="font-semibold text-neutral-900 dark:text-neutral-100">Created "{create.data.entry.channel.name}"</Text>

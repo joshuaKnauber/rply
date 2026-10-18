@@ -677,14 +677,39 @@ async def _standalone_send(pconfig, chat_id: str, message: str, *, thread_id: Op
         return send_error(f"rply standalone send failed: {e}")
 
 
-def interactive_setup() -> None:
-    """`hermes gateway setup`: join a channel made in the app, or create one and claim it there."""
-    from hermes_cli.setup import prompt, save_env_value, get_env_value, print_header, print_info, print_success, print_warning
-    from hermes_cli.setup_platforms import declines_reconfigure
-
+def _agent_label() -> str:
     from hermes_cli.profiles import get_active_profile_name
     profile = get_active_profile_name()
-    label = "Hermes" if profile in ("default", "custom") else profile
+    return "Hermes" if profile in ("default", "custom") else profile
+
+
+def _connect(server: str, code: Optional[str], name: str) -> dict[str, Any]:
+    """Join a channel with an agent code, or create one to claim, and save the connection to this profile's .env."""
+    from hermes_cli.config import save_env_value
+    with httpx.Client(base_url=f"{server}/v1", timeout=15.0) as client:
+        if code:
+            resp = client.post("/agents/join", json={"code": code, "label": _agent_label()})
+        else:
+            resp = client.post("/channels", json={"name": name, "label": _agent_label()})
+        if resp.status_code >= 300:
+            raise RuntimeError(resp.json().get("error") if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:200])
+        data = resp.json()
+    save_env_value("RPLY_SERVER", server)
+    save_env_value("RPLY_TOKEN", data["agent_token"])
+    save_env_value("RPLY_ALLOWED_USERS", data["channel"]["id"])
+    return data
+
+
+def _claim_text(server: str, claim: dict[str, Any]) -> list[str]:
+    minutes = max(1, round((claim["expires_at"] / 1000 - time.time()) / 60))
+    return [f"Open this link within {minutes} minutes to add the channel to your rply account:", f"   {server}/claim?c={claim['code']}"]
+
+
+def interactive_setup() -> None:
+    """`hermes gateway setup`: join a channel made in the app, or create one and claim it there."""
+    from hermes_cli.setup import prompt, get_env_value, print_header, print_info, print_success, print_warning
+    from hermes_cli.setup_platforms import declines_reconfigure
+
     print_header("rply")
     if declines_reconfigure("rply", "Reconfigure rply?", "RPLY_TOKEN"):
         return
@@ -692,30 +717,47 @@ def interactive_setup() -> None:
     server = (prompt("rply server", default=get_env_value("RPLY_SERVER") or DEFAULT_SERVER) or DEFAULT_SERVER).rstrip("/")
     print_info("To use a channel you made in the app, open it and choose Add an agent to get a code.")
     code = (prompt("Agent code (leave empty to create a new channel)") or "").strip()
+    name = "" if code else (prompt("Channel name", default="Hermes") or "Hermes")
     try:
-        with httpx.Client(base_url=f"{server}/v1", timeout=15.0) as client:
-            if code:
-                resp = client.post("/agents/join", json={"code": code, "label": label})
-            else:
-                name = prompt("Channel name", default="Hermes") or "Hermes"
-                resp = client.post("/channels", json={"name": name, "label": label})
-            resp.raise_for_status()
-            data = resp.json()
+        data = _connect(server, code, name)
     except Exception as e:
-        detail = getattr(getattr(e, "response", None), "text", "") or str(e)
-        print_warning(f"rply setup failed: {detail[:200]}")
+        print_warning(f"rply setup failed: {e}")
         return
-    save_env_value("RPLY_SERVER", server)
-    save_env_value("RPLY_TOKEN", data["agent_token"])
-    save_env_value("RPLY_ALLOWED_USERS", data["channel"]["id"])
     print_success(f"Connected to rply channel \"{data['channel']['name']}\"")
     if claim := data.get("claim"):
-        minutes = max(1, round((claim["expires_at"] / 1000 - time.time()) / 60))
-        print_info(f"Open this link within {minutes} minutes to add the channel to your rply account:")
-        print_info(f"   {server}/claim?c={claim['code']}")
+        for line in _claim_text(server, claim):
+            print_info(line)
         # the platform menu redraws the screen next, so hold here until the link has been used
         prompt("Press Enter once you've opened the link")
     print_info("Restart the gateway for changes to take effect: hermes gateway restart")
+
+
+def _cli_setup(parser) -> None:
+    subs = parser.add_subparsers(dest="rply_command")
+    join = subs.add_parser("join", help="connect to a channel made in the rply app, with its agent code")
+    join.add_argument("server", help="e.g. https://app.rply.sh")
+    join.add_argument("code", help="the agent code the app shows")
+    init = subs.add_parser("init", help="create a channel and print a link that adds it to the human's rply account")
+    init.add_argument("server", help="e.g. https://app.rply.sh")
+    init.add_argument("--name", default="Hermes", help="channel name")
+    parser.set_defaults(func=_cli_command)
+
+
+def _cli_command(args) -> None:
+    """Non-interactive setup, so an agent can connect itself (`hermes gateway setup` is a menu)."""
+    if getattr(args, "rply_command", None) not in ("join", "init"):
+        print("Usage: hermes rply join <server-url> <code> | hermes rply init <server-url> [--name ..]")
+        raise SystemExit(1)
+    server = args.server.rstrip("/")
+    try:
+        data = _connect(server, getattr(args, "code", None), getattr(args, "name", "Hermes"))
+    except Exception as e:
+        print(f"rply setup failed: {e}")
+        raise SystemExit(1)
+    print(f"Connected this Hermes profile to the rply channel \"{data['channel']['name']}\".")
+    if claim := data.get("claim"):
+        print("\n".join(_claim_text(server, claim)))
+    print("Next: run `hermes gateway restart` (or `hermes gateway install` if the gateway isn't installed yet).")
 
 
 # -- Secrets: a tool, since Hermes can't prompt for secrets over messaging platforms ----------
@@ -808,6 +850,8 @@ def _request_secret(args: dict, **kwargs) -> str:
 def register(ctx) -> None:
     global _ctx
     _ctx = ctx
+    ctx.register_cli_command(name="rply", help="Connect this Hermes profile to an rply channel", setup_fn=_cli_setup,
+                             handler_fn=_cli_command)
     ctx.register_tool(
         name="rply_request_secret", toolset="rply", schema=SECRET_TOOL_SCHEMA, handler=_request_secret,
         check_fn=lambda: bool(_get_scoped_secret("RPLY_TOKEN", "").strip()), emoji="🔑",

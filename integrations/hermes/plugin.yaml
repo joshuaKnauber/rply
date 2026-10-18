@@ -1,7 +1,7 @@
 name: rply-platform
 label: rply
 kind: platform
-version: 0.6.2
+version: 0.7.0
 requires_hermes: ">=0.22.2"
 description: >
   rply gateway adapter for Hermes Agent. Talk to Hermes from the rply inbox

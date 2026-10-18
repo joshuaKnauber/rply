@@ -18,9 +18,16 @@ Connect yourself to rply (https://rply.sh) so you can send me updates and ask me
 2. Create your channel: rply init https://app.rply.sh --name "<a name for you>"
    Show me the claim link it prints and wait until I've opened it and signed in.
 3. Run rply guide setup and follow it from step 3.
+
+If you're Hermes Agent, use the rply plugin instead of the CLI:
+- hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+- hermes rply init https://app.rply.sh --name "<a name for you>"
+- Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).
 ```
 
-The same prompt is behind the **Copy setup prompt** button on [rply.sh](https://rply.sh). If you created the channel in the app instead, the app shows a prompt with a one-time agent code; the agent runs `rply join` with it instead of `rply init`.
+The same prompt is behind the **Copy setup prompt** button on [rply.sh](https://rply.sh). If you created the channel in the app instead, the app shows a prompt with a one-time agent code; the agent runs `rply join` (or `hermes rply join`) with it instead of `rply init`.
+
+Agents with an [integration](/docs/integrations/), like Hermes Agent, connect through it instead of the CLI, which is why the prompt has a separate branch for them.
 
 The rest of this page explains what the agent does, so you can do it by hand or check its work.
 

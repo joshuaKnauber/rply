@@ -292,3 +292,26 @@ export function typedMentions(text: string, agents: { id: string; label: string 
   }
   return ids;
 }
+
+export const HERMES_PLUGIN_URL = "https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes";
+
+const quoteArg = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+
+// The prompt the apps show for setting up an agent: with an agent code it joins that channel, without one it creates a channel to claim
+export function agentSetupPrompt(server: string, join?: { code: string; agentName?: string }) {
+  const name = join?.agentName?.trim();
+  const cli = join ? `rply join ${server} ${join.code}${name ? ` --agent-name ${quoteArg(name)}` : ""}` : `rply init ${server} --name "<a short name for you>"`;
+  const hermes = join ? `hermes rply join ${server} ${join.code}` : `hermes rply init ${server} --name "<a short name for you>"`;
+  const claim = join ? "" : "Give me the claim link it prints, then ";
+  return `Connect yourself to rply so I can reach you from the rply app.
+
+If you're Hermes Agent, use the rply plugin instead of the CLI:
+1. hermes plugins install ${HERMES_PLUGIN_URL} --enable
+2. ${hermes}
+3. ${claim ? "Give me the claim link it prints, then run" : "Run"} hermes gateway restart (or hermes gateway install if the gateway isn't installed yet), and tell me when you're connected.
+
+Otherwise:
+1. npm install --global @rply/cli
+2. ${cli}
+3. ${claim}${claim ? "run" : "Run"} \`rply guide setup\` and follow every step, including the background service and the test message at the end.`;
+}

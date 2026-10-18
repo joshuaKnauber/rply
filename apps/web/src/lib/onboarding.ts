@@ -1,5 +1,6 @@
 import type { ClaimChannelResponse, CreateOwnedChannelResponse, Pairing } from "@rply/schema";
 import type { ChannelEntry } from "@rply/schema";
+import { agentSetupPrompt } from "@rply/schema/helpers";
 import { api } from "./api";
 import { auth } from "./channels";
 
@@ -19,22 +20,6 @@ export const createChannel = (name: string) => api<CreateOwnedChannelResponse>("
 
 export const createAgentCode = (entry: ChannelEntry) => api<Pairing>("/pairings", { ...auth(entry), method: "POST" });
 
-const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+export const joinPrompt = (code: string, agentName = "") => agentSetupPrompt(location.origin, { code, agentName });
 
-const setupPrompt = (connect: string, last: string) =>
-  `Connect yourself to rply so I can reach you from the rply app:
-1. npm install --global @rply/cli
-2. ${connect}
-3. ${last}`;
-
-export const joinPrompt = (code: string, agentName = "") =>
-  setupPrompt(
-    `rply join ${location.origin} ${code}${agentName.trim() ? ` --agent-name ${shellQuote(agentName.trim())}` : ""}`,
-    "Run `rply guide setup` and follow every step, including the background service and the test message at the end.",
-  );
-
-export const initPrompt = () =>
-  setupPrompt(
-    `rply init ${location.origin} --name "<a short name for you>"`,
-    "Give me the claim link it prints, then run `rply guide setup` and follow every step, including the background service and the test message at the end.",
-  );
+export const initPrompt = () => agentSetupPrompt(location.origin);

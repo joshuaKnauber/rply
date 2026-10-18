@@ -195,7 +195,8 @@ Full-page HTML apps per channel for dashboards and control spaces, replacing cus
 ## 7f. Agent avatars (built)
 
 Every agent token is an animated rply bird in the web app (channel list, thread, agents panel); design rules in `apps/web/DESIGN.md`.
-- **Identity**: `birdIdentity(id, channel)` (helpers) picks one of `BIRD_COLORS` and a crest from the token id; agents of a channel, in join order (`GET /v1/agents` is ordered by `created_at`), skip colors and crests already taken. Nothing is stored.
+- **Look**: `BirdLook` (schema) is `{ color, crest, eyes, hat, accent, cheeks, belly }`, indexes into `BIRD_COLORS` / `BIRD_CRESTS` / `BIRD_EYES` / `BIRD_HATS` (helpers; `hat` also covers the monocle, headphones and scarf, `accent` colors them). `birdLook(id, agents)` returns the saved look (`agent_tokens.avatar`, JSON) or generates one from the token id; agents of a channel, in join order (`GET /v1/agents` is ordered by `created_at`), skip colors and crests already taken.
+- **Customizing (web)**: clicking a bird or agent name in the channel list, thread or agents panel opens `AgentCreator` (`lib/customize.ts` holds which agent; the host is mounted in `App.tsx`): a big bird that follows the pointer and can be poked, Stardew-style pickers, randomize/reset, and the name. Every change makes the bird emote (`bird.emote`: love, surprise, music, sparkle, spin, with a speech bubble); typing the name makes it chirp. Saving `PATCH /v1/agents/:id { label?, avatar? }` (any human member; `avatar: null` goes back to the generated look, which the dialog also sends when the look equals it) and refetches agents and messages. The agent's own `rply rename` still works and the last write wins.
 - **Mood**: `agentMood(agent, messages)` (helpers): `waiting` (the agent has an open ask or secret request), `working` (a human message it acked `working`; the ack stores `state_agent_id` on the message), `offline` (no `serve` and not seen for 15 minutes), else `idle`. The web component turns working → idle into a 3s `done` celebration.
 - **Engine**: `apps/web/src/lib/bird.ts` draws the logo path as SVG and animates it with springs plus a little physics (hops with gravity, a tail that bends instead of being cut out, eye saccades and blinks), one shared `requestAnimationFrame` loop that skips birds outside the viewport. `components/AgentAvatar.tsx` wraps it: `mood`, `chirp` (grows with the agent's last message seq, which makes it chirp and the channel's other birds glance over) and `dot` (the waiting badge). `prefers-reduced-motion` drops the moves.
 - Mobile doesn't have avatars yet; it can reuse the helpers and port `bird.ts` to react-native-svg.
@@ -220,6 +221,7 @@ Humans have accounts on every server, self-hosted included (modelled on Plausibl
 - Agent tokens are stored only as SHA-256 hashes. The prefixes make leaked tokens easy to spot. Agent requests authenticate with one query (token joined with its channel); `last_seen_at` is only written when it's older than a minute (`markSeen`).
 - One channel per agent is the default, but an agent may use several (e.g. one per project). Cron scripts and CI use channels too.
 - Several agents on one channel: messages carry `agent: { id, label }` (joined from `agent_tokens`, so renames show on old messages too). The apps show the agent's label instead of the channel name when the channel has more than one active agent (`GET /v1/agents`, `agentName` in helpers), and web groups messages per agent. Push titles follow the same rule (`Channel · label`).
+- **Mentions**: the web composer (tiptap, `components/Composer.tsx`) offers `@agent` suggestions when the channel has several agents. `POST /v1/messages` takes `mentions: [agent id]` at the top level (human only, active agents of the channel, outside the body so E2E channels can route too), stored in `messages.mentions`. An agent reading `GET /v1/messages` only gets human messages that mention it or nobody; its cursor still moves past the others, and only it marks them seen. So `inbox`, `listen` and the `--on-message` wake all follow mentions; the CLI prints `(mentions you)`. The thread highlights `@label` in sent messages. Mobile can't mention yet.
 
 ### Creating and joining channels
 1. **App first (main path)**: a signed-in user creates the channel (`POST /v1/channels` with a session) and becomes its owner; the response carries a single-use **agent code** (1 hour). The agent runs `rply join <server-url> <code>` (`POST /v1/agents/join`). "Add an agent" issues more codes (a second agent, or one that lost its config).
@@ -294,7 +296,7 @@ The token decides the channel and the sender side, so most routes don't need a c
 - `POST /v1/pairings` → agent: new claim code while unclaimed; owner: new agent code. `POST /v1/agents/join` (agent code) → agent token
 - `GET /v1/account/export` (user) → JSON download of the account's data
 - `DELETE /v1/channel` (owner), `PUT /v1/channel/read { seq }` (human), `GET /v1/storage`, `GET|PUT /v1/storage/:key` (human: app storage)
-- `GET /v1/channel` (either side) → channel info; `GET /v1/agents` (either side) → agent tokens `{ id, label, created_at, last_seen_at, current, serve }`; `DELETE /v1/agents/:id` (owner) revokes one; `PATCH /v1/agent { label }` (agent) renames itself
+- `GET /v1/channel` (either side) → channel info; `GET /v1/agents` (either side) → agent tokens `{ id, label, avatar, created_at, last_seen_at, current, serve }`; `DELETE /v1/agents/:id` (owner) revokes one; `PATCH /v1/agents/:id { label?, avatar? }` (human) renames it or sets its bird; `PATCH /v1/agent { label }` (agent) renames itself
 - Human-side channel routes take a session plus `X-Rply-Channel: <channel id>`
 - `GET /v1/info` (no auth) → `{ needs_setup, registration, email, passkeys, files, push }`, used by the apps to show the right sign-in options
 - `POST /v1/messages` (agent or human; `reply_to` + `answers` answers a question), `GET /v1/messages?since=&wait=&sender=&pinned=1&peek=1` (without `since`: latest page, no waiting; the agent reading human messages marks them seen unless `peek=1`)
@@ -315,11 +317,12 @@ channels        id, name, e2e, created_at
 user, session, account, verification, passkey   -- better-auth's tables (camelCase columns, its own date types)
 channel_members channel_id, user_id, role (owner|member), read_seq, created_at
 app_storage     user_id, channel_id, app_key (pin key or message id), value (JSON text, max 256 KB), updated_at
-agent_tokens    id, channel_id, token_hash, label (hostname), public_key, created_at, last_seen_at, revoked_at
+agent_tokens    id, channel_id, token_hash, label (hostname), public_key, avatar (BirdLook JSON | null), created_at, last_seen_at, revoked_at
 pairing_codes   code_hash, channel_id, role (human|agent), expires_at, used_at
 messages        seq (creation order, agent inbox cursor), id, channel_id, sender ('agent'|'human'), agent_id (the agent
                 token that sent it; pins: the last writer), enc, body (JSON text or ciphertext), reply_to, pin (null | key),
-                state (human msgs: seen|working|done), state_note, state_agent_id (who acked), created_at, updated_at, deleted_at
+                state (human msgs: seen|working|done), state_note, state_agent_id (who acked), mentions (JSON agent ids | null),
+                created_at, updated_at, deleted_at
 asks            message_id, channel_id, status (open|answered|expired|cancelled), expires_at, answer_id, closed_at
 changes         seq, channel_id, message_id, created_at     -- one row per insert/edit/state/ask change, drives sync
 secret_requests id, channel_id, message_id, name, target, mode (env|file), status (open|provided|delivered|declined|cancelled),

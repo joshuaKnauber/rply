@@ -144,6 +144,7 @@ function printMessage(message: Message) {
   const body = message.body;
   const attachments = "attachments" in body ? (body.attachments ?? []) : [];
   const text = ("text" in body && body.text) || (attachments.length ? "" : JSON.stringify(body));
-  console.log(`[${time}] (${message.id}) ${text}`.trimEnd());
+  const to = message.mentions?.length ? "(mentions you) " : "";
+  console.log(`[${time}] (${message.id}) ${to}${text}`.trimEnd());
   for (const a of attachments) console.log(`  attachment: ${a.name} (${a.mime}, ${a.size} bytes), download with: rply file get ${a.file_id}`);
 }

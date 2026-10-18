@@ -2,9 +2,10 @@ import { AppWindowIcon, ArrowUpRightIcon, BookOpenIcon, PlusIcon, SettingsIcon }
 import { Link } from "wouter";
 import type { AgentParticipant, Message, ChannelEntry } from "@rply/schema";
 import { Button } from "@/components/ui/button";
-import { appTitle, isApp } from "@rply/schema";
+import { appTitle, birdLook, isApp } from "@rply/schema";
 import { formatTime, isAnswer, preview } from "@/lib/format";
 import { useAllAgents, useAllMessages, useAllPins } from "@/lib/queries";
+import { openCustomizer } from "@/lib/customize";
 import { cn } from "@/lib/utils";
 import { AgentAvatar, AvatarPlaceholder, useAgentMoods } from "./AgentAvatar";
 import { NotificationsButton } from "./NotificationsButton";
@@ -50,7 +51,7 @@ export function ChannelList({ channels, activeId, activeApp, adding, settings }:
                 activeId === entry.id && !activeApp && "bg-foreground/6 hover:bg-foreground/6",
               )}
             >
-              <ChannelAvatar channelId={entry.id} agents={agents} messages={messages} />
+              <ChannelAvatar entry={entry} agents={agents} messages={messages} />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium">{entry.name}</span>
@@ -108,16 +109,29 @@ export function ChannelList({ channels, activeId, activeApp, adding, settings }:
 const MOOD_ORDER = { waiting: 0, working: 1, idle: 2, offline: 3 };
 
 // one bird per channel, or two when several agents share it: whoever needs you first
-function ChannelAvatar({ channelId, agents, messages }: { channelId: string; agents: AgentParticipant[]; messages: Message[] }) {
+function ChannelAvatar({ entry, agents, messages }: { entry: ChannelEntry; agents: AgentParticipant[]; messages: Message[] }) {
   const moods = useAgentMoods(agents, messages);
   const lastSeq = new Map<string, number>();
   for (const m of messages) if (m.agent) lastSeq.set(m.agent.id, m.seq);
-  const order = agents.map((a) => a.id);
   const shown = [...agents]
     .sort((a, b) => MOOD_ORDER[moods.get(a.id)!] - MOOD_ORDER[moods.get(b.id)!] || (lastSeq.get(b.id) ?? 0) - (lastSeq.get(a.id) ?? 0))
     .slice(0, 2);
   const avatar = (agent: AgentParticipant, size: number, className?: string) => (
-    <AgentAvatar key={agent.id} id={agent.id} channel={order} mood={moods.get(agent.id)!} size={size} group={channelId} chirp={lastSeq.get(agent.id)} className={className} />
+    <AgentAvatar
+      key={agent.id}
+      look={birdLook(agent.id, agents)}
+      mood={moods.get(agent.id)!}
+      size={size}
+      group={entry.id}
+      chirp={lastSeq.get(agent.id)}
+      className={className}
+      title={`Customize ${agent.label ?? "agent"}`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openCustomizer(entry, agent.id);
+      }}
+    />
   );
   if (shown.length === 0) return <AvatarPlaceholder size={32} />;
   if (shown.length === 1) return avatar(shown[0]!, 32);

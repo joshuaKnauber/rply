@@ -52,6 +52,7 @@ interface AgentTokensTable {
   token_hash: string;
   label: string | null;
   public_key: string | null;
+  avatar: string | null;
   created_at: number;
   last_seen_at: number | null;
   revoked_at: number | null;
@@ -71,6 +72,7 @@ interface MessagesTable {
   channel_id: string;
   sender: Sender;
   agent_id: string | null;
+  mentions: string | null;
   enc: number;
   body: string;
   reply_to: string | null;

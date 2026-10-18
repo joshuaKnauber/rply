@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { AgentsResponse, ChannelEntry, HumanMessageBody, Message, MessagesResponse, ServerInfo } from "@rply/schema";
+import type { AgentsResponse, BirdLook, ChannelEntry, HumanMessageBody, Message, MessagesResponse, ServerInfo } from "@rply/schema";
 import { api } from "./api";
 import { auth, channelsKey } from "./channels";
 
@@ -41,6 +41,17 @@ const agentsQuery = (entry: ChannelEntry, refetchInterval = 60_000) => ({
 export const useAgents = (entry: ChannelEntry, refetchInterval?: number) => useQuery(agentsQuery(entry, refetchInterval));
 
 export const useAllAgents = (entries: ChannelEntry[]) => useQueries({ queries: entries.map((entry) => agentsQuery(entry)) });
+
+export function useUpdateAgent(entry: ChannelEntry) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; label?: string; avatar?: BirdLook | null }) => api(`/agents/${id}`, { ...auth(entry), method: "PATCH", body }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents", entry.id] });
+      queryClient.invalidateQueries({ queryKey: messagesKey(entry.id) });
+    },
+  });
+}
 
 export function useRevokeAgent(entry: ChannelEntry) {
   const queryClient = useQueryClient();
@@ -100,7 +111,7 @@ export function useRemoveApp(entry: ChannelEntry) {
 export function useSendMessage(entry: ChannelEntry) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (req: { body: HumanMessageBody; reply_to?: string }) =>
+    mutationFn: (req: { body: HumanMessageBody; reply_to?: string; mentions?: string[] }) =>
       api<{ message: Message }>("/messages", { ...auth(entry), body: req }).then((r) => r.message),
     onSuccess: (message) => applySynced(queryClient, [message]),
   });

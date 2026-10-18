@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { agentMood, type AgentMood, type AgentParticipant, type Message } from "@rply/schema";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from "react";
+import { agentMood, type AgentMood, type AgentParticipant, type BirdLook, type Message } from "@rply/schema";
 import { Bird as BirdIcon } from "./Bird";
 import { Bird } from "@/lib/bird";
 import { cn } from "@/lib/utils";
@@ -11,8 +11,7 @@ const groupFor = (key: string) => {
 };
 
 type Props = {
-  id: string;
-  channel: string[];
+  look: BirdLook;
   mood: AgentMood;
   size: number;
   // the channel id: birds of one channel glance at whoever chirps
@@ -22,16 +21,21 @@ type Props = {
   chirpOnMount?: boolean;
   // the "waiting on you" dot; off where the message itself already shows it
   dot?: boolean;
+  // follow the pointer with its eye (big birds only)
+  follow?: boolean;
+  birdRef?: RefObject<Bird | null>;
+  onClick?: (e: MouseEvent) => void;
+  title?: string;
   className?: string;
 };
 
-export function AgentAvatar({ id, channel, mood, size, group, chirp, chirpOnMount, dot = true, className }: Props) {
+export function AgentAvatar({ look, mood, size, group, chirp, chirpOnMount, dot = true, follow, birdRef, onClick, title, className }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
   const bird = useRef<Bird | null>(null);
-  const channelKey = channel.join(",");
 
   useEffect(() => {
-    const b = new Bird({ id, channel: channelKey.split(","), size, state: mood, group: groupFor(group), dot });
+    const b = new Bird({ look, size, state: mood, group: groupFor(group), dot, follow });
+    if (birdRef) birdRef.current = b;
     ref.current!.appendChild(b.svg);
     bird.current = b;
     const observer = new IntersectionObserver(([entry]) => (b.visible = entry!.isIntersecting));
@@ -42,10 +46,14 @@ export function AgentAvatar({ id, channel, mood, size, group, chirp, chirpOnMoun
       observer.disconnect();
       b.destroy();
       bird.current = null;
+      if (birdRef) birdRef.current = null;
     };
-    // mood is applied below, recreating the bird would reset its motion
+    // look and mood are applied below, recreating the bird would reset its motion
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, channelKey, size, group, dot]);
+  }, [size, group, dot, follow]);
+
+  const lookKey = JSON.stringify(look);
+  useEffect(() => bird.current?.setLook(JSON.parse(lookKey)), [lookKey]);
 
   // working → idle means it just finished: celebrate before settling
   const prevMood = useRef(mood);
@@ -66,7 +74,17 @@ export function AgentAvatar({ id, channel, mood, size, group, chirp, chirpOnMoun
     prevChirp.current = chirp;
   }, [chirp]);
 
-  return <span ref={ref} className={cn("inline-block shrink-0", className)} style={{ width: size, height: size }} />;
+  return (
+    <span
+      ref={ref}
+      className={cn("inline-block shrink-0", onClick && "cursor-pointer", className)}
+      style={{ width: size, height: size }}
+      onClick={onClick}
+      title={title}
+      role={onClick ? "button" : undefined}
+      aria-label={onClick ? title : undefined}
+    />
+  );
 }
 
 export function AvatarPlaceholder({ size, className }: { size: number; className?: string }) {

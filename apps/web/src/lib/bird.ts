@@ -1,9 +1,10 @@
-import { birdIdentity, type AgentMood } from "@rply/schema";
+import { BIRD_COLORS, type AgentMood, type BirdLook } from "@rply/schema";
 
 // Animated agent avatar: the rply bird driven by springs and a little physics.
 // Actions only kick springs, so moves blend into each other and nothing snaps.
 
 export type BirdState = AgentMood | "done";
+export type Emote = "love" | "surprise" | "music" | "sparkle" | "spin";
 
 const LOGO_HEAD =
   "M98.5728 24.1553C125.573 9.25532 156.273 -0.844261 196.073 0.0556508C230.973 -0.444349 260.974 10.8558 287.874 26.2558C314.473 41.5558 335.173 64.6555 351.173 90.1553C353.773 94.3551 357.573 96.7556 362.073 99.3555L434.173 141.556C439.173 144.456 441.573 147.556 441.573 151.256C441.573 155.456 438.973 159.056 433.874 162.056L374.173 197.256C366.673 201.656 364.473 205.956 364.073 213.256C362.473 252.556 349.673 286.156 316.573 314.855C294.873 334.755 271.273 350.155 240.673 356.655C222.173 360.655 203.073 361.255 182.073 360.855C174.573 360.656 171.173 362.756 165.374 367.756";
@@ -48,7 +49,82 @@ function logoPath(tailDeg: number) {
 const PIVOT: Point = [48, 86];
 const EYE: Point = [56, 41.8];
 const BEAK: Point = [89.5, 47.2];
+const CHEEK: Point = [67, 53.5];
 const GRAVITY = 900;
+const INK = "#1f1d1b";
+
+// lighter version of a color for the belly
+const tint = (hex: string, t: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) + (255 - ((n >> shift) & 255)) * t);
+  return `rgb(${ch(16)} ${ch(8)} ${ch(0)})`;
+};
+
+// crests and accessories in the logo's own coordinates (442 × 417, facing right)
+function drawCrest(g: SVGGElement, crest: number, color: string) {
+  if (crest === 1) for (const a of [-26, 0, 26]) el(g, "ellipse", { cx: 0, cy: -46, rx: 19, ry: 50, transform: `translate(200 40) rotate(${a})` });
+  if (crest === 2) el(g, "path", { d: "M190 34 C178 -30 236 -72 266 -40 C280 -25 262 -2 244 -16", fill: "none", stroke: color, "stroke-width": 30, "stroke-linecap": "round" });
+  if (crest === 3) el(g, "circle", { cx: 200, cy: 16, r: 40 });
+  if (crest === 4) el(g, "path", { d: "M150 45 L162 -35 L195 15 L216 -60 L240 15 L272 -28 L272 55 Z", stroke: color, "stroke-width": 18, "stroke-linejoin": "round" });
+  if (crest === 5) {
+    el(g, "path", { d: "M215 30 Q218 -40 246 -78", fill: "none", stroke: color, "stroke-width": 14, "stroke-linecap": "round" });
+    el(g, "circle", { cx: 250, cy: -86, r: 26 });
+  }
+}
+
+function drawHat(g: SVGGElement, hat: number, accent: string) {
+  const round = { stroke: accent, "stroke-width": 14, "stroke-linejoin": "round" };
+  if (hat === 1) {
+    el(g, "path", { d: "M140 42 L262 22 L212 -118 Z", fill: accent, ...round });
+    for (const [x, y, r] of [[196, -6, 11], [222, -52, 9], [178, 22, 8]]) el(g, "circle", { cx: x!, cy: y!, r: r!, fill: "#fff", opacity: 0.7 });
+    el(g, "circle", { cx: 212, cy: -124, r: 24, fill: "#fff" });
+  }
+  if (hat === 2) {
+    el(g, "path", { d: "M118 58 C118 -48 300 -52 300 52 Z", fill: accent });
+    el(g, "rect", { x: 108, y: 30, width: 202, height: 38, rx: 19, fill: accent });
+    el(g, "rect", { x: 108, y: 30, width: 202, height: 38, rx: 19, fill: "#fff", opacity: 0.3 });
+    el(g, "circle", { cx: 208, cy: -34, r: 28, fill: "#fff" });
+  }
+  if (hat === 3) {
+    el(g, "path", { d: "M188 14 L128 -30 L132 48 Z M188 14 L250 -36 L248 50 Z", fill: accent, ...round });
+    el(g, "circle", { cx: 188, cy: 14, r: 20, fill: accent });
+    el(g, "circle", { cx: 188, cy: 14, r: 20, fill: "#000", opacity: 0.15 });
+  }
+  if (hat === 4) {
+    el(g, "path", { d: "M200 168 C186 210 168 238 150 270", fill: "none", stroke: INK, "stroke-width": 6, "stroke-linecap": "round" });
+    el(g, "circle", { cx: 258, cy: 121, r: 64, fill: "#fff", opacity: 0.25, stroke: INK, "stroke-width": 13 });
+  }
+  if (hat === 5) {
+    el(g, "path", { d: "M171 122 C158 8 262 -36 304 40", fill: "none", stroke: INK, "stroke-width": 22, "stroke-linecap": "round" });
+    el(g, "rect", { x: 138, y: 108, width: 66, height: 96, rx: 30, fill: accent });
+  }
+  if (hat === 6) {
+    el(g, "path", { d: "M140 42 L150 -48 L190 2 L215 -70 L240 2 L280 -48 L286 42 Z", fill: accent, stroke: accent, "stroke-width": 12, "stroke-linejoin": "round" });
+    el(g, "circle", { cx: 215, cy: 12, r: 14, fill: "#fff" });
+  }
+}
+
+function drawScarf(clipped: SVGGElement, loose: SVGGElement, accent: string) {
+  el(clipped, "path", { d: "M100 214 C190 252 282 250 360 200 L366 252 C282 302 180 298 96 262 Z", fill: accent });
+  el(loose, "path", { d: "M150 252 L118 344 L176 340 L196 266 Z", fill: accent, stroke: accent, "stroke-width": 10, "stroke-linejoin": "round" });
+}
+
+const NOTE = `<path d="M-1.6 3.6 V-5 L4 -6.4 V2.4" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="-3.2" cy="3.8" r="2" fill="${INK}"/><circle cx="2.4" cy="2.6" r="2" fill="${INK}"/>`;
+
+const EMOTE_ICONS: Record<Emote, string> = {
+  love: `<path d="M0 4.5 C-6 0 -6.5 -4 -3.6 -5.2 C-1.8 -6 -0.6 -5 0 -3.8 C0.6 -5 1.8 -6 3.6 -5.2 C6.5 -4 6 0 0 4.5Z" fill="#ff5a5f"/>`,
+  surprise: `<rect x="-1.4" y="-6" width="2.8" height="7.6" rx="1.4" fill="${INK}"/><circle cx="0" cy="4.2" r="1.6" fill="${INK}"/>`,
+  music: NOTE,
+  sparkle: `<path d="M0 -6.5 Q1 -1 6.5 0 Q1 1 0 6.5 Q-1 1 -6.5 0 Q-1 -1 0 -6.5Z" fill="#f5a524"/>`,
+  spin: NOTE,
+};
+
+const pointer = { x: -1e4, y: -1e4 };
+if (typeof addEventListener !== "undefined")
+  addEventListener("pointermove", (e) => {
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+  });
 const NS = "http://www.w3.org/2000/svg";
 const ABORT = Symbol("abort");
 const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -86,6 +162,7 @@ type Timer = { at: number; res: () => void; rej: (e: unknown) => void };
 
 const birds = new Set<Bird>();
 let running = false;
+let uid = 0;
 let last = 0;
 function loop(t: number) {
   const dt = Math.min(0.05, (t - last) / 1000);
@@ -117,6 +194,7 @@ export class Bird {
     sleep: new Spring(0, 50, 13),
     dot: new Spring(0, 380, 13),
     gray: new Spring(0, 22, 10),
+    bubble: new Spring(0, 320, 15),
   };
   private air = { y: 0, vy: 0, on: false, land: null as { res: () => void; rej: (e: unknown) => void } | null };
   private spin: { t: number; dur: number } | null = null;
@@ -129,23 +207,36 @@ export class Bird {
   private impatience = 0;
   private chirpT = 9;
   private tailAngle = NaN;
+  private pokes: number[] = [];
+  private follow: boolean;
+  private lookCfg!: BirdLook;
   private body: SVGGElement;
   private crest: SVGGElement;
   private shape: SVGPathElement;
+  private clip: SVGPathElement;
+  private clipped: SVGGElement;
+  private front: SVGGElement;
+  private hat: SVGGElement;
   private eye: SVGRectElement;
+  private pupil: SVGEllipseElement;
+  private lashes: SVGPathElement;
+  private cheek: SVGCircleElement;
   private happyEye: SVGPathElement;
   private sleepEye: SVGPathElement;
   private chirp: SVGGElement | null = null;
   private chirpLines: SVGLineElement[] = [];
   private dot: SVGCircleElement;
+  private bubble: SVGGElement | null = null;
+  private bubbleIcon: SVGGElement | null = null;
+  private bubbleT = 9;
 
-  constructor(opts: { id: string; channel?: string[]; size: number; state: BirdState; group?: Set<Bird>; dot?: boolean }) {
-    const { color, crest, seed } = birdIdentity(opts.id, opts.channel);
-    let rs = seed ^ Math.floor(Math.random() * 2 ** 31);
+  constructor(opts: { look: BirdLook; size: number; state: BirdState; group?: Set<Bird>; dot?: boolean; follow?: boolean }) {
+    let rs = Math.floor(Math.random() * 2 ** 31);
     this.r = () => ((rs = Math.imul(rs ^ (rs >>> 15), 2246822507) ^ Math.imul(rs ^ (rs >>> 13), 3266489909)) >>> 0) / 4294967296;
     this.amp = clamp((opts.size - 12) / 52, 0.3, 1);
     this.state = opts.state;
     this.group = opts.group;
+    this.follow = opts.follow ?? false;
     this.clock = this.r() * 10;
     this.nextBlink = this.clock + 1 + this.r() * 3;
 
@@ -153,24 +244,35 @@ export class Bird {
     this.svg.setAttribute("viewBox", "0 0 100 100");
     this.svg.setAttribute("aria-hidden", "true");
     this.svg.style.overflow = "visible";
+    const clipId = `bird-${(uid = (uid + 1) % 1e9)}`;
+    this.clip = el(el(el(this.svg, "defs"), "clipPath", { id: clipId }), "path");
     this.body = el(this.svg, "g");
-    const logo = el(this.body, "g", { transform: "translate(10 20) scale(0.18)", fill: color });
+    const logo = el(this.body, "g", { transform: "translate(10 20) scale(0.18)" });
     this.crest = el(logo, "g");
-    if (crest === 1) for (const a of [-26, 0, 26]) el(this.crest, "ellipse", { cx: 0, cy: -46, rx: 19, ry: 50, transform: `translate(200 40) rotate(${a})` });
-    if (crest === 2) el(this.crest, "path", { d: "M190 34 C178 -30 236 -72 266 -40 C280 -25 262 -2 244 -16", fill: "none", stroke: color, "stroke-width": 30, "stroke-linecap": "round" });
-    if (crest === 3) el(this.crest, "circle", { cx: 200, cy: 16, r: 40 });
-    this.shape = el(logo, "path", { d: logoPath(0) });
+    this.shape = el(logo, "path");
+    this.clipped = el(logo, "g", { "clip-path": `url(#${clipId})` });
+    this.front = el(logo, "g");
+    this.hat = el(logo, "g");
+    this.cheek = el(this.body, "circle", { cx: CHEEK[0], cy: CHEEK[1], r: 3.8, fill: "#ff8fa3", opacity: 0.6 });
     this.eye = el(this.body, "rect", { fill: "#fff" });
+    this.pupil = el(this.body, "ellipse", { fill: INK });
+    this.lashes = el(this.body, "path", { fill: "none", stroke: "#fff", "stroke-width": 1.8, "stroke-linecap": "round" });
     this.happyEye = el(this.body, "path", { fill: "none", stroke: "#fff", "stroke-width": 3.8, "stroke-linecap": "round" });
     this.sleepEye = el(this.body, "path", { fill: "none", stroke: "#fff", "stroke-width": 3.4, "stroke-linecap": "round" });
     if (opts.size >= 24) {
-      this.chirp = el(this.body, "g", { stroke: color, "stroke-width": 3, "stroke-linecap": "round", opacity: 0 });
+      this.chirp = el(this.body, "g", { "stroke-width": 3, "stroke-linecap": "round", opacity: 0 });
       this.chirpLines = [0, 1, 2].map(() => el(this.chirp!, "line"));
+    }
+    if (opts.size >= 48) {
+      this.bubble = el(this.svg, "g", { opacity: 0 });
+      el(this.bubble, "path", { d: "M-10 -9 H10 A4 4 0 0 1 14 -5 V5 A4 4 0 0 1 10 9 H-2 L-7 14 L-6 9 H-10 A4 4 0 0 1 -14 5 V-5 A4 4 0 0 1 -10 -9Z", fill: "#fff", stroke: "rgb(0 0 0 / 0.1)", "stroke-width": 1 });
+      this.bubbleIcon = el(this.bubble, "g");
     }
     const small = opts.size < 32;
     this.dot = el(this.svg, "circle", { cx: 90, cy: 14, r: small ? 15 : 8, fill: "var(--attention)", stroke: "var(--avatar-ring, var(--background))", "stroke-width": small ? 8 : 3.5 });
     if (opts.dot === false) this.dot.style.display = "none";
 
+    this.setLook(opts.look);
     this.applyTargets(true);
     this.run(() => Promise.resolve());
     this.group?.add(this);
@@ -186,6 +288,100 @@ export class Bird {
     birds.delete(this);
     this.group?.delete(this);
     this.svg.remove();
+  }
+
+  setLook(look: BirdLook) {
+    const prev = this.lookCfg;
+    this.lookCfg = look;
+    const color = BIRD_COLORS[look.color]!, accent = BIRD_COLORS[look.accent]!;
+    this.shape.setAttribute("fill", color);
+    this.crest.setAttribute("fill", color);
+    this.chirp?.setAttribute("stroke", color);
+    for (const g of [this.crest, this.clipped, this.front, this.hat]) g.replaceChildren();
+    drawCrest(this.crest, look.crest, color);
+    if (look.belly) el(this.clipped, "ellipse", { cx: 215, cy: 292, rx: 128, ry: 82, fill: tint(color, 0.55) });
+    if (look.hat === 7) drawScarf(this.clipped, this.front, accent);
+    else drawHat(this.hat, look.hat, accent);
+    this.cheek.style.display = look.cheeks ? "" : "none";
+    this.tailAngle = NaN;
+    if (prev && prev.crest !== look.crest) this.kick("crest", -500);
+  }
+
+  // a short reaction, then back to what the state does
+  emote(kind: Emote) {
+    this.run(async () => {
+      const s = this.s;
+      this.showBubble(kind);
+      if (kind === "love") {
+        s.happy.t = 1;
+        await this.hop(150);
+        await this.wait(0.7);
+      }
+      if (kind === "surprise") {
+        s.wide.x = 1.4;
+        this.kick("crest", -420);
+        await this.hop(120, { crouch: 0.03 });
+        await this.wait(0.4);
+      }
+      if (kind === "music") {
+        for (let i = 0; i < 4; i++) {
+          this.kick("rot", i % 2 ? 380 : -380);
+          this.kick("tail", i % 2 ? -300 : 300);
+          await this.wait(0.22);
+        }
+      }
+      if (kind === "sparkle") {
+        s.stretch.t = 0.12;
+        this.look = { x: 0.2, y: -0.8 };
+        await this.wait(0.45);
+        s.stretch.t = 0;
+        this.blinkT = 0;
+        await this.wait(0.3);
+      }
+      if (kind === "spin") {
+        s.happy.t = 1;
+        s.stretch.t = -0.16;
+        await this.wait(0.16);
+        await this.hop(220, { spin: true, crouch: 0.02 });
+        this.kick("tail", 500);
+        await this.wait(0.6);
+      }
+      this.applyTargets(false);
+    });
+  }
+
+  // a click: startle and hop; three in a row and it turns its back on you
+  poke() {
+    const now = this.clock;
+    this.pokes = this.pokes.filter((t) => now - t < 2).concat(now);
+    const grumpy = this.pokes.length >= 3;
+    if (grumpy) this.pokes = [];
+    this.run(async () => {
+      const s = this.s;
+      s.wide.x = 1.45;
+      s.happy.t = 0;
+      s.sleep.t = 0;
+      s.open.t = 1;
+      this.kick("crest", -420);
+      if (!grumpy) this.showBubble("surprise");
+      await this.hop(170, { crouch: 0.03 });
+      if (grumpy) {
+        s.flip.t = -1;
+        this.look = { x: 0.6, y: 0.4 };
+        await this.wait(1.6);
+        s.flip.t = 1;
+        await this.wait(0.3);
+      } else await this.wait(0.5);
+      this.applyTargets(false);
+    });
+  }
+
+  private showBubble(kind: Emote) {
+    if (!this.bubbleIcon) return;
+    this.bubbleIcon.innerHTML = EMOTE_ICONS[kind];
+    this.bubbleT = 0;
+    this.s.bubble.x = 0;
+    this.s.bubble.t = 1;
   }
 
   setState(next: BirdState) {
@@ -407,7 +603,12 @@ export class Bird {
     this.timers = this.timers.filter((t) => t.at > this.clock);
     for (const t of due) t.res();
 
-    const watching = this.attention && this.attention.until > this.clock ? this.attention : this.look;
+    let watching = this.attention && this.attention.until > this.clock ? this.attention : this.look;
+    if (this.follow && this.state !== "offline") {
+      const r = this.svg.getBoundingClientRect();
+      const dx = pointer.x - (r.left + r.width / 2), dy = pointer.y - (r.top + r.height * 0.4), d = Math.hypot(dx, dy);
+      if (d > 0 && d < 520) watching = { x: (dx / d) * Math.min(1, d / 140), y: (dy / d) * Math.min(1, d / 140) };
+    }
     const facing = s.flip.x >= 0 ? 1 : -1;
     s.lx.t = watching.x * facing;
     s.ly.t = watching.y;
@@ -466,22 +667,42 @@ export class Bird {
       `translate(0 ${y.toFixed(2)}) rotate(${spin.toFixed(1)} 48 58) translate(${PIVOT[0]} ${PIVOT[1]}) rotate(${rot.toFixed(2)}) scale(${(sx * flip).toFixed(3)} ${sy.toFixed(3)}) translate(${-PIVOT[0]} ${-PIVOT[1]})`,
     );
     this.crest.setAttribute("transform", `rotate(${(s.crest.x * this.amp).toFixed(2)} 205 44)`);
+    this.hat.setAttribute("transform", `rotate(${(s.crest.x * this.amp * 0.35).toFixed(2)} 205 40)`);
     const tailAngle = s.tail.x * this.amp;
     if (!(Math.abs(tailAngle - this.tailAngle) < 0.05)) {
       this.tailAngle = tailAngle;
-      this.shape.setAttribute("d", logoPath(tailAngle));
+      const d = logoPath(tailAngle);
+      this.shape.setAttribute("d", d);
+      this.clip.setAttribute("d", d);
     }
 
     const wide = Math.max(0.6, s.wide.x);
-    const ex = EYE[0] + s.lx.x * 4.6, ey = EYE[1] + s.ly.x * 4.2;
-    const ew = 11.5 * wide * (1 - 0.14 * Math.abs(s.lx.x));
-    const eh = Math.max(ew * 0.4, 18 * wide * clamp(s.open.x, 0, 1.2) * (1 - shut * 0.9));
+    const style = this.lookCfg.eyes;
+    const shiny = style === 2;
+    const ex = EYE[0] + s.lx.x * (shiny ? 2.5 : 4.6), ey = EYE[1] + s.ly.x * (shiny ? 2.2 : 4.2);
+    const [baseW, baseH] = style === 1 ? [13, 13] : shiny ? [17, 17] : [11.5, 18];
+    const ew = baseW * wide * (1 - 0.14 * Math.abs(s.lx.x));
+    const openness = clamp(s.open.x, 0, 1.2) * (1 - shut * 0.9);
+    const eh = Math.max(ew * 0.4, baseH * wide * openness);
+    const eyeOpacity = clamp(1 - Math.max(s.happy.x, s.sleep.x) * 1.6, 0, 1);
     this.eye.setAttribute("x", (ex - ew / 2).toFixed(2));
     this.eye.setAttribute("y", (ey - eh / 2).toFixed(2));
     this.eye.setAttribute("width", ew.toFixed(2));
     this.eye.setAttribute("height", eh.toFixed(2));
     this.eye.setAttribute("rx", (Math.min(ew, eh) / 2).toFixed(2));
-    this.eye.setAttribute("opacity", String(clamp(1 - Math.max(s.happy.x, s.sleep.x) * 1.6, 0, 1)));
+    this.eye.setAttribute("opacity", String(eyeOpacity));
+    this.pupil.setAttribute("opacity", String(shiny ? eyeOpacity * clamp(eh / baseH * 2 - 0.4, 0, 1) : 0));
+    if (shiny) {
+      this.pupil.setAttribute("cx", (ex + s.lx.x * 3.4).toFixed(2));
+      this.pupil.setAttribute("cy", (ey + s.ly.x * 3).toFixed(2));
+      this.pupil.setAttribute("rx", (5.4 * wide).toFixed(2));
+      this.pupil.setAttribute("ry", Math.max(0.5, 5.4 * wide * Math.min(1, eh / (baseH * wide))).toFixed(2));
+    }
+    this.lashes.setAttribute("opacity", String(style === 3 ? eyeOpacity : 0));
+    if (style === 3) {
+      const top = ey - eh / 2;
+      this.lashes.setAttribute("d", `M${ex + 2.5} ${top + 1.5} l2.6 -3.6 M${ex + 5} ${top + 3.6} l3.4 -2.6`);
+    }
     this.happyEye.setAttribute("d", `M${ex - 6} ${ey + 3} Q${ex} ${ey - 6 * s.happy.x} ${ex + 6} ${ey + 3}`);
     this.happyEye.setAttribute("opacity", String(clamp(s.happy.x * 1.4 - 0.3, 0, 1)));
     this.sleepEye.setAttribute("d", `M${ex - 6} ${ey} Q${ex} ${ey + 5} ${ex + 6} ${ey}`);
@@ -499,6 +720,13 @@ export class Bird {
           line.setAttribute("x2", String(BEAK[0] + Math.cos(ang) * r1));
           line.setAttribute("y2", String(BEAK[1] + Math.sin(ang) * r1));
         });
+    }
+    if (this.bubble) {
+      this.bubbleT += dt;
+      if (this.bubbleT > 1.3) s.bubble.t = 0;
+      const b = Math.max(0, s.bubble.x);
+      this.bubble.setAttribute("opacity", String(clamp(b * 1.5, 0, 1)));
+      this.bubble.setAttribute("transform", `translate(78 ${(6 - Math.min(this.bubbleT, 1.3) * 3).toFixed(2)}) scale(${(b * 0.95).toFixed(3)})`);
     }
     const pulse = 1 + Math.sin(this.clock * 4) * 0.06 * clamp(s.dot.x, 0, 1);
     this.dot.setAttribute("transform", `translate(90 14) scale(${(Math.max(0, s.dot.x) * pulse).toFixed(3)}) translate(-90 -14)`);

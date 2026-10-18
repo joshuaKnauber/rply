@@ -269,6 +269,32 @@ test("messages and pins carry the agent that sent them, with its current label",
   assert.equal(pin.agent.id, other.agent.id);
 });
 
+test("a human message that mentions agents only reaches those agents", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const code = (await request("POST", "/pairings", { token: human })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+  const agents = (await request("GET", "/agents", { token: human })).json.agents;
+  const secondId = agents.find((a: any) => a.id !== (agents[0].id)).id;
+
+  assert.equal((await request("POST", "/messages", { token: human, body: { body: { text: "@x" }, mentions: ["nope"] } })).status, 400);
+  assert.equal((await request("POST", "/messages", { token: agent, body: { body: { text: "hi" }, mentions: [secondId] } })).status, 400);
+
+  const all = (await request("POST", "/messages", { token: human, body: { body: { text: "everyone" } } })).json.message;
+  const targeted = (await request("POST", "/messages", { token: human, body: { body: { text: "@Deploy only you" }, mentions: [secondId, secondId] } })).json.message;
+  assert.deepEqual(targeted.mentions, [secondId]);
+  assert.deepEqual(all.mentions, []);
+
+  const inbox = async (token: string) => (await request("GET", "/messages?sender=human&since=0", { token })).json;
+  const first = await inbox(agent);
+  assert.deepEqual(first.messages.map((m: any) => m.text ?? m.body.text), ["everyone"]);
+  assert.equal(first.cursor, targeted.seq);
+  assert.deepEqual((await inbox(second)).messages.map((m: any) => m.body.text), ["everyone", "@Deploy only you"]);
+
+  const state = (await request("GET", "/messages", { token: human })).json.messages.find((m: any) => m.id === targeted.id).state;
+  assert.equal(state, "seen");
+});
+
 test("a question is answered once and the agent's wait returns the answer", async () => {
   const { request, ownedChannel } = await setup();
   const { agent, human } = await ownedChannel();
@@ -778,4 +804,24 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "gone" } } });
   await flush();
   assert.deepEqual((await db.selectFrom("push_subscriptions").select("endpoint").execute()).map((r) => r.endpoint), ["https://push.example/b"]);
+});
+
+test("the human renames an agent and picks its bird", async () => {
+  const { request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const [bot] = (await request("GET", "/agents", { token: human })).json.agents;
+  assert.equal(bot.avatar, null);
+
+  const look = { color: 3, crest: 5, eyes: 2, hat: 1, accent: 7, cheeks: true, belly: false };
+  assert.equal((await request("PATCH", `/agents/${bot.id}`, { token: human, body: { label: "Scout", avatar: look } })).status, 204);
+  const [updated] = (await request("GET", "/agents", { token: agent })).json.agents;
+  assert.equal(updated.label, "Scout");
+  assert.deepEqual(updated.avatar, look);
+
+  assert.equal((await request("PATCH", `/agents/${bot.id}`, { token: human, body: { avatar: { ...look, hat: 99 } } })).status, 400);
+  assert.equal((await request("PATCH", `/agents/${bot.id}`, { token: human, body: {} })).status, 400);
+  assert.equal((await request("PATCH", `/agents/${bot.id}`, { token: agent, body: { label: "me" } })).status, 403);
+  assert.equal((await request("PATCH", "/agents/nope", { token: human, body: { label: "x" } })).status, 404);
+  await request("PATCH", `/agents/${bot.id}`, { token: human, body: { avatar: null } });
+  assert.equal((await request("GET", "/agents", { token: human })).json.agents[0].avatar, null);
 });

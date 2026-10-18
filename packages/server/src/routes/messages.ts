@@ -37,6 +37,15 @@ export function messageRoutes(deps: Deps) {
     return row;
   };
 
+  const checkMentions = async (channelId: string, sender: Sender, ids: string[] = []) => {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return unique;
+    if (sender !== "human") throw new HTTPException(400, { message: "Only the human can mention agents" });
+    const agents = await db.selectFrom("agent_tokens").select("id").where("channel_id", "=", channelId).where("revoked_at", "is", null).where("id", "in", unique).execute();
+    if (agents.length !== unique.length) throw new HTTPException(400, { message: "Mentions must be agents of this channel" });
+    return unique;
+  };
+
   return new Hono<AppEnv>()
     .post("/messages", auth, async (c) => {
       const { channel, sender } = c.var.auth;
@@ -47,6 +56,7 @@ export function messageRoutes(deps: Deps) {
       const id = randomId();
       const fileIds = await checkFiles(deps, channel.id, body);
       if (sender === "human" && req.ask) throw new HTTPException(400, { message: "Only the agent can ask" });
+      const mentions = await checkMentions(channel.id, sender, req.mentions);
 
       const ask = sender === "agent" && (req.ask ?? (body && "blocks" in body && body.blocks?.some(isInput) ? {} : undefined));
       const changed = [id];
@@ -78,6 +88,7 @@ export function messageRoutes(deps: Deps) {
           channel_id: channel.id,
           sender,
           agent_id: c.var.auth.agentId ?? null,
+          mentions: mentions.length ? JSON.stringify(mentions) : null,
           enc: req.enc ? 1 : 0,
           body: req.enc ? req.body : JSON.stringify(body),
           reply_to: req.reply_to ?? null,
@@ -102,7 +113,9 @@ export function messageRoutes(deps: Deps) {
       return c.json({ message }, 201);
     })
     .get("/messages", auth, async (c) => {
-      const { channel, sender: reader } = c.var.auth;
+      const { channel, sender: reader, agentId } = c.var.auth;
+      const forReader = (row: { sender: Sender; mentions: string | null }) =>
+        reader !== "agent" || row.sender !== "human" || !row.mentions || JSON.parse(row.mentions).includes(agentId);
       const since = c.req.query("since") === undefined ? undefined : Number(c.req.query("since"));
       const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
       const sender = c.req.query("sender") as Sender | undefined;
@@ -127,10 +140,10 @@ export function messageRoutes(deps: Deps) {
               waitSeconds: waitParam(c.req.query("wait")),
               signal: c.req.raw.signal,
               fetch: query,
-              isEmpty: (rows) => rows.length === 0,
+              isEmpty: (rows) => !rows.some(forReader),
             });
 
-      const messages = rows.map(toMessage);
+      const messages = rows.filter(forReader).map(toMessage);
       if (reader === "agent" && c.req.query("peek") !== "1") {
         const unseen = messages.filter((m) => m.sender === "human" && m.state === null);
         if (unseen.length) {

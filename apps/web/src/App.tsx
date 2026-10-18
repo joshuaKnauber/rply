@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation, useRoute } from "wouter";
 import { AddChannelPage } from "@/components/AddChannelPage";
+import { AgentCreatorHost } from "@/components/AgentCreator";
 import { AuthPage, ResetPasswordPage } from "@/components/AuthPage";
 import { ChannelList } from "@/components/ChannelList";
 import { ChannelView } from "@/components/ChannelView";
@@ -75,6 +76,7 @@ function Inbox({ userId }: { userId: string }) {
           </div>
         )}
       </main>
+      <AgentCreatorHost />
     </div>
   );
 }

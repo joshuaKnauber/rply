@@ -25,6 +25,7 @@ export function toMessage(row: JoinedRow): Message {
     channel_id: row.channel_id,
     sender: row.sender,
     agent: row.agent_id ? { id: row.agent_id, label: row.agent_label } : null,
+    mentions: row.mentions ? JSON.parse(row.mentions) : [],
     reply_to: row.reply_to,
     pin: row.pin,
     state: row.state,

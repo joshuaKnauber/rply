@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ChannelContext } from "@/lib/channel-context";
+import { openCustomizer } from "@/lib/customize";
 import { cn } from "@/lib/utils";
 import { formatAgo } from "@/lib/format";
 import { useAgents, useDeleteChannel, useMessages, usePins, useRemoveApp, useRevokeAgent } from "@/lib/queries";
 import { toast } from "sonner";
-import { appTitle, appUrl, isApp, type Participant, type ChannelEntry } from "@rply/schema";
+import { appTitle, appUrl, birdLook, isApp, type Participant, type ChannelEntry } from "@rply/schema";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AgentAvatar, useAgentMoods } from "./AgentAvatar";
 import { AppView } from "./AppView";
@@ -176,7 +177,6 @@ function Agents({ entry }: { entry: ChannelEntry }) {
   const { data = [] } = useAgents(entry);
   const { data: messages = [] } = useMessages(entry);
   const moods = useAgentMoods(data, messages);
-  const order = data.map((a) => a.id);
   const revoke = useRevokeAgent(entry);
   const owner = entry.role === "owner";
 
@@ -201,8 +201,10 @@ function Agents({ entry }: { entry: ChannelEntry }) {
         {data.length === 0 && <li className="text-muted-foreground">No agent has joined yet</li>}
         {data.map((p) => (
           <li key={p.id} className="group/row flex min-w-0 items-center gap-2">
-            <AgentAvatar id={p.id} channel={order} mood={moods.get(p.id)!} size={22} group={entry.id} className="-ml-0.5" />
-            <span className="truncate">{p.label ?? "Agent"}</span>
+            <AgentAvatar look={birdLook(p.id, data)} mood={moods.get(p.id)!} size={22} group={entry.id} className="-ml-0.5" onClick={() => openCustomizer(entry, p.id)} title="Customize" />
+            <button type="button" className="hover:text-muted-foreground truncate text-left" onClick={() => openCustomizer(entry, p.id)}>
+              {p.label ?? "Agent"}
+            </button>
             <span className="ml-auto flex h-5 shrink-0 items-center">
               <span className={cn("text-muted-foreground text-xs", owner && "group-hover/row:hidden")}>{p.last_seen_at ? formatAgo(p.last_seen_at) : "Never seen"}</span>
               {owner && (

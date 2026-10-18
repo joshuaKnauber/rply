@@ -181,3 +181,11 @@ body,
 .markdown blockquote {
   @apply text-muted-foreground border-l-2 pl-3;
 }
+
+.tiptap p.is-editor-empty:first-child::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}
+.mention {
+  @apply text-attention font-medium;
+}

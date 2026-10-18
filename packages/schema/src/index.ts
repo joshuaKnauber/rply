@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COMMAND_NAME, isInput } from "./helpers.ts";
+import { BIRD_COLORS, BIRD_CRESTS, BIRD_EYES, BIRD_HATS, COMMAND_NAME, isInput } from "./helpers.ts";
 
 const elementId = z.string().min(1).max(64);
 const Json = z.json();
@@ -199,6 +199,20 @@ export const CreateChannelRequest = z.object({
   label: z.string().max(100).optional(),
 });
 export const RenameAgentRequest = z.object({ label: z.string().trim().min(1).max(100) });
+const part = (options: readonly unknown[]) => z.number().int().min(0).max(options.length - 1);
+export const BirdLook = z.object({
+  color: part(BIRD_COLORS),
+  crest: part(BIRD_CRESTS),
+  eyes: part(BIRD_EYES),
+  hat: part(BIRD_HATS),
+  accent: part(BIRD_COLORS),
+  cheeks: z.boolean(),
+  belly: z.boolean(),
+});
+export type BirdLook = z.infer<typeof BirdLook>;
+export const UpdateAgentRequest = z
+  .object({ label: z.string().trim().min(1).max(100).optional(), avatar: BirdLook.nullable().optional() })
+  .refine((r) => r.label !== undefined || r.avatar !== undefined, "Send a label or an avatar");
 export const CreatePairingRequest = z.object({ role: z.enum(["agent", "human"]).default("human") });
 export const JoinChannelRequest = z.object({ code: z.string().min(1).max(32), label: z.string().max(100).optional() });
 export const ClaimChannelRequest = z.object({ code: z.string().min(1).max(32) });
@@ -210,6 +224,7 @@ export const PostMessageRequest = z.intersection(
     reply_to: z.string().optional(),
     ask: z.object({ expires_at: z.number().int().optional() }).optional(),
     silent: z.boolean().optional(),
+    mentions: z.array(z.string().max(64)).max(20).optional(),
   }),
 );
 export const ReplaceMessageRequest = Payload;
@@ -274,6 +289,7 @@ export type Message = {
   channel_id: string;
   sender: Sender;
   agent: { id: string; label: string | null } | null;
+  mentions: string[];
   reply_to: string | null;
   pin: string | null;
   ask: Ask | null;
@@ -323,7 +339,7 @@ export type AccountExport = {
     app_storage: Record<string, unknown>;
   })[];
 };
-export type AgentParticipant = Participant & { serve: { commands: string[]; wakes: boolean } | null };
+export type AgentParticipant = Participant & { avatar: BirdLook | null; serve: { commands: string[]; wakes: boolean } | null };
 export type AgentsResponse = { agents: AgentParticipant[] };
 export type CreateOwnedChannelResponse = { channel: ChannelEntry; agent_code: Pairing };
 export type JoinChannelResponse = { channel: Channel; agent_token: string };

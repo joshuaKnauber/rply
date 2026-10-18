@@ -6,8 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { markRead } from "@/lib/channels";
 import { MessageContext } from "@/lib/channel-context";
-import { agentName, eventLabel, isCall, isWaiting } from "@rply/schema";
+import { agentName, birdLook, eventLabel, isCall, isWaiting } from "@rply/schema";
 import { askStatus, formatClock, formatDay, formatTime, isAnswer, isEvent, preview } from "@/lib/format";
+import { openCustomizer } from "@/lib/customize";
 import { useAgents, useMessages, useSendMessage } from "@/lib/queries";
 import { useSwipeToReply } from "@/lib/swipe";
 import { cn } from "@/lib/utils";
@@ -31,22 +32,28 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
   const { data: agents = [] } = useAgents(entry);
   const several = agents.length > 1;
   const nameOf = (m: Message) => (m.sender === "agent" ? agentName(m, entry.name, several) : "You");
+  const labels = new Map(agents.flatMap((a) => (a.label ? [[a.id, a.label] as const] : [])));
 
   const moods = useAgentMoods(agents, messages);
-  const agentOrder = useMemo(() => agents.map((a) => a.id), [agents]);
+  const agentIdOf = (message: Message) => message.agent?.id ?? (agents.length === 1 ? agents[0]!.id : undefined);
+  const customize = (message: Message) => {
+    const id = agentIdOf(message);
+    return id && agents.some((a) => a.id === id) ? () => openCustomizer(entry, id) : undefined;
+  };
   const avatarFor = (message: Message, groupLastSeq: number) => {
-    const id = message.agent?.id ?? (agents.length === 1 ? agents[0]!.id : undefined);
+    const id = agentIdOf(message);
     if (!id) return undefined;
     return (
       <AgentAvatar
-        id={id}
-        channel={agentOrder}
+        look={birdLook(id, agents)}
         mood={moods.get(id) ?? "offline"}
         size={28}
         group={entry.id}
         chirp={groupLastSeq}
         chirpOnMount={Date.now() - message.created_at < 10_000}
         dot={false}
+        onClick={customize(message)}
+        title="Customize"
       />
     );
   };
@@ -101,9 +108,11 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
                 key={message.id}
                 message={message}
                 nameOf={nameOf}
+                mentionLabels={message.mentions?.flatMap((id) => labels.get(id) ?? []) ?? []}
                 quoted={message.reply_to ? byId.get(message.reply_to) : undefined}
                 first={first}
                 avatar={first && message.sender === "agent" ? avatarFor(message, visible[groupEnd]!.seq) : undefined}
+                onAgent={first ? customize(message) : undefined}
                 last={!next || !sameGroup(message, next, several)}
                 submitted={message.ask?.answer_id ? answersById.get(message.ask.answer_id) : undefined}
                 onAnswer={answer(message)}
@@ -118,11 +127,16 @@ export function Thread({ entry }: { entry: ChannelEntry }) {
         disabled={send.isPending}
         replyTo={replyTo && { name: nameOf(replyTo), text: preview(replyTo) }}
         onCancelReply={() => setReplyTo(null)}
-        onSend={(text, attachments) => {
+        agents={several ? agents.map((a) => ({ id: a.id, label: a.label ?? "Agent" })) : []}
+        onSend={(text, attachments, mentions) => {
           atBottom.current = true;
           setReplyTo(null);
           send.mutate(
-            { body: { ...(text && { text }), ...(attachments.length && { attachments }) }, ...(replyTo && { reply_to: replyTo.id }) },
+            {
+              body: { ...(text && { text }), ...(attachments.length && { attachments }) },
+              ...(replyTo && { reply_to: replyTo.id }),
+              ...(mentions.length && { mentions }),
+            },
             { onError: (err) => toast.error(err.message) },
           );
         }}
@@ -173,7 +187,9 @@ function EventLine({ message }: { message: Message }) {
 function MessageView({
   message,
   avatar,
+  onAgent,
   nameOf,
+  mentionLabels,
   quoted,
   first,
   last,
@@ -184,7 +200,9 @@ function MessageView({
 }: {
   message: Message;
   avatar?: ReactNode;
+  onAgent?: () => void;
   nameOf: (message: Message) => string;
+  mentionLabels: string[];
   quoted?: Message;
   first: boolean;
   last: boolean;
@@ -221,7 +239,7 @@ function MessageView({
     return (
       <div className="flex flex-col gap-3">
         {"title" in body && body.title && <p className="font-semibold">{body.title}</p>}
-        {body.text && (fromAgent ? <Markdown text={body.text} /> : <p className="whitespace-pre-wrap wrap-anywhere">{body.text}</p>)}
+        {body.text && (fromAgent ? <Markdown text={body.text} /> : <p className="whitespace-pre-wrap wrap-anywhere"><MentionText text={body.text} labels={mentionLabels} /></p>)}
         {"attachments" in body && body.attachments?.length ? <AttachmentList attachments={body.attachments} /> : null}
         {"blocks" in body && body.blocks?.length ? (
           <MessageContext.Provider value={message}>
@@ -240,7 +258,14 @@ function MessageView({
       onPointerUp={onPointerUp}
     >
       {avatar && <div className="absolute top-0 left-0">{avatar}</div>}
-      {first && fromAgent && <span className="text-muted-foreground mb-1 text-xs font-medium">{nameOf(message)}</span>}
+      {first && fromAgent &&
+        (onAgent ? (
+          <button type="button" className="text-muted-foreground hover:text-foreground mb-1 text-xs font-medium" onClick={onAgent}>
+            {nameOf(message)}
+          </button>
+        ) : (
+          <span className="text-muted-foreground mb-1 text-xs font-medium">{nameOf(message)}</span>
+        ))}
       <ReplyIcon className="text-muted-foreground absolute top-1/2 left-0 size-4 -translate-y-1/2" style={{ opacity: swipe.progress, transform: `translateX(${swipe.offset / 2 - 24}px) scale(${0.6 + swipe.progress * 0.4})` }} />
       <div
         className={cn("flex items-center gap-1", fromAgent ? "w-full" : "max-w-[85%] flex-row-reverse", wide && "w-full", swipe.offset === 0 && "transition-transform")}
@@ -272,6 +297,13 @@ function MessageView({
       )}
     </div>
   );
+}
+
+function MentionText({ text, labels }: { text: string; labels: string[] }) {
+  if (!labels.length) return text;
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${labels.map((l) => escape(`@${l}`)).join("|")})`));
+  return parts.map((part, i) => (i % 2 ? <span key={i} className="mention">{part}</span> : part));
 }
 
 function Quote({ message, name }: { message: Message; name: string }) {

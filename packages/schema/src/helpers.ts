@@ -1,4 +1,4 @@
-import type { AgentParticipant, Answers, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
+import type { AgentParticipant, Answers, BirdLook, Ask, AskStatus, Block, BlockOf, Message, SecretStatus } from "./index.ts";
 
 export const COMMAND_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -247,7 +247,12 @@ export function agentMood(agent: AgentParticipant, messages: Message[], now = Da
   return "idle";
 }
 
-export const BIRD_COLORS = ["#8b6cf6", "#3d8bfd", "#22b573", "#14b8a6", "#ff8a3d", "#ff5a5f", "#f062b0", "#f5a524", "#5b68e0", "#7cc243"];
+export const BIRD_COLORS = ["#8b6cf6", "#3d8bfd", "#22b573", "#14b8a6", "#ff8a3d", "#ff5a5f", "#f062b0", "#f5a524", "#5b68e0", "#7cc243", "#64748b", "#a8714a"];
+export const BIRD_CRESTS = ["None", "Tuft", "Curl", "Puff", "Spikes", "Antenna"] as const;
+export const BIRD_EYES = ["Classic", "Round", "Shiny", "Lashes"] as const;
+export const BIRD_HATS = ["None", "Party hat", "Beanie", "Bow", "Monocle", "Headphones", "Crown", "Scarf"] as const;
+// generated looks only use the bright colors, the muted ones are for picking
+const DEFAULT_COLORS = 10;
 
 const fnv = (s: string) => {
   let h = 2166136261;
@@ -255,17 +260,21 @@ const fnv = (s: string) => {
   return h >>> 0;
 };
 
-// color and crest come from the agent id; agents of one channel (in join order) skip ones already taken
-export function birdIdentity(id: string, channel: string[] = [id]) {
-  const colors = new Set<number>(), crests = new Set<number>();
-  for (const other of channel.includes(id) ? channel : [...channel, id]) {
-    const h = fnv(other);
-    let color = h % BIRD_COLORS.length, crest = (h >>> 8) % 4;
-    for (let i = 0; i < BIRD_COLORS.length && colors.has(color); i++) color = (color + 1) % BIRD_COLORS.length;
+// the saved look, or one generated from the id; agents of a channel (in join order) skip colors and crests already taken
+export function birdLook(id: string, agents: { id: string; avatar?: BirdLook | null }[] = []): BirdLook {
+  const saved = agents.find((a) => a.id === id)?.avatar;
+  if (saved) return saved;
+  const colors = new Set(agents.flatMap((a) => (a.avatar ? [a.avatar.color] : [])));
+  const crests = new Set(agents.flatMap((a) => (a.avatar ? [a.avatar.crest] : [])));
+  for (const agent of agents.some((a) => a.id === id) ? agents : [...agents, { id }]) {
+    if (agent.avatar) continue;
+    const h = fnv(agent.id);
+    let color = h % DEFAULT_COLORS, crest = (h >>> 8) % 4;
+    for (let i = 0; i < DEFAULT_COLORS && colors.has(color); i++) color = (color + 1) % DEFAULT_COLORS;
     for (let i = 0; i < 4 && crests.has(crest); i++) crest = (crest + 1) % 4;
     colors.add(color);
     crests.add(crest);
-    if (other === id) return { color: BIRD_COLORS[color]!, crest, seed: h };
+    if (agent.id === id) return { color, crest, eyes: 0, hat: 0, accent: (color + 5) % DEFAULT_COLORS, cheeks: false, belly: false };
   }
   throw new Error("unreachable");
 }

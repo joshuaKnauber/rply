@@ -7,6 +7,7 @@ import {
   PublicKeyRequest,
   ReadRequest,
   RenameAgentRequest,
+  UpdateAgentRequest,
   type AgentsResponse,
   type ChannelsResponse,
   type ClaimChannelResponse,
@@ -116,7 +117,7 @@ export function channelRoutes(deps: Deps, serves: Serves) {
     .get("/agents", requireAuth(deps), async (c) => {
       const rows = await db
         .selectFrom("agent_tokens")
-        .select(["id", "label", "created_at", "last_seen_at"])
+        .select(["id", "label", "avatar", "created_at", "last_seen_at"])
         .where("channel_id", "=", c.var.auth.channel.id)
         .where("revoked_at", "is", null)
         .orderBy("created_at")
@@ -124,10 +125,28 @@ export function channelRoutes(deps: Deps, serves: Serves) {
       const res: AgentsResponse = {
         agents: rows.map((a) => {
           const serve = serves.online(a.id);
-          return { ...a, current: a.id === c.var.auth.agentId, serve: serve ? { commands: [...serve.commands], wakes: serve.wakes } : null };
+          return {
+            ...a,
+            avatar: a.avatar ? JSON.parse(a.avatar) : null,
+            current: a.id === c.var.auth.agentId,
+            serve: serve ? { commands: [...serve.commands], wakes: serve.wakes } : null,
+          };
         }),
       };
       return c.json(res);
+    })
+    // the human renames an agent or dresses up its bird
+    .patch("/agents/:id", requireAuth(deps, "human"), async (c) => {
+      const { label, avatar } = parse(UpdateAgentRequest, await c.req.json());
+      const res = await db
+        .updateTable("agent_tokens")
+        .set({ ...(label !== undefined && { label }), ...(avatar !== undefined && { avatar: avatar && JSON.stringify(avatar) }) })
+        .where("id", "=", c.req.param("id"))
+        .where("channel_id", "=", c.var.auth.channel.id)
+        .where("revoked_at", "is", null)
+        .executeTakeFirst();
+      if (!res.numUpdatedRows) throw new HTTPException(404, { message: "Not found" });
+      return c.body(null, 204);
     })
     .delete("/agents/:id", owner, async (c) => {
       const res = await db

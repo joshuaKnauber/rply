@@ -59,9 +59,11 @@ Good habits
 - Keep a live overview with \`rply status set\` instead of sending a message for every step.
 - Never send secrets through messages. Use \`rply secret request\`.
 - Keep messages short. The human reads them on a phone.
+- A channel can have several agents. A message that @mentions agents only reaches those; the inbox marks
+  them "(mentions you)". Messages without mentions reach every agent.
 
 Reading messages as data
-  rply inbox --json prints one message per line: { id, seq, sender, created_at, reply_to, state, enc, body }
+  rply inbox --json prints one message per line: { id, seq, sender, created_at, reply_to, state, enc, body, mentions }
   body is one of
     { text, attachments? }                   a message; attachments: [{ file_id, name, mime, size }]
     { event: { block_id, value, label } }    a click etc. in an embed or app; reply_to is that message

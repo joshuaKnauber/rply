@@ -429,14 +429,17 @@ class RplyAdapter(BasePlatformAdapter):
     # -- Dashboard app: a full-page pin whose buttons call the commands below ---------
 
     async def _install_app(self) -> None:
-        """Upload the dashboard when its HTML changed, so a human who removed it isn't overruled."""
+        """Refresh the dashboard on every start (so its calls route to this agent), but don't bring it
+        back when the human removed it and the page hasn't changed since."""
+        key = self._pin_key(APP_PIN_KEY)
         try:
             html = DASHBOARD.read_text()
             digest = hashlib.sha256(html.encode()).hexdigest()
-            if self._load_state().get("app") == digest:
+            pins = (await self._http.get("/pins")).json()["messages"]
+            if not any(m["pin"] == key for m in pins) and self._load_state().get("app") == digest:
                 return
             body = {"title": self._titled("Hermes"), "view": "app", "blocks": [{"type": "html", "id": "app", "html": html}]}
-            resp = await self._http.put(f"/pins/{self._pin_key(APP_PIN_KEY)}", json={"body": body})
+            resp = await self._http.put(f"/pins/{key}", json={"body": body})
             resp.raise_for_status()
             self._save_state(app=digest)
         except Exception as e:

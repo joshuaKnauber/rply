@@ -10,6 +10,7 @@ import HardBreak from "@tiptap/extension-hard-break";
 import Mention from "@tiptap/extension-mention";
 import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import type { FileRef } from "@rply/schema";
+import { typedMentions } from "@rply/schema/helpers";
 import { Button } from "@/components/ui/button";
 import { useChannelEntry } from "@/lib/channel-context";
 import { uploadFile } from "@/lib/files";
@@ -60,7 +61,7 @@ export function Composer({ onSend, disabled, replyTo, onCancelReply, agents = []
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     if (!canSend || !editor) return;
-    const { text, mentions } = read(editor);
+    const { text, mentions } = read(editor, agents);
     onSend(text, ready, mentions);
     editor.commands.clearContent(true);
     setPending([]);
@@ -239,10 +240,11 @@ function typedAnywhere(e: KeyboardEvent) {
   return !getSelection()?.toString();
 }
 
-function read(editor: Editor) {
-  const mentions = new Set<string>();
+function read(editor: Editor, agents: Mentionable[]) {
+  const text = editor.getText({ blockSeparator: "\n" }).trim();
+  const mentions = new Set<string>(typedMentions(text, agents));
   editor.state.doc.descendants((node) => {
     if (node.type.name === "mention") mentions.add(node.attrs.id);
   });
-  return { text: editor.getText({ blockSeparator: "\n" }).trim(), mentions: [...mentions] };
+  return { text, mentions: [...mentions] };
 }

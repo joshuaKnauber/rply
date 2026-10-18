@@ -1,7 +1,8 @@
 name: rply-platform
 label: rply
 kind: platform
-version: 0.5.0
+version: 0.6.0
+requires_hermes: ">=0.22.2"
 description: >
   rply gateway adapter for Hermes Agent. Talk to Hermes from the rply inbox
   (web app and phone, with push): messages in and out, seen/working/done
@@ -9,6 +10,8 @@ description: >
   tappable questions. Works with app.rply.sh or a self-hosted rply server.
   Only uses httpx (already a Hermes dependency).
 author: Joshua Knauber
+provides_tools:
+  - rply_request_secret
 requires_env:
   - name: RPLY_TOKEN
     description: "Agent token for the rply channel (written by `hermes gateway setup`)"

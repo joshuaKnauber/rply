@@ -10,6 +10,8 @@ import hashlib
 import json
 import logging
 import mimetypes
+import os
+import re
 import time
 from datetime import datetime, UTC
 from pathlib import Path
@@ -36,6 +38,8 @@ from gateway.platforms._shared import (
     seed_extra_from_env as _seed_extra_from_env, send_error,
 )
 from hermes_constants import get_hermes_home, set_hermes_home_override
+
+from .sealed_box import generate_keypair, open_sealed
 
 logger = logging.getLogger(__name__)
 
@@ -393,7 +397,8 @@ class RplyAdapter(BasePlatformAdapter):
         else:
             from tools.clarify_gateway import resolve_gateway_clarify
             value = answers.get("answer")
-            resolve_gateway_clarify(key, ", ".join(value) if isinstance(value, list) else str(value or ""))
+            # multi-select answers go back as a JSON array of labels, like Hermes' own parser produces
+            resolve_gateway_clarify(key, json.dumps(value, ensure_ascii=False) if isinstance(value, list) else str(value or ""))
             self._clarify_messages.pop(key, None)
 
     # -- Cron overview pin --------------------------------------------------------
@@ -596,7 +601,11 @@ class RplyAdapter(BasePlatformAdapter):
     async def send_clarify(self, chat_id: str, question: str, choices: Optional[list], clarify_id: str,
                            session_key: str, metadata: Optional[dict[str, Any]] = None) -> SendResult:
         if choices:
-            block = {"type": "choice", "id": "answer", "options": [{"label": str(c)} for c in choices], "other": True}
+            from tools.clarify_gateway import get_pending_for_session
+            entry = get_pending_for_session(session_key, include_choice_prompts=True)
+            multi = bool(entry and entry.clarify_id == clarify_id and entry.multi_select)
+            block = {"type": "choice", "id": "answer", "options": [{"label": str(c)} for c in choices], "other": True,
+                     **({"multi": True} if multi else {})}
         else:
             block = {"type": "text_input", "id": "answer", "multiline": True}
         # Hermes appends a text-reply hint ('Reply "skip" to skip...') that doesn't fit next to a form
@@ -692,7 +701,100 @@ def interactive_setup() -> None:
     print_info("Restart the gateway for changes to take effect: hermes gateway restart")
 
 
+# -- Secrets: a tool, since Hermes can't prompt for secrets over messaging platforms ----------
+
+SECRET_WAIT_SECONDS = 15 * 60
+ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_ctx = None
+
+SECRET_TOOL_SCHEMA = {
+    "name": "rply_request_secret",
+    "description": (
+        "Ask your human for a secret (API key, token, password) through rply. They type it into a masked "
+        "field on their phone or laptop, it's encrypted for this machine, and saved to Hermes' .env as "
+        "NAME=value. You never see the value, only that it was saved. Use this instead of asking for "
+        "secrets in chat. Waits up to 15 minutes for them to answer."),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Environment variable name, e.g. OPENAI_API_KEY"},
+            "reason": {"type": "string", "description": "Why you need it, shown to the human"},
+        },
+        "required": ["name"],
+    },
+}
+
+
+def _secret_key() -> tuple[str, str]:
+    """This profile's X25519 keypair for secrets (secret key, public key), created on first use."""
+    path = get_hermes_home() / "rply" / "secret-key.json"
+    try:
+        keys = json.loads(path.read_text())
+        return keys["secret_key"], keys["public_key"]
+    except (FileNotFoundError, KeyError, ValueError):
+        pass
+    secret, public = generate_keypair()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"secret_key": secret, "public_key": public}, f)
+    return secret, public
+
+
+def _request_secret(args: dict, **kwargs) -> str:
+    """Never puts the value into the result, logs or errors."""
+    name, reason = str(args.get("name") or ""), args.get("reason")
+    if not ENV_NAME.match(name):
+        return json.dumps({"error": "name must be an environment variable name (letters, digits and _)"})
+    if _ctx is not None and _ctx.current_cron_execution():
+        return json.dumps({"error": "Can't ask the human for a secret during a scheduled run. Ask in a normal conversation."})
+    token = _get_scoped_secret("RPLY_TOKEN", "").strip()
+    if not token:
+        return json.dumps({"error": "rply isn't set up for this profile (no RPLY_TOKEN)"})
+    from hermes_cli.config import get_env_path, save_env_value
+    server = _get_scoped_secret("RPLY_SERVER", "").strip().rstrip("/") or DEFAULT_SERVER
+    target = str(get_env_path())
+    try:
+        secret_key, public_key = _secret_key()
+        with httpx.Client(base_url=f"{server}/v1", headers=_headers(token), timeout=15.0) as client:
+            client.put("/channel/key", json={"public_key": public_key}).raise_for_status()
+            deadline = time.time() + SECRET_WAIT_SECONDS
+            created = client.post("/secrets", json={
+                "name": name, "target": target, "mode": "env", "expires_at": int(deadline * 1000),
+                **({"reason": str(reason)[:500]} if reason else {})})
+            created.raise_for_status()
+            request_id = created.json()["id"]
+            while True:
+                wait = max(1, min(POLL_WAIT_SECONDS, int(deadline - time.time())))
+                res = client.get(f"/secrets/{request_id}", params={"wait": wait}, timeout=wait + 30)
+                res.raise_for_status()
+                data = res.json()
+                if data["status"] != "open" or time.time() >= deadline:
+                    break
+            if data["status"] == "open" or data["status"] == "expired":
+                return json.dumps({"error": f"{name} wasn't provided in time"})
+            if data["status"] in ("declined", "cancelled"):
+                return json.dumps({"error": f"The human {data['status']} the request for {name}"})
+            if data["status"] != "provided" or not data.get("ciphertext"):
+                return json.dumps({"error": f"Unexpected secret status: {data['status']}"})
+            try:
+                value = open_sealed(data["ciphertext"], secret_key)
+            except Exception:
+                return json.dumps({"error": "Couldn't decrypt the secret. Was it encrypted for a different key?"})
+            save_env_value(name, value)
+            client.post(f"/secrets/{request_id}/delivered").raise_for_status()
+    except httpx.HTTPError as e:
+        return json.dumps({"error": f"rply request failed: {type(e).__name__}"})
+    return json.dumps({"saved": name, "to": target})
+
+
 def register(ctx) -> None:
+    global _ctx
+    _ctx = ctx
+    ctx.register_tool(
+        name="rply_request_secret", toolset="rply", schema=SECRET_TOOL_SCHEMA, handler=_request_secret,
+        check_fn=lambda: bool(_get_scoped_secret("RPLY_TOKEN", "").strip()), emoji="🔑",
+        description="Ask the human for a secret through rply; it's saved to .env without you seeing it")
     ctx.register_platform(
         name="rply", label="rply", adapter_factory=lambda cfg: RplyAdapter(cfg),
         check_fn=check_requirements, validate_config=validate_config, is_connected=is_connected,
@@ -706,6 +808,6 @@ def register(ctx) -> None:
             "Your replies already go to rply and render as markdown, and their messages reach you directly: "
             "don't use `rply send`, `rply inbox` or `rply ack` for this conversation. Send images and files "
             "the normal way; they show up in the inbox with previews. Keep messages short and readable on a "
-            "phone. If the rply CLI is installed, use it only for pinned status, apps and secret requests "
-            "(`rply guide` explains them)."
+            "phone. When you need an API key or other secret, use the rply_request_secret tool, never chat. "
+            "If the rply CLI is installed, use it only for pinned status and apps (`rply guide` explains them)."
         ))

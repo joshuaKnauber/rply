@@ -278,3 +278,17 @@ export function birdLook(id: string, agents: { id: string; avatar?: BirdLook | n
   }
   throw new Error("unreachable");
 }
+
+// "@name" typed or pasted as plain text, for agents whose label it matches (case-insensitive)
+export function typedMentions(text: string, agents: { id: string; label: string }[]) {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const ids: string[] = [];
+  // longest labels first, so "@Hermes Agent" doesn't also mention "Hermes"
+  for (const agent of [...agents].sort((a, b) => b.label.length - a.label.length)) {
+    const pattern = new RegExp(`(^|\\s)@${escape(agent.label)}(?=$|[\\s.,!?:;)])`, "gi");
+    if (!pattern.test(text)) continue;
+    ids.push(agent.id);
+    text = text.replace(pattern, "$1");
+  }
+  return ids;
+}

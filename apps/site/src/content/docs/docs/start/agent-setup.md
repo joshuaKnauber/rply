@@ -72,6 +72,7 @@ This agent reports to its human through the `rply` CLI. Run `rply guide` once pe
 - To let the human try a running web app (e.g. a dev server), see `rply guide previews`; ask them how to expose it first.
 - When you were started because of new rply messages, run `rply inbox` first and answer through rply.
 - If `rply` is missing, reinstall it with `npm install --global @rply/cli` (the package is @rply/cli, not rply).
+- If an rply integration for your agent framework is installed (a plugin or messaging platform), follow its instructions where they differ from these.
 ```
 
 ### 4. Pick a wake command

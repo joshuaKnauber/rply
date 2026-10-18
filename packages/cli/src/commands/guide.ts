@@ -8,6 +8,10 @@ import { VERSION } from "../update.ts";
 const topics: Record<string, string> = {
   setup: `Setting up this machine. Follow every step; the human is waiting for the result in the rply app.
 
+If your agent framework has an rply integration installed (a plugin, extension or messaging platform for rply),
+its instructions come first: it may already handle messages, waking you and secrets. Use this CLI only for what
+it doesn't cover. https://rply.sh/docs/integrations/ lists the known ones.
+
 1. Install the CLI globally, not with npx (the background service needs a stable path). The npm package
    is @rply/cli; there is no package called rply:
      npm install --global @rply/cli
@@ -251,7 +255,8 @@ This agent reports to its human through the \`rply\` CLI. Run \`rply guide\` onc
 - To let the human try a running web app (e.g. a dev server), see \`rply guide previews\`; ask them how to expose it first.
 - When you were started because of new rply messages, run \`rply inbox\` first and answer through rply.
 - The channel may have other agents (\`rply whoami\`). For messages that don't mention you, check \`rply history\` before acting.
-- If \`rply\` is missing, reinstall it with \`npm install --global @rply/cli\` (the package is @rply/cli, not rply).`;
+- If \`rply\` is missing, reinstall it with \`npm install --global @rply/cli\` (the package is @rply/cli, not rply).
+- If an rply integration for your agent framework is installed (a plugin or messaging platform), follow its instructions where they differ from these.`;
 
 const seenPath = () => join(dirname(configPath()), "guide.json");
 

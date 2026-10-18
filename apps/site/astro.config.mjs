@@ -5,6 +5,7 @@ import starlightLlmsTxt from "starlight-llms-txt";
 const sections = [
   ["Get started", "start", "what rply is, the quickstart, and setting up an agent so it runs on its own"],
   ["Guides", "guides", "how to send updates, ask questions, keep a status, take instructions, request secrets, share files, build apps and use rply in scripts"],
+  ["Integrations", "integrations", "plugins that connect agent frameworks like Hermes Agent to rply directly"],
   ["Concepts", "concepts", "how rply works, channels and accounts, the life of a message, and security"],
   ["Self-hosting", "self-hosting", "running your own rply server with Docker, Railway, exe.dev, Fly.io or Render, configuration and upgrades"],
   ["Reference", "reference", "every CLI command, CLI configuration, block types, the HTML bridge, the HTTP API and the FAQ"],

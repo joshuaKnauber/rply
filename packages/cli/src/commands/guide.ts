@@ -11,7 +11,7 @@ const topics: Record<string, string> = {
 If your agent framework has an rply integration (a plugin, extension or messaging platform for rply), use it
 instead of these steps: it handles messages, waking you and secrets. Use this CLI only for what it doesn't cover.
 https://rply.sh/docs/integrations/ lists them. Hermes Agent has one:
-  hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+  hermes plugins install rply-platform --enable
   hermes rply join <server-url> <code>     (or: hermes rply init <server-url> --name "<channel name>")
   hermes gateway restart                   (hermes gateway install if the gateway isn't installed yet)
 Inside Hermes this CLI uses the plugin's connection automatically (the profile's RPLY_TOKEN), so never run

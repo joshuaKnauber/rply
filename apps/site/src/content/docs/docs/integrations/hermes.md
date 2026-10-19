@@ -31,7 +31,7 @@ In the rply app, create a channel and copy the setup prompt it shows, then paste
 1. Install and enable the plugin:
 
    ```sh
-   hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+   hermes plugins install rply-platform --enable
    ```
 
 2. In the rply app, create a channel for Hermes. The app shows an agent code. For a channel you already have, open it and choose **Add an agent**.
@@ -65,7 +65,7 @@ hermes cron create --name "Morning summary" --deliver rply "0 8 * * *" "Summariz
 Every profile has its own copy of the plugin and its own rply agent. Set each one up against the same channel with an agent code of its own:
 
 ```sh
-hermes -p research plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+hermes -p research plugins install rply-platform --enable
 hermes -p research rply join https://app.rply.sh <code>
 hermes gateway restart
 ```

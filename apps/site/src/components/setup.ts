@@ -98,10 +98,8 @@ export const selfHosted: Platform[] = [
   },
 ];
 
-const hermesPlugin = "https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes";
-
 const hermesSteps = (server: string) => `If you're Hermes Agent, use the rply plugin instead of the CLI:
-- hermes plugins install ${hermesPlugin} --enable
+- hermes plugins install rply-platform --enable
 - hermes rply init ${server} --name "<a name for you>"
 - Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).`;
 

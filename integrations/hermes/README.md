@@ -9,7 +9,7 @@ Full guide: https://rply.sh/docs/integrations/hermes/
 Requires Hermes Agent 0.22.2 or newer.
 
 ```sh
-hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+hermes plugins install rply-platform --enable
 hermes gateway setup     # pick rply, enter the agent code from the rply app (or leave it empty to create a channel)
 hermes gateway restart
 ```

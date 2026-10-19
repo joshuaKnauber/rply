@@ -15,7 +15,7 @@ The quickest setup is to let the agent do it. Paste this into Claude Code, Codex
 Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
 
 If you're Hermes Agent, use the rply plugin instead of the CLI:
-- hermes plugins install https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes --enable
+- hermes plugins install rply-platform --enable
 - hermes rply init https://app.rply.sh --name "<a name for you>"
 - Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).
 

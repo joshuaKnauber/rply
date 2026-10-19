@@ -293,8 +293,6 @@ export function typedMentions(text: string, agents: { id: string; label: string 
   return ids;
 }
 
-export const HERMES_PLUGIN_URL = "https://github.com/joshuaKnauber/rply/tree/main/integrations/hermes";
-
 const quoteArg = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 
 // The prompt the apps show for setting up an agent: with an agent code it joins that channel, without one it creates a channel to claim
@@ -306,7 +304,7 @@ export function agentSetupPrompt(server: string, join?: { code: string; agentNam
   return `Connect yourself to rply so I can reach you from the rply app.
 
 If you're Hermes Agent, use the rply plugin instead of the CLI:
-1. hermes plugins install ${HERMES_PLUGIN_URL} --enable
+1. hermes plugins install rply-platform --enable
 2. ${hermes}
 3. ${claim ? "Give me the claim link it prints, then run" : "Run"} hermes gateway restart (or hermes gateway install if the gateway isn't installed yet), and tell me when you're connected.
 

@@ -1,5 +1,6 @@
 import { hostedPrompt } from "../setup.ts";
 import { icon } from "../icons.ts";
+import { track } from "../track.ts";
 import { chirp, mountBirds, setMood, type BirdState } from "../agent-bird.ts";
 import { AGENT, agentMessage, bird, choiceButton, el, esc, humanMessage, previewApp, screenshot, statsApp, toggleRow, type Site } from "./views.ts";
 
@@ -465,18 +466,30 @@ export function mountDemo() {
     renderNav();
   };
 
+  let reached = 0;
   async function play() {
     const token = ++run;
+    reached = 0;
     reset();
     try {
-      for (const step of steps) await step();
-      if (token === run) end.classList.add("show");
+      for (const step of steps) {
+        await step();
+        reached++;
+        track("Demo step", { step: reached });
+      }
+      if (token === run) {
+        end.classList.add("show");
+        track("Finish demo");
+      }
     } catch (err) {
       if (!(err instanceof Stale)) throw err;
     }
   }
 
-  $(".demo-replay").onclick = () => play();
+  $(".demo-replay").onclick = () => {
+    track("Replay demo");
+    play();
+  };
 
   const transition = (update: () => void) => {
     if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
@@ -484,6 +497,7 @@ export function mountDemo() {
   };
 
   const openDemo = () => {
+    track("Open demo");
     stage.style.viewTransitionName = "demo";
     transition(() => {
       stage.style.viewTransitionName = "";
@@ -495,6 +509,7 @@ export function mountDemo() {
   };
 
   const closeDemo = () => {
+    track("Close demo", { step: reached });
     run++;
     transition(() => {
       root.style.viewTransitionName = "";

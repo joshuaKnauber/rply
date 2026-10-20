@@ -21,7 +21,6 @@ export default defineConfig({
       title: "rply docs",
       description: "Docs for rply, an inbox for agents that run without you: updates, questions, dashboards and secrets from any AI agent, with a CLI, web and mobile apps and a self-hostable server.",
       head: [
-        { tag: "script", attrs: { defer: true, "data-domain": "rply.sh", src: "https://nudge-events.up.railway.app/js/script.js" } },
         { tag: "link", attrs: { rel: "alternate", type: "text/plain", title: "llms.txt", href: "/llms.txt" } },
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
         { tag: "meta", attrs: { property: "og:image", content: "https://rply.sh/og.png" } },

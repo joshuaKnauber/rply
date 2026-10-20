@@ -2,6 +2,7 @@
 import "@fontsource-variable/inter/opsz.css";
 import "@fontsource-variable/geist-mono";
 import "../styles/global.css";
+import Analytics from "../components/Analytics.astro";
 
 interface Props {
   title: string;
@@ -33,7 +34,7 @@ const structuredData = {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <script is:inline defer data-domain="rply.sh" src="https://nudge-events.up.railway.app/js/script.js"></script>
+    <Analytics />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

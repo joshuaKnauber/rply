@@ -1,8 +1,9 @@
 ---
+import { tagged } from "../track.ts";
 import { siGithub } from "simple-icons";
 ---
 
-<a href="https://github.com/joshuaKnauber/rply" class="github" aria-label="rply on GitHub">
+<a href="https://github.com/joshuaKnauber/rply" class:list={["github", tagged("GitHub", { location: "docs" })]} aria-label="rply on GitHub">
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siGithub.path} /></svg>
 </a>
 

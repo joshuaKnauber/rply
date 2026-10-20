@@ -4,6 +4,7 @@ import Logo, { type LogoName } from "./Logo.astro";
 import { siTelegram } from "simple-icons";
 import { hosted, selfHosted, promptFor } from "./setup.ts";
 import type { IconName } from "./icons.ts";
+import { tagged } from "./track.ts";
 
 const agents: { key: LogoName; label: string }[] = [
   { key: "claude", label: "Claude Code" },
@@ -109,7 +110,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       <button class="copy-setup group btn btn-dark h-12 px-6 text-base" data-prompt={promptFor(hosted)}>
         <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
       </button>
-      <a href="/docs/start/quickstart/" class="manual btn btn-outline h-12 px-6 text-base">Set it up by hand</a>
+      <a href="/docs/start/quickstart/" class:list={["manual btn btn-outline h-12 px-6 text-base", tagged("Set up by hand")]}>Set it up by hand</a>
     </div>
   </div>
 
@@ -204,6 +205,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
 <script>
   import { flutter } from "./flutter.ts";
   import { chirp, mountBirds } from "./agent-bird.ts";
+  import { track } from "./track.ts";
 
   document.querySelectorAll<HTMLElement>(".setup").forEach((root) => {
     const phone = root.querySelector<HTMLElement>(".phone")!;
@@ -213,17 +215,20 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
     const serverNote = root.querySelector<HTMLElement>(".server-note")!;
     mountBirds(phone);
 
-    const group = (attr: string, onPick: (b: HTMLElement) => void) => {
+    const picked = { agent: "Claude Code", server: "app.rply.sh" };
+    const group = (attr: string, event: string, onPick: (b: HTMLElement) => void) => {
       const buttons = root.querySelectorAll<HTMLElement>(`[data-${attr}]`);
       buttons.forEach((b) =>
         b.addEventListener("click", () => {
           buttons.forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
           onPick(b);
+          track(event, { value: b.textContent!.trim() });
         }),
       );
     };
 
-    group("agent", (b) => {
+    group("agent", "Pick agent", (b) => {
+      picked.agent = b.dataset.label!;
       phone.querySelectorAll("[data-agent-name]").forEach((el) => (el.textContent = b.dataset.label!));
       phone.querySelectorAll<HTMLElement>("[data-agent-bird]").forEach((el) => {
         const next = el.cloneNode() as HTMLElement;
@@ -235,13 +240,14 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       chirp(b.dataset.agent!);
     });
 
-    group("view", (b) => {
+    group("view", "Pick alternative", (b) => {
       phone.querySelectorAll<HTMLElement>("[data-screen]").forEach((s) => (s.hidden = s.dataset.screen !== b.dataset.view));
       viewText.children[0]!.textContent = b.dataset.title!;
       viewText.children[1]!.textContent = b.dataset.text!;
     });
 
-    group("server", (b) => {
+    group("server", "Pick server", (b) => {
+      picked.server = b.textContent!.trim();
       phone.querySelector("[data-server-name]")!.textContent = b.dataset.server!;
       copy.dataset.prompt = b.dataset.prompt!;
       manual.href = b.dataset.docs!;
@@ -249,6 +255,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
     });
 
     copy.addEventListener("click", async () => {
+      track("Copy setup prompt", { location: "setup", ...picked });
       flutter(copy);
       copy.classList.add("copied");
       setTimeout(() => copy.classList.remove("copied"), 2000);

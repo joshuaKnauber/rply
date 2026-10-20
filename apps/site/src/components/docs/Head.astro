@@ -1,8 +1,10 @@
 ---
 import Default from "@astrojs/starlight/components/Head.astro";
+import Analytics from "../Analytics.astro";
 
 const markdown = `${Astro.url.pathname.replace(/\/$/, "")}.md`;
 ---
 
 <Default />
+<Analytics />
 <link rel="alternate" type="text/markdown" href={markdown} />

@@ -3,11 +3,11 @@ import Icon from "./Icon.astro";
 import { hostedPrompt } from "./setup.ts";
 import { birdPath } from "./bird.ts";
 
-const { dark = false } = Astro.props as { dark?: boolean };
+const { dark = false, location } = Astro.props as { dark?: boolean; location: string };
 const outline = birdPath.split("ZM")[0] + "Z";
 ---
 
-<button class:list={["hero-setup group btn relative h-12 px-6 text-base", dark ? "btn-dark" : "btn-primary"]} data-prompt={hostedPrompt}>
+<button class:list={["hero-setup group btn relative h-12 px-6 text-base", dark ? "btn-dark" : "btn-primary"]} data-prompt={hostedPrompt} data-location={location}>
   {
     dark && (
       <svg viewBox="0 0 442 417" class="perch pointer-events-none absolute bottom-[calc(100%-5px)] left-1.5 size-8 overflow-visible" aria-hidden="true">
@@ -47,6 +47,7 @@ const outline = birdPath.split("ZM")[0] + "Z";
 
 <script>
   import { flutter } from "./flutter.ts";
+  import { track } from "./track.ts";
 
   const ease = (t: number) => (1 - Math.cos(Math.PI * t)) / 2;
   const bezier = (p: number[][], t: number) =>
@@ -183,6 +184,7 @@ const outline = birdPath.split("ZM")[0] + "Z";
     const perch = button.querySelector<SVGSVGElement>(".perch");
     const bird = perch && perched(perch);
     button.addEventListener("click", async () => {
+      track("Copy setup prompt", { location: button.dataset.location!, server: "app.rply.sh" });
       flutter(button);
       bird?.cheer();
       button.classList.add("copied");

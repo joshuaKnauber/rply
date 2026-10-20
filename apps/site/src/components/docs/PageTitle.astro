@@ -1,4 +1,5 @@
 ---
+import { tagged } from "../track.ts";
 import { siClaude } from "simple-icons";
 import Icon from "../Icon.astro";
 
@@ -16,10 +17,10 @@ const ask = encodeURIComponent(`Read ${url} (and https://rply.sh/llms.txt for th
       <span class="label done"><Icon name="check" /> Copied</span>
     </span>
   </button>
-  <a href={`https://chatgpt.com/?q=${ask}`} target="_blank" rel="noopener">
+  <a href={`https://chatgpt.com/?q=${ask}`} target="_blank" rel="noopener" class={tagged("Open docs in AI", { target: "ChatGPT" })}>
     <img src="/logos/openai.svg" alt="" /> Open in ChatGPT <Icon name="external" />
   </a>
-  <a href={`https://claude.ai/new?q=${ask}`} target="_blank" rel="noopener">
+  <a href={`https://claude.ai/new?q=${ask}`} target="_blank" rel="noopener" class={tagged("Open docs in AI", { target: "Claude" })}>
     <svg viewBox="0 0 24 24" fill="#D97757" aria-hidden="true"><path d={siClaude.path} /></svg> Open in Claude <Icon name="external" />
   </a>
 </div>
@@ -92,8 +93,11 @@ const ask = encodeURIComponent(`Read ${url} (and https://rply.sh/llms.txt for th
 </style>
 
 <script>
+  import { track } from "../track.ts";
+
   document.querySelectorAll<HTMLElement>(".copy-page").forEach((button) =>
     button.addEventListener("click", async () => {
+      track("Copy docs page");
       button.classList.add("copied");
       setTimeout(() => button.classList.remove("copied"), 2000);
       await navigator.clipboard.writeText(button.dataset.markdown!);

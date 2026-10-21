@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { emailFromEnv } from "./email.ts";
-import { createAccounts } from "./accounts.ts";
+import { createAccounts, oauthFromEnv } from "./accounts.ts";
 import { createLimits, quotasFromEnv } from "./limits.ts";
 import { databaseFromEnv, isPostgresUrl, openDatabase } from "./db/index.ts";
 import { filesConfigFromEnv } from "./files/config.ts";
@@ -23,6 +23,7 @@ const accounts = await createAccounts(db, {
   registration: process.env.RPLY_REGISTRATION,
   email: emailFromEnv(process.env),
   secret: process.env.RPLY_AUTH_SECRET,
+  oauth: oauthFromEnv(process.env),
   trustedOrigins: process.env.RPLY_TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean),
   beforeDeleteUser: (userId) => deleteOwnedChannels(deps, userId),
 });
@@ -51,7 +52,7 @@ sweep();
 const sweeper = setInterval(sweep, 10 * 60 * 1000);
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`rply server listening on :${info.port} (db: ${dbPath ?? "postgres"})`);
-  console.log(`accounts: registration ${accounts.info.registration}${accounts.info.email ? ", email on" : ", email off"}${accounts.info.passkeys ? ", passkeys on" : " (set RPLY_URL for passkeys)"}`);
+  console.log(`accounts: registration ${accounts.info.registration}${accounts.info.email ? ", email on" : ", email off"}${accounts.info.passkeys ? ", passkeys on" : " (set RPLY_URL for passkeys)"}${accounts.info.oauth.map((p) => `, ${p} on`).join("")}`);
   console.log(push ? "push: web push enabled" : "push: off");
   if (deps.feedbackChannel) console.log(`feedback: collected in channel ${deps.feedbackChannel}`);
   console.log(files ? `files: ${files.store.name} (max ${Math.round(files.maxSize / 1024 / 1024)} MB per file)` : "files: off");

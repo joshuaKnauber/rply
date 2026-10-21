@@ -3,7 +3,7 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { bearer, magicLink } from "better-auth/plugins";
-import type { Registration } from "@rply/schema";
+import type { OAuthProvider, Registration } from "@rply/schema";
 import { isPostgres } from "./db/dialect.ts";
 import type { DB } from "./db/index.ts";
 import type { EmailSender } from "./email.ts";
@@ -14,9 +14,25 @@ export type AccountsOptions = {
   email?: EmailSender | null;
   secret?: string;
   trustedOrigins?: string[];
+  oauth?: Partial<Record<OAuthProvider, OAuthCredentials>>;
   beforeDeleteUser?: (userId: string) => Promise<void>;
 };
+export type OAuthCredentials = { clientId: string; clientSecret: string };
 export type Accounts = Awaited<ReturnType<typeof createAccounts>>;
+
+// both values or neither, so a half-configured provider fails at start instead of at sign-in
+export function oauthFromEnv(env: Record<string, string | undefined>) {
+  const oauth: Partial<Record<OAuthProvider, OAuthCredentials>> = {};
+  for (const provider of ["github", "google"] as const) {
+    const prefix = `RPLY_${provider.toUpperCase()}`;
+    const clientId = env[`${prefix}_CLIENT_ID`];
+    const clientSecret = env[`${prefix}_CLIENT_SECRET`];
+    if (!clientId && !clientSecret) continue;
+    if (!clientId || !clientSecret) throw new Error(`${prefix}_CLIENT_ID and ${prefix}_CLIENT_SECRET must be set together`);
+    oauth[provider] = { clientId, clientSecret };
+  }
+  return oauth;
+}
 
 const REGISTRATION_MODES: Registration[] = ["open", "invite", "closed"];
 
@@ -38,6 +54,9 @@ export async function createAccounts(db: DB, opts: AccountsOptions = {}) {
   const email = opts.email ?? null;
   const registration = parseRegistration(opts.registration);
   if (email && !opts.url) throw new Error("RPLY_URL is required for email, since the links in it point there");
+  const oauth = opts.oauth ?? {};
+  const oauthProviders = Object.keys(oauth) as OAuthProvider[];
+  if (oauthProviders.length && !opts.url) throw new Error("RPLY_URL is required for GitHub and Google sign-in, since the providers redirect back there");
   const url = opts.url ? new URL(opts.url) : null;
   const hasUsers = async () => Boolean(await db.selectFrom("user").select("id").limit(1).executeTakeFirst());
 
@@ -60,6 +79,7 @@ export async function createAccounts(db: DB, opts: AccountsOptions = {}) {
         ? ({ user, url }) => email({ to: user.email, subject: "Reset your rply password", text: `Reset your password: ${url}\n\nIgnore this email if you didn't ask for it.` })
         : undefined,
     },
+    socialProviders: oauth,
     emailVerification: email
       ? {
           sendOnSignUp: true,
@@ -91,7 +111,7 @@ export async function createAccounts(db: DB, opts: AccountsOptions = {}) {
     api: auth.api,
     context: auth.$context,
     hasUsers,
-    info: { registration, email: Boolean(email), passkeys: Boolean(url) },
+    info: { registration, email: Boolean(email), passkeys: Boolean(url), oauth: oauthProviders },
     user: async (headers: Headers) => (await auth.api.getSession({ headers }))?.user ?? null,
   };
 }

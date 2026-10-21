@@ -43,6 +43,17 @@ Email enables verification, password reset and magic links. It's sent through [R
 | `RPLY_RESEND_API_KEY` | Resend API key. |
 | `RPLY_EMAIL_FROM` | Sender, e.g. `rply <login@example.com>`. Required with the API key. |
 
+### GitHub and Google sign-in
+
+Each provider shows a "Continue with …" button once both of its variables are set. Both need `RPLY_URL`. New accounts still follow `RPLY_REGISTRATION`; signing in with a provider whose verified email matches an existing account links it.
+
+| Variable | Description |
+| --- | --- |
+| `RPLY_GITHUB_CLIENT_ID`, `RPLY_GITHUB_CLIENT_SECRET` | A [GitHub OAuth app](https://github.com/settings/developers) with the callback URL `<RPLY_URL>/v1/auth/callback/github`. |
+| `RPLY_GOOGLE_CLIENT_ID`, `RPLY_GOOGLE_CLIENT_SECRET` | A [Google OAuth client](https://console.cloud.google.com/apis/credentials) (web application) with the redirect URI `<RPLY_URL>/v1/auth/callback/google`. |
+
+The mobile app signs in with email and password only for now.
+
 Without email, reset a password from the command line; see [Upgrades and backups](/docs/self-hosting/upgrades/#reset-a-password-without-email).
 
 ## Files

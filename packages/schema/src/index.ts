@@ -315,11 +315,14 @@ export type Participant = { id: string; label: string | null; created_at: number
 
 export type Registration = "open" | "invite" | "closed";
 
+export type OAuthProvider = "github" | "google";
+
 export type ServerInfo = {
   needs_setup: boolean;
   registration: Registration;
   email: boolean;
   passkeys: boolean;
+  oauth: OAuthProvider[];
   files: { enabled: boolean; max_size: number };
   push: { public_key: string } | null;
 };

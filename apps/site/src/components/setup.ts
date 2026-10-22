@@ -103,6 +103,11 @@ const hermesSteps = (server: string) => `If you're Hermes Agent, use the rply pl
 - hermes rply init ${server} --name "<a name for you>"
 - Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).`;
 
+export const hermesPrompt = `Connect yourself to rply (https://rply.sh) so I can message you from my phone:
+1. hermes plugins install rply-platform --enable
+2. hermes rply init https://app.rply.sh --name "Hermes"
+3. Show me the claim link it prints, then run hermes gateway restart (or hermes gateway install if the gateway isn't installed yet).`;
+
 export const hostedPrompt = `Connect yourself to rply (https://rply.sh) so you can send me updates and ask me questions.
 
 ${hermesSteps("https://app.rply.sh")}

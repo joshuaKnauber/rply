@@ -2,7 +2,7 @@
 import Icon from "./Icon.astro";
 import Logo, { type LogoName } from "./Logo.astro";
 import { siTelegram } from "simple-icons";
-import { hosted, selfHosted, promptFor } from "./setup.ts";
+import { hosted, selfHosted, promptFor, hermesPrompt } from "./setup.ts";
 import type { IconName } from "./icons.ts";
 import { tagged } from "./track.ts";
 
@@ -82,7 +82,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
         </p>
       </div>
 
-      <div>
+      <div class="generic">
         <p class="text-sm font-medium text-gray-500">Server</p>
         <div class="mt-2.5 flex flex-wrap gap-2">
           {
@@ -106,7 +106,21 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       </div>
     </div>
 
-    <div class="mt-10 flex flex-wrap items-center gap-3">
+    <div hidden class="hermes mt-10 max-w-lg overflow-hidden rounded-xl border border-[#CD7F32]/60 bg-[#0b0d12] font-mono text-[13px] shadow-[0_20px_40px_-20px_rgb(0_0_0/0.5)]">
+      <div class="flex items-center justify-between border-b border-[#CD7F32]/40 px-4 py-2.5">
+        <span class="flex items-center gap-2 font-semibold tracking-wide whitespace-nowrap text-[#FFD700]"><Logo name="hermes" class="size-4" /> ⚕ HERMES AGENT</span>
+        <span class="hidden text-xs text-[#B8860B] sm:inline">paste this to your Hermes</span>
+      </div>
+      <p class="px-4 pt-3.5 pb-4 leading-relaxed whitespace-pre-wrap text-[#FFF8DC]"><span class="text-[#FFBF00]">❯ </span>{hermesPrompt}</p>
+      <div class="flex items-center gap-4 border-t border-[#CD7F32]/40 px-4 py-3">
+        <button class="copy-setup group inline-flex h-9 items-center rounded-lg bg-[#FFD700] px-4 font-semibold text-[#0b0d12] transition-colors hover:bg-[#FFBF00]" data-prompt={hermesPrompt}>
+          <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
+        </button>
+        <a href="/docs/integrations/hermes/" class:list={["text-[#B8860B] underline-offset-4 hover:text-[#FFD700] hover:underline", tagged("Hermes docs")]}>Set it up by hand</a>
+      </div>
+    </div>
+
+    <div class="generic mt-10 flex flex-wrap items-center gap-3">
       <button class="copy-setup group btn btn-dark h-12 px-6 text-base" data-prompt={promptFor(hosted)}>
         <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
       </button>
@@ -209,7 +223,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
 
   document.querySelectorAll<HTMLElement>(".setup").forEach((root) => {
     const phone = root.querySelector<HTMLElement>(".phone")!;
-    const copy = root.querySelector<HTMLElement>(".copy-setup")!;
+    const copy = root.querySelector<HTMLElement>(".generic .copy-setup")!;
     const manual = root.querySelector<HTMLAnchorElement>(".manual")!;
     const viewText = root.querySelector<HTMLElement>(".view-text")!;
     const serverNote = root.querySelector<HTMLElement>(".server-note")!;
@@ -229,6 +243,9 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
 
     group("agent", "Pick agent", (b) => {
       picked.agent = b.dataset.label!;
+      const hermes = b.dataset.agent === "hermes";
+      root.querySelectorAll<HTMLElement>(".generic").forEach((el) => (el.hidden = hermes));
+      root.querySelector<HTMLElement>(".hermes")!.hidden = !hermes;
       phone.querySelectorAll("[data-agent-name]").forEach((el) => (el.textContent = b.dataset.label!));
       phone.querySelectorAll<HTMLElement>("[data-agent-bird]").forEach((el) => {
         const next = el.cloneNode() as HTMLElement;
@@ -254,12 +271,14 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       serverNote.textContent = b.dataset.note!;
     });
 
-    copy.addEventListener("click", async () => {
-      track("Copy setup prompt", { location: "setup", ...picked });
-      flutter(copy);
-      copy.classList.add("copied");
-      setTimeout(() => copy.classList.remove("copied"), 2000);
-      await navigator.clipboard.writeText(copy.dataset.prompt!);
-    });
+    root.querySelectorAll<HTMLElement>(".copy-setup").forEach((b) =>
+      b.addEventListener("click", async () => {
+        track("Copy setup prompt", { location: "setup", ...picked });
+        flutter(b);
+        b.classList.add("copied");
+        setTimeout(() => b.classList.remove("copied"), 2000);
+        await navigator.clipboard.writeText(b.dataset.prompt!);
+      }),
+    );
   });
 </script>

@@ -2,7 +2,7 @@
 import Icon from "./Icon.astro";
 import Logo, { type LogoName } from "./Logo.astro";
 import { siTelegram } from "simple-icons";
-import { hosted, selfHosted, promptFor } from "./setup.ts";
+import { hosted, selfHosted, promptFor, hermesPrompt } from "./setup.ts";
 import type { IconName } from "./icons.ts";
 import { tagged } from "./track.ts";
 
@@ -61,7 +61,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
         </div>
       </div>
 
-      <div>
+      <div class="generic">
         <p class="text-sm font-medium text-gray-500">Instead of</p>
         <div class="mt-2.5 flex flex-wrap gap-2">
           {
@@ -82,7 +82,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
         </p>
       </div>
 
-      <div>
+      <div class="generic">
         <p class="text-sm font-medium text-gray-500">Server</p>
         <div class="mt-2.5 flex flex-wrap gap-2">
           {
@@ -106,7 +106,22 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       </div>
     </div>
 
-    <div class="mt-10 flex flex-wrap items-center gap-3">
+    <div hidden class="hermes mt-10 max-w-lg">
+      <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
+        <div class="flex items-center gap-2 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-900">
+          <Logo name="hermes" class="size-4" /> Paste this into Hermes
+        </div>
+        <p class="bg-gray-50 px-4 py-3.5 font-mono text-[13px] leading-relaxed whitespace-pre-wrap text-gray-700">{hermesPrompt}</p>
+      </div>
+      <div class="mt-6 flex flex-wrap items-center gap-3">
+        <button class="copy-setup group btn btn-dark h-12 px-6 text-base" data-prompt={hermesPrompt}>
+          <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
+        </button>
+        <a href="/docs/integrations/hermes/" class:list={["btn btn-outline h-12 px-6 text-base", tagged("Hermes docs")]}>Set it up by hand</a>
+      </div>
+    </div>
+
+    <div class="generic mt-10 flex flex-wrap items-center gap-3">
       <button class="copy-setup group btn btn-dark h-12 px-6 text-base" data-prompt={promptFor(hosted)}>
         <span class="grid [&>*]:[grid-area:1/1]"><span class="flex items-center gap-2 group-[.copied]:invisible"><Icon name="copy" class="size-4" /> Copy setup prompt</span><span class="invisible flex items-center justify-center gap-2 group-[.copied]:visible"><Icon name="check" class="size-4" /> Copied</span></span>
       </button>
@@ -209,7 +224,7 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
 
   document.querySelectorAll<HTMLElement>(".setup").forEach((root) => {
     const phone = root.querySelector<HTMLElement>(".phone")!;
-    const copy = root.querySelector<HTMLElement>(".copy-setup")!;
+    const copy = root.querySelector<HTMLElement>(".generic .copy-setup")!;
     const manual = root.querySelector<HTMLAnchorElement>(".manual")!;
     const viewText = root.querySelector<HTMLElement>(".view-text")!;
     const serverNote = root.querySelector<HTMLElement>(".server-note")!;
@@ -229,6 +244,9 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
 
     group("agent", "Pick agent", (b) => {
       picked.agent = b.dataset.label!;
+      const hermes = b.dataset.agent === "hermes";
+      root.querySelectorAll<HTMLElement>(".generic").forEach((el) => (el.hidden = hermes));
+      root.querySelector<HTMLElement>(".hermes")!.hidden = !hermes;
       phone.querySelectorAll("[data-agent-name]").forEach((el) => (el.textContent = b.dataset.label!));
       phone.querySelectorAll<HTMLElement>("[data-agent-bird]").forEach((el) => {
         const next = el.cloneNode() as HTMLElement;
@@ -254,12 +272,14 @@ const who = "flex items-center gap-1.5 text-xs text-gray-500";
       serverNote.textContent = b.dataset.note!;
     });
 
-    copy.addEventListener("click", async () => {
-      track("Copy setup prompt", { location: "setup", ...picked });
-      flutter(copy);
-      copy.classList.add("copied");
-      setTimeout(() => copy.classList.remove("copied"), 2000);
-      await navigator.clipboard.writeText(copy.dataset.prompt!);
-    });
+    root.querySelectorAll<HTMLElement>(".copy-setup").forEach((b) =>
+      b.addEventListener("click", async () => {
+        track("Copy setup prompt", { location: "setup", ...picked });
+        flutter(b);
+        b.classList.add("copied");
+        setTimeout(() => b.classList.remove("copied"), 2000);
+        await navigator.clipboard.writeText(b.dataset.prompt!);
+      }),
+    );
   });
 </script>

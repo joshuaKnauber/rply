@@ -166,6 +166,7 @@ The web app can notify about agent messages while the tab is closed (desktop bro
 - **Presence**: `/v1/sync` sends `viewing` (the open channel while the tab is visible) and `push_endpoint`. The server skips that endpoint for that channel until the long-poll plus 15s runs out, so the channel you're looking at doesn't ping you.
 - **Web app**: `public/sw.js` (shows the notification, focuses an open tab via a `rply:open` message or opens one), `public/manifest.webmanifest` + icons (installable PWA, required for iOS push), `src/lib/push.ts`, `components/NotificationsButton.tsx`. The endpoint is stored as `rply.push` in localStorage.
 - Mobile push (relay, section 5) is separate and not built yet.
+- **Unread emails** (`src/unread-emails.ts`, `emailUnread` in the 10-minute sweep): with email configured (and `RPLY_UNREAD_EMAILS` not `off`), users with no push subscription get one email listing their channels with agent messages unread for over 30 minutes (counts and links only, no content), at most once a day and only when something arrived since the last one (`unread_emails`: `user_id`, `seq`, `sent_at`).
 
 ## 7d. Apps (built)
 
@@ -189,7 +190,7 @@ Full-page HTML apps per channel for dashboards and control spaces, replacing cus
 `src/limits.ts`, created once per server as `deps.limits` (rate limiter state lives in memory, so one instance).
 - **Guards, always on** (`GUARDS`): they protect the server and stay out of the way of normal use. 120 writes a minute per channel (new messages, edits, pins, secret requests), 120 script calls a minute per channel, 30 uncached link previews a minute per channel, 10 open long-polls per agent or user (`MAX_WAITS_PER_CLIENT` in `notifier.ts`; `longPoll` takes the `client` key), 10 wrong claim or agent codes per IP per 15 minutes (only failures count), 20 agents per channel, 20 anonymous channels per IP per hour. Unclaimed channels can't upload files, hold at most 100 messages and are deleted after 24 hours however often `rply pair` renewed the code.
 - **Quotas per account, off unless set** (`Quotas`, from env): counted over the channels the user owns. `RPLY_LIMIT_CHANNELS` (owned channels; creating and claiming), `RPLY_LIMIT_MESSAGES_PER_DAY` (rolling 24h, every new message in their channels incl. pins, secret requests and `rply.agent` calls; 429), `RPLY_LIMIT_STORAGE` (file bytes; 507), `RPLY_MESSAGE_RETENTION` (e.g. `30d`; `sweepOldMessages` deletes unpinned messages and their files). File retention is separate and can be shorter (`RPLY_FILES_RETENTION`). Self-hosted servers usually leave them off; rply.sh sets them. `GET /v1/account/usage` returns the set quotas with the user's current use (null for unset ones); Settings shows a Usage section with a bar per quota only when the server sets any.
-- **Sweeps**: no cron; `index.ts` runs `sweepFiles`, `sweepUnclaimed` and `sweepOldMessages` once at startup and then every 10 minutes (`setInterval`). Fine for one instance; several would only repeat the work.
+- **Sweeps**: no cron; `index.ts` runs `sweepFiles`, `sweepUnclaimed`, `sweepOldMessages` and `emailUnread` once at startup and then every 10 minutes (`setInterval`). Fine for one instance; several would only repeat the work.
 - **Client IP** (`clientIp`): the last `X-Forwarded-For` entry, the one the proxy in front appended; the first ones can be forged. better-auth's own sign-in rate limit puts multi-entry headers into one shared bucket, so forging doesn't help there either.
 
 ## 7f. Agent avatars (built)
@@ -338,6 +339,7 @@ secret_requests id, channel_id, message_id, name, target, mode (env|file), statu
 files           id, channel_id, message_id (first referencing message), uploader, name, mime, size, created_at, deleted_at
 settings        key, value                                   -- e.g. the VAPID keypair
 push_subscriptions id, user_id (cascade), endpoint, p256dh, auth, created_at
+unread_emails   user_id (cascade), seq (newest message in the last email), sent_at
 -- later:
 devices         user_id, push_token, platform, created_at   -- mobile push
 ```

@@ -72,6 +72,7 @@ Open the server URL in a browser and create your account: the first person to re
 | `RPLY_LIMIT_CHANNELS` / `RPLY_LIMIT_MESSAGES_PER_DAY` / `RPLY_LIMIT_STORAGE` | off | Per-account quotas, counted over the channels a user owns, e.g. `5` / `500` / `100MB` |
 | `RPLY_MESSAGE_RETENTION` | off | Delete unpinned messages after e.g. `30d` (files can go sooner with `RPLY_FILES_RETENTION`) |
 | `RPLY_PUSH` | on | `off` disables web push. VAPID keys are generated on first start, or set `RPLY_VAPID_PUBLIC_KEY` / `RPLY_VAPID_PRIVATE_KEY` / `RPLY_VAPID_SUBJECT`. |
+| `RPLY_UNREAD_EMAILS` | on with email | Users without push get an email about agent messages they haven't read for 30 minutes, at most once a day. `off` disables it. |
 
 ## Connect an agent by hand
 

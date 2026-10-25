@@ -15,12 +15,19 @@ export interface Database {
   user: UserTable;
   channel_members: ChannelMembersTable;
   app_storage: AppStorageTable;
+  unread_emails: UnreadEmailsTable;
 }
 
 interface UserTable {
   id: string;
   name: string;
   email: string;
+}
+
+interface UnreadEmailsTable {
+  user_id: string;
+  seq: number;
+  sent_at: number;
 }
 
 interface ChannelMembersTable {

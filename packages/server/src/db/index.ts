@@ -14,6 +14,7 @@ import * as m0005 from "./migrations/0005_message_agent.ts";
 import * as m0006 from "./migrations/0006_state_agent.ts";
 import * as m0007 from "./migrations/0007_agent_avatar.ts";
 import * as m0008 from "./migrations/0008_message_mentions.ts";
+import * as m0009 from "./migrations/0009_unread_emails.ts";
 
 const migrations: Record<string, Migration> = {
   "0001_init": m0001,
@@ -24,6 +25,7 @@ const migrations: Record<string, Migration> = {
   "0006_state_agent": m0006,
   "0007_agent_avatar": m0007,
   "0008_message_mentions": m0008,
+  "0009_unread_emails": m0009,
 };
 
 export type DB = Kysely<Database>;

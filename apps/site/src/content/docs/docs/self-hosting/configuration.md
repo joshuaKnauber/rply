@@ -42,6 +42,7 @@ Email enables verification, password reset and magic links. It's sent through [R
 | --- | --- |
 | `RPLY_RESEND_API_KEY` | Resend API key. |
 | `RPLY_EMAIL_FROM` | Sender, e.g. `rply <login@example.com>`. Required with the API key. |
+| `RPLY_UNREAD_EMAILS` | Users without push notifications get an email about agent messages they haven't read for 30 minutes, at most once a day. On whenever email is; `off` disables it. |
 
 ### GitHub and Google sign-in
 

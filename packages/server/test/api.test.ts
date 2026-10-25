@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sweepOldMessages } from "../src/messages.ts";
 import { sweepUnclaimed } from "../src/routes/channels.ts";
+import { emailUnread, UNREAD_EMAIL_DELAY_MS, UNREAD_EMAIL_GAP_MS } from "../src/unread-emails.ts";
 import { delay, setup } from "./helpers.ts";
 
 const choice = (id = "choice") => ({ type: "choice", id, options: [{ label: "Yes" }, { label: "No" }] });
@@ -847,6 +848,44 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
   await request("POST", "/messages", { token: a.agent, body: { body: { text: "gone" } } });
   await flush();
   assert.deepEqual((await db.selectFrom("push_subscriptions").select("endpoint").execute()).map((r) => r.endpoint), ["https://push.example/b"]);
+});
+
+test("unread emails: users without push hear about old unread agent messages, at most once a day", async () => {
+  const { db, deps, request, ownedChannel, signUp } = await setup({ pushSend: async () => {} });
+  const emails: { to: string; subject: string; text: string }[] = [];
+  const run = () => emailUnread(deps, async (e) => void emails.push(e), "https://rply.test");
+  const age = (ms: number) => db.updateTable("messages").set({ created_at: Date.now() - ms }).execute();
+  const a = await ownedChannel("SEO bot", (await signUp("a@example.com")).token!);
+  const b = await ownedChannel("Shop agent", (await signUp("b@example.com")).token!);
+  await request("PUT", "/push/subscription", { token: b.human, body: { subscription: { endpoint: "https://push.example/b", keys: { p256dh: "BKey", auth: "auth" } } } });
+
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "one" } } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "two" } } });
+  await request("POST", "/messages", { token: a.human, body: { body: { text: "mine" } } });
+  await request("POST", "/messages", { token: b.agent, body: { body: { text: "b has push" } } });
+  assert.equal(await run(), 0, "too recent");
+
+  await age(UNREAD_EMAIL_DELAY_MS + 1000);
+  assert.equal(await run(), 1);
+  assert.equal(emails[0]!.to, "a@example.com");
+  assert.equal(emails[0]!.subject, "You have 2 unread messages in rply");
+  assert.match(emails[0]!.text, new RegExp(`SEO bot: 2 unread\\n  https://rply.test/c/${a.channel.id}`));
+
+  assert.equal(await run(), 0, "already emailed");
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "three" } } });
+  await age(UNREAD_EMAIL_DELAY_MS + 1000);
+  assert.equal(await run(), 0, "within a day");
+  await db.updateTable("unread_emails").set({ sent_at: Date.now() - UNREAD_EMAIL_GAP_MS - 1000 }).execute();
+  assert.equal(await run(), 1);
+  assert.equal(emails[1]!.subject, "You have 3 unread messages in rply");
+
+  await db.updateTable("unread_emails").set({ sent_at: Date.now() - UNREAD_EMAIL_GAP_MS - 1000 }).execute();
+  assert.equal(await run(), 0, "nothing new since the last email");
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "four" } } });
+  await age(UNREAD_EMAIL_DELAY_MS + 1000);
+  const last = (await db.selectFrom("messages").select((eb) => eb.fn.max("seq").as("seq")).executeTakeFirstOrThrow()).seq;
+  await request("PUT", "/channel/read", { token: a.human, body: { seq: Number(last) } });
+  assert.equal(await run(), 0, "read");
 });
 
 test("the human renames an agent and picks its bird", async () => {

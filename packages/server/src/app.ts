@@ -52,7 +52,7 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
     .route("/", feedbackRoutes(deps))
     .route("/", messageRoutes(deps));
 
-  const app = new Hono()
+  const app = new Hono<AppEnv>()
     .get("/health", (c) => c.json({ ok: true }))
     .route("/v1", api)
     .all("/v1/*", (c) => c.json({ error: "Not found" }, 404));
@@ -65,7 +65,8 @@ export function createApp(deps: Deps, opts: { webDir?: string } = {}) {
   return app.onError((err, c) => {
       if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
       if (err instanceof SyntaxError) return c.json({ error: "Invalid JSON body" }, 400);
-      console.error(err);
+      // an unhandled 500 is otherwise untraceable: record which request reached it and who it belonged to
+      console.error("request failed", { method: c.req.method, path: c.req.path, channel: c.get("auth")?.channel.id ?? null, error: err });
       return c.json({ error: "Internal server error" }, 500);
     });
 }

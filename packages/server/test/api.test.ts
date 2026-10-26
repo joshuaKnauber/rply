@@ -849,6 +849,26 @@ test("web push: agent messages notify subscribed browsers, with suppression and 
   assert.deepEqual((await db.selectFrom("push_subscriptions").select("endpoint").execute()).map((r) => r.endpoint), ["https://push.example/b"]);
 });
 
+test("web push: only the signed-in owner can delete their subscription", async () => {
+  const { db, request, ownedChannel } = await setup({ pushSend: async () => {} });
+  const a = await ownedChannel("SEO bot");
+  const b = await ownedChannel("Shop agent");
+  const endpoint = "https://push.example/owner";
+  const sub = (e: string) => ({ endpoint: e, keys: { p256dh: "BKey", auth: "auth" } });
+  const endpoints = async () => (await db.selectFrom("push_subscriptions").select("endpoint").execute()).map((r) => r.endpoint);
+  await request("PUT", "/push/subscription", { token: a.human, body: { subscription: sub(endpoint) } });
+  assert.deepEqual(await endpoints(), [endpoint]);
+
+  assert.equal((await request("DELETE", "/push/subscription", { body: { endpoint } })).status, 401);
+  assert.deepEqual(await endpoints(), [endpoint]);
+
+  assert.equal((await request("DELETE", "/push/subscription", { token: b.human, body: { endpoint } })).status, 204);
+  assert.deepEqual(await endpoints(), [endpoint]);
+
+  assert.equal((await request("DELETE", "/push/subscription", { token: a.human, body: { endpoint } })).status, 204);
+  assert.deepEqual(await endpoints(), []);
+});
+
 test("the human renames an agent and picks its bird", async () => {
   const { request, ownedChannel } = await setup();
   const { agent, human } = await ownedChannel();

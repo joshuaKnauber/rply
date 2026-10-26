@@ -32,9 +32,13 @@ export function pushRoutes(deps: Deps) {
       });
       return c.body(null, 204);
     })
-    .delete("/push/subscription", async (c) => {
+    .delete("/push/subscription", requireUser(deps), async (c) => {
       const { endpoint } = parse(PushUnsubscribeRequest, await c.req.json());
-      await db.deleteFrom("push_subscriptions").where("endpoint", "=", endpoint).execute();
+      await db
+        .deleteFrom("push_subscriptions")
+        .where("endpoint", "=", endpoint)
+        .where("user_id", "=", c.var.user.id)
+        .execute();
       return c.body(null, 204);
     });
 }

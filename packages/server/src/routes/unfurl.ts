@@ -76,14 +76,53 @@ async function assertPublic(hostname: string) {
   if (addresses.length === 0 || addresses.some(isPrivate)) throw new Error("Private address");
 }
 
-function isPrivate(address: string) {
-  const v4 = address.replace(/^::ffff:/, "");
-  if (isIP(v4) === 4) {
-    const [a, b] = v4.split(".").map(Number) as [number, number];
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224;
+export function isPrivate(address: string) {
+  const v4 = toIPv4(address);
+  if (v4) return isPrivateV4(v4);
+  const groups = toIPv6Groups(address);
+  // An address this cannot parse is not proven public, so block it too.
+  if (!groups) return true;
+  const [a, b, c, d, e, f] = groups;
+  return (
+    (a & 0xfe00) === 0xfc00 || // fc00::/7 unique local
+    (a & 0xffc0) === 0xfe80 || // fe80::/10 link local
+    (a & 0xff00) === 0xff00 || // ff00::/8 multicast
+    (a === 0x64 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0) // 64:ff9b::/96 NAT64
+  );
+}
+
+function isPrivateV4(v4: string) {
+  const [a, b] = v4.split(".").map(Number) as [number, number];
+  return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224;
+}
+
+// The IPv4 address an IPv6 address embeds (::/96 and ::ffff:0:0/96), or null.
+function toIPv4(address: string): string | null {
+  if (isIP(address) === 4) return address;
+  const groups = toIPv6Groups(address);
+  if (!groups) return null;
+  const [a, b, c, d, e, f, hi, lo] = groups;
+  if (a || b || c || d || e || (f !== 0 && f !== 0xffff)) return null;
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+}
+
+// The eight 16-bit groups of an IPv6 address, or null when it is not one.
+function toIPv6Groups(address: string): number[] | null {
+  let src = address;
+  const dotted = address.match(/(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (dotted) {
+    const octets = dotted[1].split(".").map(Number);
+    if (octets.some((octet) => octet > 255)) return null;
+    src = `${address.slice(0, dotted.index)}${(((octets[0] << 8) | octets[1]) >>> 0).toString(16)}:${(((octets[2] << 8) | octets[3]) >>> 0).toString(16)}`;
   }
-  const v6 = address.toLowerCase();
-  return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+  const parts = src.split("::");
+  if (parts.length > 2) return null;
+  const parse = (part: string) => part.split(":").map((group) => (group === "" ? NaN : parseInt(group, 16)));
+  const high = parts[0] === "" ? [] : parse(parts[0]);
+  const low = parts.length === 1 || parts[1] === "" ? [] : parse(parts[1]);
+  if (parts.length === 2 && high.length + low.length > 8) return null;
+  const groups = parts.length === 1 ? high : [...high, ...Array(8 - high.length - low.length).fill(0), ...low];
+  return groups.length === 8 && groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff) ? groups : null;
 }
 
 async function readStart(res: Response) {

@@ -9,7 +9,7 @@ export function notifyAboutMessage({ db, push }: Deps, channel: ChannelRow, mess
   const body = message.ask ? `❓ ${text}` : text;
   title(db, channel, message)
     .then((title) => push.notify(channel.id, { title, body: body.length > 180 ? `${body.slice(0, 177)}…` : body, url: `/c/${channel.id}`, tag: channel.id }))
-    .catch((err) => console.error("push notify failed", err));
+    .catch((err) => console.error("push notify failed", { channel: channel.id, error: err }));
 }
 
 async function title(db: Deps["db"], channel: ChannelRow, message: Message) {

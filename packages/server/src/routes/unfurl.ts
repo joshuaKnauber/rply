@@ -23,7 +23,10 @@ export function unfurlRoutes(deps: Deps, fetchPage: typeof fetchPreview = fetchP
     if (cached && cached.expires > Date.now()) return c.json(cached.preview);
     deps.limits.unfurl(c.var.auth.channel.id);
 
-    const preview = await fetchPage(url).catch(() => ({ url, title: null, description: null, image: null, icon: null, icon_dark: null, site: null }));
+    const preview = await fetchPage(url).catch((err) => {
+      console.error("link preview failed", { url: logUrl(url), error: err });
+      return { url, title: null, description: null, image: null, icon: null, icon_dark: null, site: null };
+    });
     cache.delete(url);
     cache.set(url, { preview, expires: Date.now() + (preview.title ? HIT_TTL : MISS_TTL) });
     if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
@@ -55,6 +58,16 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
   }
   throw new Error("Too many redirects");
 }
+
+// a URL's query string can carry tokens (presigned links, magic links), so only the origin and path go to the log
+const logUrl = (raw: string) => {
+  try {
+    const { origin, pathname } = new URL(raw);
+    return `${origin}${pathname}`;
+  } catch {
+    return raw.slice(0, 200);
+  }
+};
 
 export function fallbackPreview(url: string, pageUrl: string, icon?: string | null): LinkPreview {
   const { host, pathname } = new URL(url);

@@ -17,6 +17,14 @@ async function vapidKeys(db: DB, env: NodeJS.ProcessEnv) {
   return keys;
 }
 
+const pushHost = (endpoint: string) => {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "unknown";
+  }
+};
+
 export async function createPush(db: DB, opts: { env?: NodeJS.ProcessEnv; send?: PushSender } = {}) {
   const keys = await vapidKeys(db, opts.env ?? {});
   const subject = opts.env?.RPLY_VAPID_SUBJECT ?? SUBJECT;
@@ -51,10 +59,13 @@ export async function createPush(db: DB, opts: { env?: NodeJS.ProcessEnv; send?:
       const body = JSON.stringify(payload);
       for (const t of await targets(channelId)) {
         if (isViewing(t.endpoint, channelId)) continue;
-        send({ endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, body).catch(async (err: { statusCode?: number }) => {
+        send({ endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, body).catch(async (err: { statusCode?: number; message?: string }) => {
           if (err.statusCode === 404 || err.statusCode === 410) {
             await db.deleteFrom("push_subscriptions").where("endpoint", "=", t.endpoint).execute();
-          } else console.error("push failed", err.statusCode ?? err);
+          } else {
+            // the endpoint is a capability URL, so log only its host, the push service that failed
+            console.error("push delivery failed", { channel: channelId, endpoint: pushHost(t.endpoint), status: err.statusCode ?? null, message: err.message ?? String(err) });
+          }
         });
       }
     },

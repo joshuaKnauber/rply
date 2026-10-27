@@ -26,31 +26,32 @@ export async function createPush(db: DB, opts: { env?: NodeJS.ProcessEnv; send?:
       await webpush.sendNotification(target, payload, { vapidDetails: { subject, ...keys }, TTL: 3600, urgency: "high" });
     });
   const presence = new Map<string, { channelId: string | null; expires: number }>();
+  const presenceKey = (userId: string, endpoint: string) => `${userId}\u0000${endpoint}`;
 
   const targets = async (channelId: string) => {
     const rows = await db
       .selectFrom("push_subscriptions as s")
       .innerJoin("channel_members as m", "m.user_id", "s.user_id")
-      .select(["s.endpoint", "s.p256dh", "s.auth"])
+      .select(["s.user_id", "s.endpoint", "s.p256dh", "s.auth"])
       .where("m.channel_id", "=", channelId)
       .execute();
     return [...new Map(rows.map((r) => [r.endpoint, r])).values()];
   };
 
-  const isViewing = (endpoint: string, channelId: string) => {
-    const p = presence.get(endpoint);
+  const isViewing = (userId: string, endpoint: string, channelId: string) => {
+    const p = presence.get(presenceKey(userId, endpoint));
     return Boolean(p && p.channelId === channelId && p.expires > Date.now());
   };
 
   return {
     publicKey: keys.publicKey,
-    setPresence(endpoint: string, channelId: string | null, ttlMs: number) {
-      presence.set(endpoint, { channelId, expires: Date.now() + ttlMs });
+    setPresence(userId: string, endpoint: string, channelId: string | null, ttlMs: number) {
+      presence.set(presenceKey(userId, endpoint), { channelId, expires: Date.now() + ttlMs });
     },
     async notify(channelId: string, payload: PushPayload) {
       const body = JSON.stringify(payload);
       for (const t of await targets(channelId)) {
-        if (isViewing(t.endpoint, channelId)) continue;
+        if (isViewing(t.user_id, t.endpoint, channelId)) continue;
         send({ endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, body).catch(async (err: { statusCode?: number }) => {
           if (err.statusCode === 404 || err.statusCode === 410) {
             await db.deleteFrom("push_subscriptions").where("endpoint", "=", t.endpoint).execute();

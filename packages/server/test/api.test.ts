@@ -888,3 +888,27 @@ test("feedback lands in the collecting server's channel, and only there", async 
   for (let i = 0; i < 5; i++) assert.equal((await request("POST", "/feedback", { body, headers: ip })).status, 200);
   assert.equal((await request("POST", "/feedback", { body, headers: ip })).status, 429);
 });
+
+test("web push: a user cannot silence another user's browser through sync", async () => {
+  const sent: { endpoint: string; payload: any }[] = [];
+  const pushSend = async (target: { endpoint: string }, payload: string) => {
+    sent.push({ endpoint: target.endpoint, payload: JSON.parse(payload) });
+  };
+  const { request, ownedChannel } = await setup({ pushSend });
+  const a = await ownedChannel("SEO bot");
+  const b = await ownedChannel("Shop agent");
+  const endpoint = "https://push.example/a";
+  const sub = (e: string) => ({ endpoint: e, keys: { p256dh: "BKey", auth: "auth" } });
+  await request("PUT", "/push/subscription", { token: a.human, body: { subscription: sub(endpoint) } });
+
+  await request("POST", "/sync", { token: b.human, body: { viewing: a.channel.id, push_endpoint: endpoint } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "not suppressed" } } });
+  await delay(20);
+  assert.deepEqual(sent.map((s) => s.payload.body), ["not suppressed"]);
+
+  sent.length = 0;
+  await request("POST", "/sync", { token: a.human, body: { viewing: a.channel.id, push_endpoint: endpoint } });
+  await request("POST", "/messages", { token: a.agent, body: { body: { text: "suppressed" } } });
+  await delay(20);
+  assert.deepEqual(sent, []);
+});

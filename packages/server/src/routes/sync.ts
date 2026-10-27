@@ -18,7 +18,7 @@ export function syncRoutes(deps: Deps) {
 
     const cursor = req.cursor ? Number(req.cursor) || 0 : await maxChange();
     const wait = req.wait ?? 0;
-    if (push && req.push_endpoint) push.setPresence(req.push_endpoint, req.viewing ?? null, (wait + 15) * 1000);
+    if (push && req.push_endpoint) push.setPresence(userId, req.push_endpoint, req.viewing ?? null, (wait + 15) * 1000);
 
     const result = await longPoll({
       notifier,

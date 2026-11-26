@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import type { Command } from "commander";
 import type { AgentsResponse, CallsResponse, Message, MessagesResponse, PendingCall } from "@rply/schema";
 import { isAnswer } from "@rply/schema/helpers";
-import { CliError, type Client } from "../client.ts";
+import { AuthError, CliError, type Client } from "../client.ts";
 import { updateChannel, type Selected } from "../config.ts";
 import { connect } from "../context.ts";
 import { parseDuration } from "../io.ts";
@@ -45,25 +45,33 @@ in the background from the hook (runs would overlap); raise --on-message-timeout
       if (key && !process.env.RPLY_SERVICE && serviceRunning(key)) {
         throw new CliError(`The service for "${key}" is already running. Logs: ${logPath(key)}. Remove it with rply serve --uninstall.`);
       }
+      const fail = (err: unknown): never => {
+        console.error(`rply: ${(err as Error).message}`);
+        // Units written by older versions restart on any exit, so a service stops and removes itself instead of looping on a rejected token
+        if (err instanceof AuthError && process.env.RPLY_SERVICE && key) {
+          console.error(`rply: stopping and removing the service for "${key}". Install it again with rply serve --install once the channel works.`);
+          uninstallService(key, true);
+        }
+        process.exit(err instanceof CliError ? err.exitCode : 1);
+      };
       const dir = opts.dir ? resolve(opts.dir) : commandsDir(selected);
       mkdirSync(dir, { recursive: true });
       log(`Serving commands from ${dir}`);
       if (opts.onMessage) {
-        await warnAboutOtherWakers(client);
+        await warnAboutOtherWakers(client).catch(fail);
         log(`Waking the agent on new messages with: ${opts.onMessage}`);
         const timeout = parseDuration(opts.onMessageTimeout) || undefined;
-        watchInbox(client, selected, opts.onMessage, timeout).catch((err) => {
-          console.error(`rply: ${err.message}`);
-          process.exit(1);
-        });
+        watchInbox(client, selected, opts.onMessage, timeout).catch(fail);
       }
-      await client.poll(undefined, async (waitSeconds) => {
-        const names = listCommands(dir);
-        const wakes = opts.onMessage ? "&wakes=1" : "";
-        const { calls } = await client.once<CallsResponse>("GET", `/calls?wait=${waitSeconds}&commands=${names.join(",")}${wakes}`);
-        for (const call of calls) void handle(client, dir, call, key);
-        return undefined;
-      });
+      await client
+        .poll(undefined, async (waitSeconds) => {
+          const names = listCommands(dir);
+          const wakes = opts.onMessage ? "&wakes=1" : "";
+          const { calls } = await client.once<CallsResponse>("GET", `/calls?wait=${waitSeconds}&commands=${names.join(",")}${wakes}`);
+          for (const call of calls) void handle(client, dir, call, key);
+          return undefined;
+        })
+        .catch(fail);
     });
 }
 

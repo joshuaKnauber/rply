@@ -8,6 +8,13 @@ export class CliError extends Error {
 
 class TransientError extends Error {}
 
+// An installed service supervisor restarts a failed process forever, so a token the server rejects exits cleanly and leaves the service stopped for a person to fix
+export class AuthError extends CliError {
+  constructor(message: string) {
+    super(message, process.env.RPLY_SERVICE ? 0 : 1);
+  }
+}
+
 export type Client = ReturnType<typeof createClient>;
 
 export function createClient(server: string, token?: string, rejected?: string) {
@@ -28,7 +35,7 @@ export function createClient(server: string, token?: string, rejected?: string) 
     const json = res.status === 204 ? {} : await res.json().catch(() => ({}));
     if (res.status >= 500) throw new TransientError(json.error ?? `Server error (${res.status})`);
     const hint = res.status === 400 && /^\/(messages|pins)/.test(path) ? " (see `rply guide blocks`)" : "";
-    if (res.status === 401 && rejected) throw new CliError(rejected);
+    if (res.status === 401 && rejected) throw new AuthError(rejected);
     if (!res.ok) throw new CliError((json.error ?? `Request failed (${res.status})`) + hint);
     return json as T;
   }

@@ -35,12 +35,15 @@ export function installService({ key, args, cwd }: Service) {
   throw new CliError(`Installing a service isn't supported on ${process.platform}. Keep \`rply serve\` running with your own process manager.`);
 }
 
-export function uninstallService(key: string) {
+// fromService runs inside the unit it removes: stopping the unit kills this process, so the file has to go first
+export function uninstallService(key: string, fromService = false) {
   if (process.platform === "linux") {
+    if (fromService) rmSync(unitPath(key), { force: true });
     run("systemctl", ["--user", "disable", "--now", unitName(key)]);
     rmSync(unitPath(key), { force: true });
     run("systemctl", ["--user", "daemon-reload"]);
   } else if (process.platform === "darwin") {
+    if (fromService) rmSync(plistPath(key), { force: true });
     run("launchctl", ["bootout", `${domain()}/${label(key)}`]);
     rmSync(plistPath(key), { force: true });
   }
@@ -54,8 +57,8 @@ export function serviceRunning(key: string) {
 
 const systemdQuote = (value: string) => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/%/g, "%%").replace(/\$/g, "$$$$")}"`;
 
-function installSystemd(key: string, program: string[], env: Record<string, string>, cwd: string) {
-  const unit = `[Unit]
+export function systemdUnit(key: string, program: string[], env: Record<string, string>, cwd: string) {
+  return `[Unit]
 Description=rply serve (${key})
 After=network-online.target
 
@@ -65,7 +68,7 @@ ${Object.entries(env)
   .map(([k, v]) => `Environment=${systemdQuote(`${k}=${v}`)}`)
   .join("\n")}
 ExecStart=${program.map(systemdQuote).join(" ")}
-Restart=always
+Restart=on-failure
 RestartSec=5
 StandardOutput=append:${logPath(key)}
 StandardError=append:${logPath(key)}
@@ -73,6 +76,10 @@ StandardError=append:${logPath(key)}
 [Install]
 WantedBy=default.target
 `;
+}
+
+function installSystemd(key: string, program: string[], env: Record<string, string>, cwd: string) {
+  const unit = systemdUnit(key, program, env, cwd);
   mkdirSync(dirname(unitPath(key)), { recursive: true });
   writeFileSync(unitPath(key), unit);
   const reload = run("systemctl", ["--user", "daemon-reload"]);
@@ -90,8 +97,8 @@ WantedBy=default.target
 
 const xml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function installLaunchd(key: string, program: string[], env: Record<string, string>, cwd: string) {
-  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+export function launchdPlist(key: string, program: string[], env: Record<string, string>, cwd: string) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -108,12 +115,19 @@ ${Object.entries(env)
   </dict>
   <key>WorkingDirectory</key><string>${xml(cwd)}</string>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
   <key>StandardOutPath</key><string>${xml(logPath(key))}</string>
   <key>StandardErrorPath</key><string>${xml(logPath(key))}</string>
 </dict>
 </plist>
 `;
+}
+
+function installLaunchd(key: string, program: string[], env: Record<string, string>, cwd: string) {
+  const plist = launchdPlist(key, program, env, cwd);
   mkdirSync(dirname(plistPath(key)), { recursive: true });
   run("launchctl", ["bootout", `${domain()}/${label(key)}`]);
   writeFileSync(plistPath(key), plist);

@@ -245,7 +245,7 @@ Some apps refuse to load in a frame (X-Frame-Options, CSP frame-ancestors) or ne
   rply secret request SERVICE_ACCOUNT --to key.json --file --wait
 
 Prints only "NAME written to /abs/path". Never cat the file into a message or log.
-Without --wait: \`rply secret fetch <id> --wait\` later. \`rply secret cancel <id>\` withdraws it.
+Without --wait: \`rply secret fetch <id> --wait\` later. \`rply secret cancel <id>\` withdraws it, but only the agent that asked can.
 Exit codes: 2 = expired or timed out, 3 = declined or cancelled.`,
 
   files: `Attachments

@@ -264,8 +264,8 @@ Prints only the file path. Exit codes: `2` if it expired or timed out, `3` if de
 
 ### `rply secret fetch <id>`
 
-Writes a requested secret once the person has provided it. Takes `--wait` and `--timeout`.
+Writes a requested secret once the person has provided it. Takes `--wait` and `--timeout`. Only the agent that asked for the secret can fetch it.
 
 ### `rply secret cancel <id>`
 
-Withdraws a secret request.
+Withdraws a secret request. Only the agent that asked for it can cancel it.

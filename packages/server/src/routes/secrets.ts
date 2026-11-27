@@ -4,7 +4,7 @@ import { CreateSecretRequest, FulfilSecretRequest, type BlockOf, type SecretResp
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
 import type { DB } from "../db/index.ts";
-import { insertMessage, loadMessage, recordChanges, toMessage } from "../messages.ts";
+import { assertOwnMessage, insertMessage, loadMessage, recordChanges, toMessage } from "../messages.ts";
 import { longPoll } from "../notifier.ts";
 import { notifyAboutMessage } from "../push/notify.ts";
 import { now, randomId } from "../tokens.ts";
@@ -17,16 +17,28 @@ export function secretRoutes(deps: Deps) {
   const human = requireAuth(deps, "human");
 
   const load = async (channelId: string, id: string) => {
-    const row = await db.selectFrom("secret_requests").selectAll().where("id", "=", id).where("channel_id", "=", channelId).executeTakeFirst();
+    const row = await db
+      .selectFrom("secret_requests")
+      .innerJoin("messages", "messages.id", "secret_requests.message_id")
+      .leftJoin("agent_tokens", "agent_tokens.id", "messages.agent_id")
+      .selectAll("secret_requests")
+      .select(["messages.agent_id as agent_id", "agent_tokens.label as agent_label", "agent_tokens.revoked_at as agent_revoked_at"])
+      .where("secret_requests.id", "=", id)
+      .where("secret_requests.channel_id", "=", channelId)
+      .executeTakeFirst();
     if (!row) throw new HTTPException(404, { message: "Secret request not found" });
     return row;
   };
 
+  // a secret request belongs to the agent that asked; the human writes the value, any channel member reads the block
+  const assertOwnSecret = (row: Awaited<ReturnType<typeof load>>, agentId: string) => assertOwnMessage(row, agentId, "This secret request");
+
   const effective = (row: { status: Stored; expires_at: number | null }): SecretStatus =>
     row.status === "open" && row.expires_at !== null && Number(row.expires_at) <= Date.now() ? "expired" : row.status;
 
-  const transition = async (channelId: string, id: string, from: Stored[], to: Stored, set: { ciphertext?: string | null } = {}) => {
+  const transition = async (channelId: string, id: string, from: Stored[], to: Stored, set: { ciphertext?: string | null } = {}, agentId?: string) => {
     const row = await load(channelId, id);
+    if (agentId) assertOwnSecret(row, agentId);
     const status = effective(row);
     if (!(from as SecretStatus[]).includes(status)) throw new HTTPException(409, { message: `This secret request is already ${status}` });
     await db
@@ -87,6 +99,7 @@ export function secretRoutes(deps: Deps) {
       const { channel } = c.var.auth;
       const id = c.req.param("id");
       const first = await load(channel.id, id);
+      assertOwnSecret(first, c.var.auth.agentId!);
       const untilExpiry = first.expires_at === null ? Infinity : Math.max(0, Math.ceil((Number(first.expires_at) - Date.now()) / 1000));
       const row = await longPoll({
         notifier,
@@ -101,11 +114,11 @@ export function secretRoutes(deps: Deps) {
       return c.json(res);
     })
     .post("/secrets/:id/delivered", agent, async (c) => {
-      await transition(c.var.auth.channel.id, c.req.param("id"), ["provided"], "delivered", { ciphertext: null });
+      await transition(c.var.auth.channel.id, c.req.param("id"), ["provided"], "delivered", { ciphertext: null }, c.var.auth.agentId!);
       return c.body(null, 204);
     })
     .post("/secrets/:id/cancel", agent, async (c) => {
-      await transition(c.var.auth.channel.id, c.req.param("id"), ["open", "provided"], "cancelled", { ciphertext: null });
+      await transition(c.var.auth.channel.id, c.req.param("id"), ["open", "provided"], "cancelled", { ciphertext: null }, c.var.auth.agentId!);
       return c.body(null, 204);
     })
     .post("/secrets/:id/fulfil", human, async (c) => {

@@ -697,6 +697,32 @@ test("each secret request carries the key of the agent that asked", async () => 
   assert.equal(other.json.message.body.blocks[0].public_key, b);
 });
 
+test("only the agent that asked can cancel or deliver a secret request", async () => {
+  const { generateKeyPair, seal } = await import("@rply/schema/crypto");
+  const { db, request, ownedChannel } = await setup();
+  const { agent, human } = await ownedChannel();
+  const code = (await request("POST", "/pairings", { token: human, body: { role: "agent" } })).json.code;
+  const second = (await request("POST", "/agents/join", { body: { code } })).json.agent_token;
+  const keys = generateKeyPair();
+  await request("PUT", "/channel/key", { token: agent, body: { public_key: keys.publicKey } });
+  const created = await request("POST", "/secrets", { token: agent, body: { name: "TOKEN", target: "/tmp/.env", mode: "env" } });
+  const id = created.json.id;
+  const stored = () => db.selectFrom("secret_requests").select(["status", "ciphertext"]).where("id", "=", id).executeTakeFirstOrThrow();
+
+  assert.equal((await request("GET", `/secrets/${id}`, { token: second })).status, 403);
+  assert.equal((await request("POST", `/secrets/${id}/cancel`, { token: second })).status, 403);
+  assert.equal((await stored()).status, "open");
+
+  assert.equal((await request("POST", `/secrets/${id}/fulfil`, { token: human, body: { ciphertext: seal("sk-123", keys.publicKey) } })).status, 204);
+  assert.equal((await request("POST", `/secrets/${id}/delivered`, { token: second })).status, 403);
+  assert.equal((await stored()).status, "provided");
+
+  assert.equal((await request("GET", `/secrets/${id}`, { token: agent })).json.status, "provided");
+  assert.equal((await request("POST", `/secrets/${id}/delivered`, { token: agent })).status, 204);
+  assert.equal((await stored()).status, "delivered");
+  assert.equal((await stored()).ciphertext, null);
+});
+
 test("secret requests can be declined, cancelled, expire, and can't be faked", async () => {
   const { generateKeyPair } = await import("@rply/schema/crypto");
   const { request, ownedChannel } = await setup();

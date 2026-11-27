@@ -49,12 +49,6 @@ export function toMessage(row: JoinedRow): Message {
   };
 }
 
-// agents change only their own messages and pins; old messages without an agent and those of revoked agents are free
-export function assertOwnMessage(row: JoinedRow, agentId: string, what = "This message", hint = "") {
-  if (!row.agent_id || row.agent_id === agentId || row.agent_revoked_at !== null) return;
-  throw new HTTPException(403, { message: `${what} belongs to ${row.agent_label ?? "another agent"}. Agents can only change their own messages and pins.${hint}` });
-}
-
 export const selectLiveMessages = (db: DB) => selectMessages(db).where("messages.deleted_at", "is", null);
 
 export async function loadMessage(db: DB, channelId: string, id: string) {

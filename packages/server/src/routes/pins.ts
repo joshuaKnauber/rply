@@ -3,7 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { isApp, PatchMessageRequest, PIN_KEY, PinnedBody, PutPinRequest } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, type AppEnv, type Deps } from "../context.ts";
-import { assertOwnMessage, insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { assertOwnRow } from "../ownership.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { applyPatch } from "../patch.ts";
 import { rejectSecretBlocks } from "./messages.ts";
@@ -18,15 +19,14 @@ export function pinRoutes(deps: Deps) {
     return key;
   };
 
-  const assertOwnPin = (row: Parameters<typeof assertOwnMessage>[0], agentId: string, key: string) =>
-    assertOwnMessage(row, agentId, `The pin "${key}"`, ` Pin under your own key instead, e.g. ${key}-<your name>.`);
+  const pinHint = (key: string) => `Agents can only change their own messages and pins. Pin under your own key instead, e.g. ${key}-<your name>.`;
 
   const findPinned = (channelId: string, key: string) =>
     selectLiveMessages(db).where("messages.channel_id", "=", channelId).where("messages.pin", "=", key).executeTakeFirst();
 
   const save = async (channelId: string, agentId: string, key: string, enc: boolean, body: string) => {
     const existing = await findPinned(channelId, key);
-    if (existing) assertOwnPin(existing, agentId, key);
+    if (existing) assertOwnRow(existing, { agentId }, `The pin "${key}"`, pinHint(key));
     if (existing) deps.limits.write(channelId);
     else await deps.limits.newMessage(channelId);
     const id = existing?.id ?? randomId();
@@ -75,7 +75,7 @@ export function pinRoutes(deps: Deps) {
       const current = await findPinned(channel.id, pinKey(c.req.param("key")));
       if (!current) throw new HTTPException(404, { message: "Nothing pinned under that key" });
       if (sender === "human" && !isApp(toMessage(current))) throw new HTTPException(403, { message: "Unpin it instead, only apps can be removed" });
-      if (sender === "agent") assertOwnPin(current, c.var.auth.agentId!, current.pin!);
+      if (sender === "agent") assertOwnRow(current, c.var.auth, `The pin "${current.pin!}"`, pinHint(current.pin!));
       await db.updateTable("messages").set({ deleted_at: now() }).where("id", "=", current.id).execute();
       await deleteFilesOf(deps, current.id);
       await recordChanges(deps, channel.id, [current.id]);

@@ -3,15 +3,19 @@ import { HTTPException } from "hono/http-exception";
 import { CallRequest, CallResultRequest, COMMAND_NAME, type Call, type CallResponse, type CallsResponse, type PendingCall } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { insertMessage, loadMessage, recordChanges } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, selectMessages } from "../messages.ts";
+import { assertOwnRow } from "../ownership.ts";
 import { longPoll } from "../notifier.ts";
 import type { Serve, Serves } from "../serves.ts";
 import { now, randomId } from "../tokens.ts";
 
 const SCRIPT_TIMEOUT = 35_000;
 const MAX_STORED_RESULT = 256 * 1024;
+const ANSWER_RULE = "Only the agent the call was sent to can answer it.";
 
-type Waiting = { channelId: string; resolve: (res: CallResponse) => void };
+// the agent a call belongs to: the one that received it, not any agent in the channel
+type CallOwner = { agent_id: string; agent_label: string | null };
+type Waiting = { channelId: string; owner: CallOwner; resolve: (res: CallResponse) => void };
 
 export function callRoutes(deps: Deps, serves: Serves) {
   const { db, notifier } = deps;
@@ -40,7 +44,7 @@ export function callRoutes(deps: Deps, serves: Serves) {
       isEmpty: (res) => res.status === "pending",
     });
 
-  const runScript = (server: Serve, agentId: string, call: PendingCall, signal: AbortSignal) =>
+  const runScript = (server: Serve, owner: CallOwner, call: PendingCall, signal: AbortSignal) =>
     new Promise<CallResponse | undefined>((resolve) => {
       const finish = (res: CallResponse | undefined) => {
         clearTimeout(timer);
@@ -52,9 +56,9 @@ export function callRoutes(deps: Deps, serves: Serves) {
       const abort = () => finish(undefined);
       const timer = setTimeout(abort, SCRIPT_TIMEOUT);
       signal.addEventListener("abort", abort);
-      waiting.set(call.id, { channelId: server.channelId, resolve: finish });
+      waiting.set(call.id, { channelId: server.channelId, owner, resolve: finish });
       server.queue.push(call);
-      notifier.notify(`calls:${agentId}`);
+      notifier.notify(`calls:${owner.agent_id}`);
     });
 
   return new Hono<AppEnv>()
@@ -75,7 +79,8 @@ export function callRoutes(deps: Deps, serves: Serves) {
           online.find(([id, s]) => id === target.agent_id && s.commands.has(req.name)) ?? online.find(([, s]) => s.commands.has(req.name)) ?? [];
         if (!server) throw new HTTPException(404, { message: `No command "${req.name}"` });
         const call: PendingCall = { id, name: req.name, args: req.args, block_id: req.block_id, message_id: target.id };
-        const res = await runScript(server, agentId!, call, c.req.raw.signal);
+        const owner: CallOwner = { agent_id: agentId!, agent_label: agentId === target.agent_id ? target.agent_label : null };
+        const res = await runScript(server, owner, call, c.req.raw.signal);
         if (!res) throw new HTTPException(504, { message: "timeout" });
         return c.json(res);
       }
@@ -131,11 +136,16 @@ export function callRoutes(deps: Deps, serves: Serves) {
 
       const script = waiting.get(id);
       if (script && script.channelId === channel.id) {
+        assertOwnRow(script.owner, c.var.auth, "This call", ANSWER_RULE);
         script.resolve("error" in outcome ? { id, status: "error", error: outcome.error } : { id, status: "done", result: outcome.result });
         return c.body(null, 204);
       }
 
       const { row, call } = await loadCall(channel.id, id);
+      // a call belongs to the agent whose message it replies to, also after that message was deleted
+      const target = row.reply_to ? await selectMessages(db).where("messages.id", "=", row.reply_to).where("messages.channel_id", "=", channel.id).executeTakeFirst() : undefined;
+      if (!target) throw new HTTPException(404, { message: "Call not found" });
+      assertOwnRow(target, c.var.auth, "This call", ANSWER_RULE);
       if (JSON.stringify(outcome).length > MAX_STORED_RESULT) {
         throw new HTTPException(413, { message: "Results of rply.agent calls are stored as messages and limited to 256 KB. Use a command script for large data" });
       }

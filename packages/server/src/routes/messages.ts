@@ -16,7 +16,8 @@ import {
 } from "@rply/schema";
 import { requireAuth } from "../auth.ts";
 import { parse, waitParam, type AppEnv, type Deps } from "../context.ts";
-import { assertOwnMessage, insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { insertMessage, loadMessage, recordChanges, selectLiveMessages, toMessage } from "../messages.ts";
+import { assertOwnRow } from "../ownership.ts";
 import { checkFiles, deleteFilesOf, linkFiles } from "../files/manage.ts";
 import { longPoll } from "../notifier.ts";
 import { notifyAboutMessage } from "../push/notify.ts";
@@ -35,7 +36,7 @@ export function messageRoutes(deps: Deps) {
   const loadAgentMessage = async (channelId: string, id: string, agentId: string) => {
     const row = await loadMessage(db, channelId, id);
     if (row.sender !== "agent") throw new HTTPException(400, { message: "Only agent messages can be changed" });
-    assertOwnMessage(row, agentId);
+    assertOwnRow(row, { agentId });
     return row;
   };
 
